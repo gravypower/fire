@@ -7,7 +7,16 @@ import * as $_app from "./routes/_app.tsx";
 import * as $api_joke from "./routes/api/joke.ts";
 import * as $greet_name_ from "./routes/greet/[name].tsx";
 import * as $index from "./routes/index.tsx";
+import * as $test_input from "./routes/test-input.tsx";
+import * as $test_simulation from "./routes/test-simulation.tsx";
+import * as $test_visualization from "./routes/test-visualization.tsx";
+import * as $ComparisonIsland from "./islands/ComparisonIsland.tsx";
 import * as $Counter from "./islands/Counter.tsx";
+import * as $InputIsland from "./islands/InputIsland.tsx";
+import * as $MainIsland from "./islands/MainIsland.tsx";
+import * as $SimulationIsland from "./islands/SimulationIsland.tsx";
+import * as $TransitionManagerIsland from "./islands/TransitionManagerIsland.tsx";
+import * as $VisualizationIsland from "./islands/VisualizationIsland.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
 const manifest = {
@@ -17,9 +26,18 @@ const manifest = {
     "./routes/api/joke.ts": $api_joke,
     "./routes/greet/[name].tsx": $greet_name_,
     "./routes/index.tsx": $index,
+    "./routes/test-input.tsx": $test_input,
+    "./routes/test-simulation.tsx": $test_simulation,
+    "./routes/test-visualization.tsx": $test_visualization,
   },
   islands: {
+    "./islands/ComparisonIsland.tsx": $ComparisonIsland,
     "./islands/Counter.tsx": $Counter,
+    "./islands/InputIsland.tsx": $InputIsland,
+    "./islands/MainIsland.tsx": $MainIsland,
+    "./islands/SimulationIsland.tsx": $SimulationIsland,
+    "./islands/TransitionManagerIsland.tsx": $TransitionManagerIsland,
+    "./islands/VisualizationIsland.tsx": $VisualizationIsland,
   },
   baseUrl: import.meta.url,
 } satisfies Manifest;

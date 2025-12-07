@@ -31,7 +31,10 @@
     "tailwindcss/": "npm:/tailwindcss@3.4.1/",
     "tailwindcss/plugin": "npm:/tailwindcss@3.4.1/plugin.js",
     "$std/": "https://deno.land/std@0.216.0/",
-    "fast-check": "npm:fast-check@3.15.0"
+    "fast-check": "npm:fast-check@3.15.0",
+    "chart.js": "npm:chart.js@4.4.1",
+    "chart.js/auto": "npm:chart.js@4.4.1/auto",
+    "chartjs-plugin-annotation": "npm:chartjs-plugin-annotation@3.0.1"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
