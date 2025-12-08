@@ -32,6 +32,7 @@ export default function ExpenseManagerIsland({
       frequency: "monthly",
       category: "other",
       enabled: true,
+      isOneOff: false,
     };
   }
 
@@ -118,6 +119,10 @@ export default function ExpenseManagerIsland({
         frequency: formData.frequency || "monthly",
         category: formData.category || "other",
         enabled: formData.enabled !== false,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        isOneOff: formData.isOneOff || false,
+        oneOffDate: formData.oneOffDate,
       };
       onExpensesChange([...expenses, newExpense]);
     }
@@ -242,10 +247,23 @@ export default function ExpenseManagerIsland({
                           {item.name}
                         </p>
                         <p class="text-xs text-gray-600">
-                          {formatAmount(item.amount, item.frequency)}
-                          {item.frequency !== "monthly" && (
-                            <span class="ml-2 text-gray-500">
-                              (${getMonthlyEquivalent(item.amount, item.frequency).toFixed(2)}/month)
+                          {item.isOneOff ? (
+                            <>
+                              ${item.amount.toFixed(2)} (One-off{item.oneOffDate ? ` on ${new Date(item.oneOffDate).toLocaleDateString()}` : ""})
+                            </>
+                          ) : (
+                            <>
+                              {formatAmount(item.amount, item.frequency)}
+                              {item.frequency !== "monthly" && (
+                                <span class="ml-2 text-gray-500">
+                                  (${getMonthlyEquivalent(item.amount, item.frequency).toFixed(2)}/month)
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {item.endDate && !item.isOneOff && (
+                            <span class="ml-2 text-orange-600">
+                              (Ends: {new Date(item.endDate).toLocaleDateString()})
                             </span>
                           )}
                         </p>
@@ -375,6 +393,67 @@ export default function ExpenseManagerIsland({
               ))}
             </select>
           </div>
+
+          {/* One-off Expense Toggle */}
+          <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <label class="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isOneOff || false}
+                onChange={(e) => setFormData({ ...formData, isOneOff: (e.target as HTMLInputElement).checked })}
+                class="w-4 h-4 text-blue-600 border-gray-300 rounded"
+              />
+              <span class="ml-2 text-sm font-medium text-gray-700">
+                This is a one-off expense
+              </span>
+            </label>
+            <p class="text-xs text-gray-600 mt-1 ml-6">
+              One-off expenses occur only once (e.g., new caravan, house gate)
+            </p>
+          </div>
+
+          {/* One-off Date */}
+          {formData.isOneOff && (
+            <div class="mb-4 fade-in">
+              <label class="block text-sm font-medium text-gray-700 mb-1">One-off Date *</label>
+              <input
+                type="date"
+                value={formData.oneOffDate ? new Date(formData.oneOffDate).toISOString().split('T')[0] : ""}
+                onInput={(e) => setFormData({ ...formData, oneOffDate: new Date((e.target as HTMLInputElement).value) })}
+                class="input-field"
+              />
+            </div>
+          )}
+
+          {/* Date Range for Recurring Expenses */}
+          {!formData.isOneOff && (
+            <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded fade-in">
+              <p class="text-sm font-medium text-gray-700 mb-2">Date Range (Optional)</p>
+              <p class="text-xs text-gray-600 mb-3">
+                Set start and end dates for expenses that don't last forever (e.g., school fees)
+              </p>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={formData.startDate ? new Date(formData.startDate).toISOString().split('T')[0] : ""}
+                    onInput={(e) => setFormData({ ...formData, startDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                    class="input-field text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={formData.endDate ? new Date(formData.endDate).toISOString().split('T')[0] : ""}
+                    onInput={(e) => setFormData({ ...formData, endDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                    class="input-field text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div class="flex gap-3 mt-6">

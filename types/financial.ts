@@ -42,6 +42,14 @@ export interface IncomeSource {
   isBeforeTax: boolean;
   /** Which person this income belongs to (for household mode) */
   personId?: string;
+  /** Optional start date (if not set, starts from simulation start) */
+  startDate?: Date;
+  /** Optional end date (if not set, continues indefinitely) */
+  endDate?: Date;
+  /** Whether this is a one-off income (occurs only once) */
+  isOneOff?: boolean;
+  /** Date when one-off income occurs (required if isOneOff is true) */
+  oneOffDate?: Date;
 }
 
 /**

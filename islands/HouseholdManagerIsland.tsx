@@ -109,7 +109,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
       id: `income-${Date.now()}`,
       label: "New Income",
       amount: 0,
-      frequency: "monthly" as PaymentFrequency,
+      frequency: "yearly" as PaymentFrequency,
       isBeforeTax: true,
       personId,
     };
@@ -434,7 +434,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
                             </select>
                           </div>
                         </div>
-                        <div>
+                        <div class="mb-2">
                           <label class="flex items-center cursor-pointer text-xs">
                             <input
                               type="checkbox"
@@ -445,6 +445,50 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
                             <span class="text-gray-600">Before tax (taxable income)</span>
                           </label>
                         </div>
+                        <div class="mb-2">
+                          <label class="flex items-center cursor-pointer text-xs">
+                            <input
+                              type="checkbox"
+                              checked={income.isOneOff || false}
+                              onChange={(e) => updateIncomeSource(person.id, income.id, { isOneOff: (e.target as HTMLInputElement).checked })}
+                              class="w-3 h-3 text-green-600 border-gray-300 rounded mr-1"
+                            />
+                            <span class="text-gray-600">One-off income (e.g., car sale)</span>
+                          </label>
+                        </div>
+                        {income.isOneOff && (
+                          <div class="mb-2 fade-in">
+                            <label class="text-xs text-gray-600">One-off Date</label>
+                            <input
+                              type="date"
+                              value={income.oneOffDate ? new Date(income.oneOffDate).toISOString().split('T')[0] : ""}
+                              onInput={(e) => updateIncomeSource(person.id, income.id, { oneOffDate: new Date((e.target as HTMLInputElement).value) })}
+                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            />
+                          </div>
+                        )}
+                        {!income.isOneOff && (
+                          <div class="grid grid-cols-2 gap-2 fade-in">
+                            <div>
+                              <label class="text-xs text-gray-600">Start Date (Optional)</label>
+                              <input
+                                type="date"
+                                value={income.startDate ? new Date(income.startDate).toISOString().split('T')[0] : ""}
+                                onInput={(e) => updateIncomeSource(person.id, income.id, { startDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              />
+                            </div>
+                            <div>
+                              <label class="text-xs text-gray-600">End Date (Optional)</label>
+                              <input
+                                type="date"
+                                value={income.endDate ? new Date(income.endDate).toISOString().split('T')[0] : ""}
+                                onInput={(e) => updateIncomeSource(person.id, income.id, { endDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

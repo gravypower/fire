@@ -257,14 +257,14 @@ export const SimulationEngine = {
     let deductibleInterest = 0;
 
     // Phase 1: Income - Add salary income and calculate initial tax (will be adjusted for deductions later)
-    const grossIncome = IncomeProcessor.calculateIncome(params, interval);
+    const grossIncome = IncomeProcessor.calculateIncome(params, interval, currentState.date);
     // Tax will be recalculated after we know deductible interest
     let netIncome = 0;
     cash += netIncome; // Will add after tax calculation
 
     // Phase 2: Expenses - Deduct living expenses only
     // Note: Mortgage payments are handled in the loan phase
-    const expenses = ExpenseProcessor.calculateExpenses(params, interval);
+    const expenses = ExpenseProcessor.calculateExpenses(params, interval, currentState.date);
     cash -= expenses;
     
     // Requirements 7.1: Handle negative cash flow by reducing available cash
@@ -389,7 +389,7 @@ export const SimulationEngine = {
     const annualDeductibleInterest = deductibleInterest * periodsPerYear;
     
     // Calculate taxable income (gross income minus deductible interest)
-    const annualGrossIncome = IncomeProcessor.calculateTotalAnnualIncome(params);
+    const annualGrossIncome = IncomeProcessor.calculateTotalAnnualIncome(params, currentState.date);
     const taxableIncome = Math.max(0, annualGrossIncome - annualDeductibleInterest);
     
     // Calculate tax on taxable income

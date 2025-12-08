@@ -26,6 +26,18 @@ export interface ExpenseItem {
   
   /** Whether this expense is active */
   enabled: boolean;
+  
+  /** Optional start date (if not set, starts from simulation start) */
+  startDate?: Date;
+  
+  /** Optional end date (if not set, continues indefinitely) */
+  endDate?: Date;
+  
+  /** Whether this is a one-off expense (occurs only once) */
+  isOneOff?: boolean;
+  
+  /** Date when one-off expense occurs (required if isOneOff is true) */
+  oneOffDate?: Date;
 }
 
 /**

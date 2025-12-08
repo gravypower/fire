@@ -89,9 +89,10 @@ export const IncomeProcessor = {
   /**
    * Calculates total annual income from all sources (before tax)
    * @param params User financial parameters
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total annual income before tax
    */
-  calculateTotalAnnualIncome(params: UserParameters): number {
+  calculateTotalAnnualIncome(params: UserParameters, currentDate?: Date): number {
     // If household mode, sum income from all people
     if (params.householdMode === "couple" && params.people && params.people.length > 0) {
       let totalAnnual = 0;
@@ -99,7 +100,8 @@ export const IncomeProcessor = {
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (source.isBeforeTax) {
-              totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+              const income = this.calculateIncomeFromSource(source, currentDate);
+              totalAnnual += income;
             }
           }
         }
@@ -114,7 +116,8 @@ export const IncomeProcessor = {
         // Only count before-tax income for tax calculation
         if (!source.isBeforeTax) continue;
         
-        totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+        const income = this.calculateIncomeFromSource(source, currentDate);
+        totalAnnual += income;
       }
       return totalAnnual;
     }
@@ -124,11 +127,53 @@ export const IncomeProcessor = {
   },
 
   /**
+   * Calculates income from a single source, handling date ranges and one-off income
+   * @param source Income source
+   * @param currentDate Current simulation date (optional)
+   * @returns Annual income amount from this source
+   */
+  calculateIncomeFromSource(
+    source: import("../types/financial.ts").IncomeSource,
+    currentDate?: Date
+  ): number {
+    // Check if this is a one-off income
+    if (source.isOneOff && source.oneOffDate && currentDate) {
+      // One-off income only applies on its specific date
+      // For simplicity, we'll apply it in the year it occurs
+      const oneOffYear = source.oneOffDate.getFullYear();
+      const currentYear = currentDate.getFullYear();
+      
+      if (oneOffYear === currentYear) {
+        return source.amount; // One-off amount is already the total
+      } else {
+        return 0; // Not in the year of the one-off
+      }
+    }
+
+    // Check date range for recurring income
+    if (currentDate) {
+      // Check if income has started
+      if (source.startDate && currentDate < source.startDate) {
+        return 0; // Income hasn't started yet
+      }
+      
+      // Check if income has ended
+      if (source.endDate && currentDate >= source.endDate) {
+        return 0; // Income has ended
+      }
+    }
+
+    // Convert to annual for recurring income
+    return this.convertToAnnual(source.amount, source.frequency);
+  },
+
+  /**
    * Calculates total annual after-tax income
    * @param params User financial parameters
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total annual after-tax income
    */
-  calculateTotalAnnualAfterTaxIncome(params: UserParameters): number {
+  calculateTotalAnnualAfterTaxIncome(params: UserParameters, currentDate?: Date): number {
     // If household mode, sum after-tax income from all people
     if (params.householdMode === "couple" && params.people && params.people.length > 0) {
       let totalAnnual = 0;
@@ -136,7 +181,8 @@ export const IncomeProcessor = {
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (!source.isBeforeTax) {
-              totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+              const income = this.calculateIncomeFromSource(source, currentDate);
+              totalAnnual += income;
             }
           }
         }
@@ -150,7 +196,8 @@ export const IncomeProcessor = {
         // Only count after-tax income
         if (source.isBeforeTax) continue;
         
-        totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+        const income = this.calculateIncomeFromSource(source, currentDate);
+        totalAnnual += income;
       }
       return totalAnnual;
     }
@@ -162,11 +209,12 @@ export const IncomeProcessor = {
    * Calculates income for the specified time interval (gross before-tax income)
    * @param params User financial parameters
    * @param interval Time interval for calculation
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Gross income amount for the interval
    */
-  calculateIncome(params: UserParameters, interval: TimeInterval): number {
-    const beforeTaxAnnual = this.calculateTotalAnnualIncome(params);
-    const afterTaxAnnual = this.calculateTotalAnnualAfterTaxIncome(params);
+  calculateIncome(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
+    const beforeTaxAnnual = this.calculateTotalAnnualIncome(params, currentDate);
+    const afterTaxAnnual = this.calculateTotalAnnualAfterTaxIncome(params, currentDate);
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     
     // Return before-tax income (for tax calculation) + after-tax income
@@ -193,16 +241,17 @@ export const IncomeProcessor = {
    * Calculates tax for a specific interval
    * @param params User financial parameters
    * @param interval Time interval for calculation
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Tax amount for the interval
    */
-  calculateTax(params: UserParameters, interval: TimeInterval): number {
+  calculateTax(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
     // If household mode is couple, calculate tax per person
     if (params.householdMode === "couple" && params.people && params.people.length > 0) {
-      return this.calculateHouseholdTax(params, interval);
+      return this.calculateHouseholdTax(params, interval, currentDate);
     }
 
     // Legacy single-person calculation
-    const totalAnnual = this.calculateTotalAnnualIncome(params);
+    const totalAnnual = this.calculateTotalAnnualIncome(params, currentDate);
     const annualTax = this.calculateAnnualTax(params, totalAnnual);
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     return annualTax / intervalPeriodsPerYear;
@@ -213,9 +262,10 @@ export const IncomeProcessor = {
    * Each person's income is taxed separately using their own tax brackets
    * @param params User financial parameters
    * @param interval Time interval for calculation
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total household tax amount for the interval
    */
-  calculateHouseholdTax(params: UserParameters, interval: TimeInterval): number {
+  calculateHouseholdTax(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
     if (!params.people || params.people.length === 0) {
       return 0;
     }
@@ -232,7 +282,7 @@ export const IncomeProcessor = {
       if (person.incomeSources && person.incomeSources.length > 0) {
         for (const source of person.incomeSources) {
           if (source.isBeforeTax) {
-            const annualAmount = this.convertToAnnual(source.amount, source.frequency);
+            const annualAmount = this.calculateIncomeFromSource(source, currentDate);
             personAnnualIncome += annualAmount;
           }
         }
@@ -286,12 +336,13 @@ export const ExpenseProcessor = {
    * Calculates total expenses for the specified time interval
    * @param params User financial parameters
    * @param interval Time interval for calculation
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total expense amount for the interval
    */
-  calculateExpenses(params: UserParameters, interval: TimeInterval): number {
+  calculateExpenses(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
     // Use individual expense items if provided, otherwise fall back to legacy fields
     if (params.expenseItems && params.expenseItems.length > 0) {
-      return this.calculateExpensesFromItems(params.expenseItems, interval);
+      return this.calculateExpensesFromItems(params.expenseItems, interval, currentDate);
     }
     
     // Legacy calculation
@@ -307,17 +358,63 @@ export const ExpenseProcessor = {
    * Calculates expenses from individual expense items
    * @param items Array of expense items
    * @param interval Target time interval
+   * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total expense amount for the interval
    */
   calculateExpensesFromItems(
     items: import("../types/expenses.ts").ExpenseItem[],
-    interval: TimeInterval
+    interval: TimeInterval,
+    currentDate?: Date
   ): number {
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     let totalExpenses = 0;
 
     for (const item of items) {
       if (!item.enabled) continue;
+
+      // Check if this is a one-off expense
+      if (item.isOneOff && item.oneOffDate && currentDate) {
+        // One-off expenses only apply on their specific date
+        // Check if current date matches the one-off date (within the interval)
+        const oneOffTime = item.oneOffDate.getTime();
+        const currentTime = currentDate.getTime();
+        
+        // Calculate interval duration in milliseconds
+        let intervalMs = 0;
+        switch (interval) {
+          case "week":
+            intervalMs = 7 * 24 * 60 * 60 * 1000;
+            break;
+          case "fortnight":
+            intervalMs = 14 * 24 * 60 * 60 * 1000;
+            break;
+          case "month":
+            intervalMs = 30 * 24 * 60 * 60 * 1000; // Approximate
+            break;
+          case "year":
+            intervalMs = 365 * 24 * 60 * 60 * 1000;
+            break;
+        }
+        
+        // Check if one-off date falls within this interval
+        if (oneOffTime >= currentTime && oneOffTime < currentTime + intervalMs) {
+          totalExpenses += item.amount;
+        }
+        continue;
+      }
+
+      // Check date range for recurring expenses
+      if (currentDate) {
+        // Check if expense has started
+        if (item.startDate && currentDate < item.startDate) {
+          continue; // Expense hasn't started yet
+        }
+        
+        // Check if expense has ended
+        if (item.endDate && currentDate >= item.endDate) {
+          continue; // Expense has ended
+        }
+      }
 
       // Convert item frequency to annual amount
       let annualAmount: number;
