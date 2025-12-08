@@ -2,15 +2,29 @@
  * Core data models and types for the Finance Simulation Tool
  */
 
+import type { ExpenseItem } from "./expenses.ts";
+
 /**
  * Time interval granularity for simulation calculations
  */
-export type TimeInterval = "week" | "month" | "year";
+export type TimeInterval = "week" | "fortnight" | "month" | "year";
 
 /**
  * Payment frequency options
  */
 export type PaymentFrequency = "weekly" | "fortnightly" | "monthly";
+
+/**
+ * Tax bracket definition
+ */
+export interface TaxBracket {
+  /** Minimum income for this bracket (inclusive) */
+  min: number;
+  /** Maximum income for this bracket (exclusive, null for top bracket) */
+  max: number | null;
+  /** Tax rate as a percentage (e.g., 19 for 19%) */
+  rate: number;
+}
 
 /**
  * Financial state at a specific point in time
@@ -49,14 +63,18 @@ export interface UserParameters {
   annualSalary: number;
   /** How often salary is paid */
   salaryFrequency: PaymentFrequency;
-  /** Income tax rate as a percentage (e.g., 30 for 30%) */
+  /** Income tax rate as a percentage (e.g., 30 for 30%) - DEPRECATED: Use taxBrackets instead */
   incomeTaxRate: number;
+  /** Tax brackets for progressive taxation (optional, falls back to incomeTaxRate if not provided) */
+  taxBrackets?: TaxBracket[];
 
   // Expenses
-  /** Monthly living expenses (food, utilities, etc.) */
+  /** Monthly living expenses (food, utilities, etc.) - DEPRECATED: Use expenseItems instead */
   monthlyLivingExpenses: number;
-  /** Monthly rent or mortgage payment */
+  /** Monthly rent or mortgage payment - DEPRECATED: Use expenseItems instead */
   monthlyRentOrMortgage: number;
+  /** Individual expense items with frequencies (optional, falls back to monthlyLivingExpenses if not provided) */
+  expenseItems?: ExpenseItem[];
 
   // Loans
   /** Outstanding loan principal amount */

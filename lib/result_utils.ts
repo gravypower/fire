@@ -37,6 +37,9 @@ export function groupByTimeInterval(
     case "week":
       intervalMs = 7 * 24 * 60 * 60 * 1000; // 7 days
       break;
+    case "fortnight":
+      intervalMs = 14 * 24 * 60 * 60 * 1000; // 14 days
+      break;
     case "month":
       intervalMs = 30 * 24 * 60 * 60 * 1000; // ~30 days (approximation)
       break;

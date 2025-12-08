@@ -4,7 +4,8 @@
  */
 
 import { useEffect, useState } from "preact/hooks";
-import type { UserParameters, PaymentFrequency, SimulationConfiguration } from "../types/financial.ts";
+import type { UserParameters, PaymentFrequency, SimulationConfiguration, TaxBracket } from "../types/financial.ts";
+import { DEFAULT_AU_TAX_BRACKETS } from "../lib/processors.ts";
 import {
   validatePositiveNumber,
   validatePercentage,
@@ -24,6 +25,7 @@ const getDefaultParameters = (): UserParameters => ({
   annualSalary: 80000,
   salaryFrequency: "monthly" as PaymentFrequency,
   incomeTaxRate: 30,
+  taxBrackets: DEFAULT_AU_TAX_BRACKETS,
   monthlyLivingExpenses: 2000,
   monthlyRentOrMortgage: 1500,
   loanPrincipal: 0,
@@ -56,6 +58,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   const [parameters, setParameters] = useState<UserParameters>(getDefaultParameters());
   const [errors, setErrors] = useState<FieldErrors>({});
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [showTaxBrackets, setShowTaxBrackets] = useState(false);
 
   // Initialize parameters from config or defaults
   useEffect(() => {
@@ -253,6 +256,58 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   };
 
   /**
+   * Handles tax bracket changes
+   */
+  const handleTaxBracketChange = (index: number, field: 'min' | 'max' | 'rate', value: string) => {
+    const brackets = [...(parameters.taxBrackets || DEFAULT_AU_TAX_BRACKETS)];
+    const numValue = field === 'max' && value === '' ? null : parseFloat(value);
+    
+    if (field === 'max' && value === '') {
+      brackets[index] = { ...brackets[index], max: null };
+    } else if (!isNaN(numValue as number)) {
+      brackets[index] = { ...brackets[index], [field]: numValue };
+    }
+    
+    const updatedParams = { ...parameters, taxBrackets: brackets };
+    setParameters(updatedParams);
+
+    if (config) {
+      try {
+        const updatedConfig: SimulationConfiguration = {
+          ...config,
+          baseParameters: updatedParams,
+        };
+        onConfigurationChange(updatedConfig);
+        if (storageError) {
+          setStorageError(null);
+        }
+      } catch (e) {
+        console.error("Failed to update configuration:", e);
+      }
+    }
+  };
+
+  /**
+   * Resets tax brackets to Australian defaults
+   */
+  const resetTaxBrackets = () => {
+    const updatedParams = { ...parameters, taxBrackets: DEFAULT_AU_TAX_BRACKETS };
+    setParameters(updatedParams);
+
+    if (config) {
+      try {
+        const updatedConfig: SimulationConfiguration = {
+          ...config,
+          baseParameters: updatedParams,
+        };
+        onConfigurationChange(updatedConfig);
+      } catch (e) {
+        console.error("Failed to update configuration:", e);
+      }
+    }
+  };
+
+  /**
    * Renders an input field with label and error message
    */
   const renderNumberInput = (
@@ -364,19 +419,88 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
         </h3>
         {renderNumberInput("Annual Salary (Gross)", "annualSalary", "1000", "$")}
         {renderFrequencySelect("Salary Frequency", "salaryFrequency")}
-        {renderNumberInput("Income Tax Rate (%)", "incomeTaxRate", "0.1")}
-        <div class="mt-2 p-3 bg-blue-50 rounded-md border border-blue-200">
-          <p class="text-xs text-gray-700 font-medium mb-1">Australian Tax Rates (2024-25):</p>
-          <ul class="text-xs text-gray-600 space-y-0.5">
-            <li>• $0 - $18,200: 0%</li>
-            <li>• $18,201 - $45,000: 19%</li>
-            <li>• $45,001 - $120,000: 32.5%</li>
-            <li>• $120,001 - $180,000: 37%</li>
-            <li>• $180,001+: 45%</li>
-          </ul>
-          <p class="text-xs text-gray-500 mt-2">
-            Enter your effective tax rate above (total tax ÷ gross income × 100)
-          </p>
+        
+        {/* Tax Brackets Section */}
+        <div class="mt-4 p-4 bg-blue-50 rounded-md border border-blue-200">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center">
+              <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <span class="text-sm font-medium text-gray-700">Tax Brackets (Progressive)</span>
+            </div>
+            <button
+              onClick={() => setShowTaxBrackets(!showTaxBrackets)}
+              class="text-xs text-blue-600 hover:text-blue-700 font-medium"
+            >
+              {showTaxBrackets ? 'Hide' : 'Edit'}
+            </button>
+          </div>
+          
+          {!showTaxBrackets && (
+            <div>
+              <p class="text-xs text-gray-700 font-medium mb-1">Australian Tax Rates (2024-25):</p>
+              <ul class="text-xs text-gray-600 space-y-0.5">
+                {(parameters.taxBrackets || DEFAULT_AU_TAX_BRACKETS).map((bracket, i) => (
+                  <li key={i}>
+                    • ${bracket.min.toLocaleString()} - {bracket.max ? `$${bracket.max.toLocaleString()}` : '+'}: {bracket.rate}%
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {showTaxBrackets && (
+            <div class="space-y-3 fade-in">
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-xs text-gray-600">Edit tax brackets below:</p>
+                <button
+                  onClick={resetTaxBrackets}
+                  class="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Reset to AU Defaults
+                </button>
+              </div>
+              
+              {(parameters.taxBrackets || DEFAULT_AU_TAX_BRACKETS).map((bracket, index) => (
+                <div key={index} class="grid grid-cols-3 gap-2 p-2 bg-white rounded border border-blue-200">
+                  <div>
+                    <label class="text-xs text-gray-600">Min ($)</label>
+                    <input
+                      type="number"
+                      value={bracket.min}
+                      onInput={(e) => handleTaxBracketChange(index, 'min', (e.target as HTMLInputElement).value)}
+                      class="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                      step="1000"
+                    />
+                  </div>
+                  <div>
+                    <label class="text-xs text-gray-600">Max ($)</label>
+                    <input
+                      type="number"
+                      value={bracket.max ?? ''}
+                      placeholder="No limit"
+                      onInput={(e) => handleTaxBracketChange(index, 'max', (e.target as HTMLInputElement).value)}
+                      class="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                      step="1000"
+                    />
+                  </div>
+                  <div>
+                    <label class="text-xs text-gray-600">Rate (%)</label>
+                    <input
+                      type="number"
+                      value={bracket.rate}
+                      onInput={(e) => handleTaxBracketChange(index, 'rate', (e.target as HTMLInputElement).value)}
+                      class="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                      step="0.5"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

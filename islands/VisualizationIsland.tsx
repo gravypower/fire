@@ -65,6 +65,30 @@ export default function VisualizationIsland({
   // Filter results based on selected granularity
   const filteredStates = groupByTimeInterval(result.states, selectedGranularity);
 
+  // Calculate cumulative values for each filtered period
+  const statesWithPeriodTotals = filteredStates.map((state, index) => {
+    // Find the previous filtered state date (or start date for first period)
+    const prevDate = index === 0 
+      ? result.states[0].date 
+      : filteredStates[index - 1].date;
+    
+    // Sum up all values between previous filtered state and current state
+    const periodStates = result.states.filter(s => 
+      s.date > prevDate && s.date <= state.date
+    );
+    
+    const periodTaxPaid = periodStates.reduce((sum, s) => sum + (s.taxPaid || 0), 0);
+    const periodInterestSaved = periodStates.reduce((sum, s) => sum + (s.interestSaved || 0), 0);
+    const periodCashFlow = periodStates.reduce((sum, s) => sum + (s.cashFlow || 0), 0);
+    
+    return {
+      ...state,
+      periodTaxPaid,
+      periodInterestSaved,
+      periodCashFlow,
+    };
+  });
+
   // Calculate key metrics
   const currentNetWorth = result.states.length > 0
     ? result.states[result.states.length - 1].netWorth
@@ -94,9 +118,13 @@ export default function VisualizationIsland({
     ? result.states[0].loanBalance
     : 0;
 
-  // Calculate total tax paid and interest saved
+  // Calculate total tax paid and interest saved (full simulation)
   const totalTaxPaid = result.states.reduce((sum, state) => sum + (state.taxPaid || 0), 0);
   const totalInterestSaved = result.states.reduce((sum, state) => sum + (state.interestSaved || 0), 0);
+
+  // Calculate cumulative totals for filtered states (sum of all period totals)
+  const filteredTaxPaid = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodTaxPaid || 0), 0);
+  const filteredInterestSaved = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodInterestSaved || 0), 0);
 
   // Find loan payoff date
   const loanPayoffDate = findLoanPayoffDate(result.states);
@@ -277,13 +305,13 @@ export default function VisualizationIsland({
       <div class="grid grid-cols-1 gap-6 mb-6">
         <ChartErrorBoundary chartName="Net Worth Chart">
           <NetWorthChart 
-            states={filteredStates} 
+            states={statesWithPeriodTotals} 
             transitionPoints={effectiveTransitionPoints}
           />
         </ChartErrorBoundary>
         <ChartErrorBoundary chartName="Cash Flow Chart">
           <CashFlowChart 
-            states={filteredStates}
+            states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
           />
         </ChartErrorBoundary>
@@ -304,6 +332,16 @@ export default function VisualizationIsland({
             }`}
           >
             Weekly
+          </button>
+          <button
+            onClick={() => setSelectedGranularity("fortnight")}
+            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              selectedGranularity === "fortnight"
+                ? "bg-blue-600 text-white shadow-md scale-105"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+            }`}
+          >
+            Fortnightly
           </button>
           <button
             onClick={() => setSelectedGranularity("month")}
@@ -331,10 +369,10 @@ export default function VisualizationIsland({
       {/* Filtered Results Display */}
       <div class="border-t pt-6">
         <h3 class="text-lg font-semibold mb-4 text-gray-700">
-          Financial Timeline ({selectedGranularity}ly view)
+          Financial Timeline ({selectedGranularity === "fortnight" ? "Fortnightly" : selectedGranularity}ly view)
         </h3>
         <p class="text-sm text-gray-600 mb-4">
-          Showing {filteredStates.length} data points
+          Showing {statesWithPeriodTotals.length} data points
         </p>
 
         {/* Summary Statistics */}
@@ -377,23 +415,27 @@ export default function VisualizationIsland({
               {formatCurrency(currentNetWorth)}
             </p>
           </div>
-          {totalTaxPaid > 0 && (
+          {filteredTaxPaid > 0 && (
             <div class="bg-red-50 p-3 rounded-md hover:bg-red-100 transition-colors duration-200">
-              <p class="text-xs text-red-600 mb-1">Total Tax Paid</p>
+              <p class="text-xs text-red-600 mb-1">Tax Paid (Filtered)</p>
               <p class="text-lg font-semibold text-red-800">
-                {formatCurrency(totalTaxPaid)}
+                {formatCurrency(filteredTaxPaid)}
               </p>
             </div>
           )}
-          {totalInterestSaved > 0 && (
+          {filteredInterestSaved > 0 && (
             <div class="bg-green-50 p-3 rounded-md hover:bg-green-100 transition-colors duration-200">
-              <p class="text-xs text-green-600 mb-1">Interest Saved</p>
+              <p class="text-xs text-green-600 mb-1">Interest Saved (Filtered)</p>
               <p class="text-lg font-semibold text-green-800">
-                {formatCurrency(totalInterestSaved)}
+                {formatCurrency(filteredInterestSaved)}
               </p>
             </div>
           )}
         </div>
+
+        <p class="text-sm text-gray-600 mb-4">
+          Note: Tax, Interest Saved, and Cash Flow values in the table show cumulative amounts for each {selectedGranularity === "fortnight" ? "fortnight" : selectedGranularity} period. The header shows the total across all displayed periods.
+        </p>
 
         {/* Data Table */}
         <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
@@ -403,73 +445,73 @@ export default function VisualizationIsland({
                 <th class="sticky-header">
                   <div>Date</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    Final: {filteredStates[filteredStates.length - 1]?.date.toLocaleDateString()}
+                    Final: {statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.date.toLocaleDateString()}
                   </div>
                 </th>
-                <th class="text-right sticky-header">
+                <th class="text-right sticky-header bg-gray-50">
                   <div>Cash</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(filteredStates[filteredStates.length - 1]?.cash || 0)}
+                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.cash || 0)}
                   </div>
                 </th>
-                <th class="text-right sticky-header">
+                <th class="text-right sticky-header bg-gray-50">
                   <div>Investments</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(filteredStates[filteredStates.length - 1]?.investments || 0)}
+                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.investments || 0)}
                   </div>
                 </th>
-                <th class="text-right sticky-header">
+                <th class="text-right sticky-header bg-gray-50">
                   <div>Super</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(filteredStates[filteredStates.length - 1]?.superannuation || 0)}
+                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.superannuation || 0)}
                   </div>
                 </th>
-                <th class="text-right sticky-header">
+                <th class="text-right sticky-header bg-gray-50">
                   <div>Loan</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(filteredStates[filteredStates.length - 1]?.loanBalance || 0)}
+                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.loanBalance || 0)}
                   </div>
                 </th>
                 {finalOffsetBalance > 0 && (
-                  <th class="text-right sticky-header">
-                    <div>Offset</div>
-                    <div class="text-xs font-normal text-gray-500 mt-1">
+                  <th class="text-right sticky-header bg-blue-50">
+                    <div class="text-blue-700">Offset</div>
+                    <div class="text-xs font-normal text-blue-600 mt-1">
                       {formatCurrency(finalOffsetBalance)}
                     </div>
                   </th>
                 )}
-                <th class="text-right sticky-header">
+                <th class="text-right sticky-header bg-gray-50">
                   <div>Net Worth</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(filteredStates[filteredStates.length - 1]?.netWorth || 0)}
+                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.netWorth || 0)}
                   </div>
                 </th>
-                <th class="text-right sticky-header">
+                <th class="text-right sticky-header bg-gray-50">
                   <div>Cash Flow</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(filteredStates[filteredStates.length - 1]?.cashFlow || 0)}
+                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.periodCashFlow || 0)}
                   </div>
                 </th>
-                {totalTaxPaid > 0 && (
-                  <th class="text-right sticky-header">
-                    <div>Tax</div>
-                    <div class="text-xs font-normal text-gray-500 mt-1">
-                      {formatCurrency(totalTaxPaid)}
+                {filteredTaxPaid > 0 && (
+                  <th class="text-right sticky-header bg-red-50">
+                    <div class="text-red-700">Tax</div>
+                    <div class="text-xs font-normal text-red-600 mt-1">
+                      Cumulative: {formatCurrency(filteredTaxPaid)}
                     </div>
                   </th>
                 )}
-                {totalInterestSaved > 0 && (
-                  <th class="text-right sticky-header">
-                    <div>Int. Saved</div>
-                    <div class="text-xs font-normal text-gray-500 mt-1">
-                      {formatCurrency(totalInterestSaved)}
+                {filteredInterestSaved > 0 && (
+                  <th class="text-right sticky-header bg-green-50">
+                    <div class="text-green-700">Int. Saved</div>
+                    <div class="text-xs font-normal text-green-600 mt-1">
+                      Cumulative: {formatCurrency(filteredInterestSaved)}
                     </div>
                   </th>
                 )}
               </tr>
             </thead>
             <tbody>
-              {filteredStates.map((state, index) => (
+              {statesWithPeriodTotals.map((state, index) => (
                 <tr key={index}>
                   <td class="text-gray-900 font-medium">
                     {state.date.toLocaleDateString()}
@@ -491,7 +533,7 @@ export default function VisualizationIsland({
                     {formatCurrency(state.loanBalance)}
                   </td>
                   {finalOffsetBalance > 0 && (
-                    <td class="text-blue-600 text-right">
+                    <td class="text-gray-900 text-right">
                       {formatCurrency(state.offsetBalance)}
                     </td>
                   )}
@@ -504,19 +546,19 @@ export default function VisualizationIsland({
                   </td>
                   <td
                     class={`text-right font-medium ${
-                      state.cashFlow < 0 ? "text-red-600" : "text-green-600"
+                      state.periodCashFlow < 0 ? "text-red-600" : "text-green-600"
                     }`}
                   >
-                    {formatCurrency(state.cashFlow)}
+                    {formatCurrency(state.periodCashFlow)}
                   </td>
-                  {totalTaxPaid > 0 && (
-                    <td class="text-red-600 text-right text-sm">
-                      {formatCurrency(state.taxPaid || 0)}
+                  {filteredTaxPaid > 0 && (
+                    <td class="text-gray-900 text-right text-sm">
+                      {formatCurrency(state.periodTaxPaid || 0)}
                     </td>
                   )}
-                  {totalInterestSaved > 0 && (
-                    <td class="text-green-600 text-right text-sm">
-                      {formatCurrency(state.interestSaved || 0)}
+                  {filteredInterestSaved > 0 && (
+                    <td class="text-gray-900 text-right text-sm">
+                      {formatCurrency(state.periodInterestSaved || 0)}
                     </td>
                   )}
                 </tr>

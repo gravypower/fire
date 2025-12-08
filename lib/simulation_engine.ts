@@ -200,7 +200,7 @@ export const SimulationEngine = {
 
     // Phase 1: Income - Add salary income and deduct tax
     const grossIncome = IncomeProcessor.calculateIncome(params, interval);
-    taxPaid = IncomeProcessor.calculateTax(grossIncome, params.incomeTaxRate || 0);
+    taxPaid = IncomeProcessor.calculateTax(params, interval);
     const netIncome = grossIncome - taxPaid;
     cash += netIncome;
 

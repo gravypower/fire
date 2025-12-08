@@ -340,39 +340,55 @@ export default function TransitionManagerIsland({
           {config.transitions.map((transition) => (
             <div
               key={transition.id}
-              class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
+              class="border-l-4 border-blue-500 bg-white shadow-sm rounded-r-lg p-4 hover:shadow-md transition-shadow"
             >
               <div class="flex items-start justify-between">
                 <div class="flex-1">
-                  <div class="flex items-center gap-2 mb-1">
-                    <svg
-                      class="w-5 h-5 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <span class="font-semibold text-gray-900">
-                      {formatDate(transition.transitionDate)}
-                    </span>
+                  <div class="flex items-center gap-3 mb-2">
+                    <div class="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
+                      <svg
+                        class="w-5 h-5 text-blue-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <span class="font-bold text-gray-900 text-lg">
+                        {formatDate(transition.transitionDate)}
+                      </span>
+                      {transition.label && (
+                        <p class="text-sm text-gray-700 font-medium mt-0.5">{transition.label}</p>
+                      )}
+                    </div>
                   </div>
-                  {transition.label && (
-                    <p class="text-sm text-gray-700 mb-2">{transition.label}</p>
-                  )}
-                  <p class="text-sm text-gray-600">
-                    Changes: {getChangesSummary(transition)}
-                  </p>
+                  <div class="ml-13 mt-2">
+                    <p class="text-sm text-gray-600 mb-1">
+                      <span class="font-medium">Changes:</span> {getChangesSummary(transition)}
+                    </p>
+                    <div class="flex flex-wrap gap-1 mt-2">
+                      {Object.keys(transition.parameterChanges).map((key) => (
+                        <span
+                          key={key}
+                          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                        >
+                          {formatParamName(key as keyof UserParameters)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <div class="flex gap-2 ml-4">
                   <button
                     onClick={() => handleStartEdit(transition)}
-                    class="text-blue-600 hover:text-blue-800 p-1"
+                    class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded transition-colors"
                     title="Edit transition"
                   >
                     <svg
@@ -391,7 +407,7 @@ export default function TransitionManagerIsland({
                   </button>
                   <button
                     onClick={() => handleDelete(transition.id)}
-                    class="text-red-600 hover:text-red-800 p-1"
+                    class="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition-colors"
                     title="Delete transition"
                   >
                     <svg
@@ -588,18 +604,22 @@ function ParameterSelector({
   // Define parameter groups
   const parameterGroups: {
     name: string;
+    icon: string;
     params: (keyof UserParameters)[];
   }[] = [
     {
       name: "Income",
+      icon: "💰",
       params: ["annualSalary", "incomeTaxRate"],
     },
     {
       name: "Expenses",
+      icon: "💳",
       params: ["monthlyLivingExpenses", "monthlyRentOrMortgage"],
     },
     {
       name: "Investments",
+      icon: "📈",
       params: [
         "monthlyInvestmentContribution",
         "investmentReturnRate",
@@ -608,6 +628,7 @@ function ParameterSelector({
     },
     {
       name: "Superannuation",
+      icon: "🏦",
       params: [
         "superContributionRate",
         "superReturnRate",
@@ -616,6 +637,7 @@ function ParameterSelector({
     },
     {
       name: "Loans",
+      icon: "🏠",
       params: [
         "loanPrincipal",
         "loanInterestRate",
@@ -626,29 +648,35 @@ function ParameterSelector({
   ];
 
   return (
-    <div class="space-y-4">
+    <div class="space-y-3 max-h-96 overflow-y-auto pr-2">
       {parameterGroups.map((group) => (
-        <div key={group.name} class="border border-gray-200 rounded-lg p-3">
-          <h5 class="text-sm font-semibold text-gray-700 mb-2">{group.name}</h5>
-          <div class="space-y-2">
+        <div key={group.name} class="border border-gray-200 rounded-lg p-3 bg-white">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-lg">{group.icon}</span>
+            <h5 class="text-sm font-semibold text-gray-700">{group.name}</h5>
+          </div>
+          <div class="space-y-3">
             {group.params.map((param) => (
-              <div key={param} class="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  id={`param-${param}`}
-                  checked={formData.selectedParams.has(param)}
-                  onChange={() => onParamToggle(param)}
-                  class="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <div class="flex-1">
+              <div key={param} class="border-l-2 border-gray-200 pl-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <input
+                    type="checkbox"
+                    id={`param-${param}`}
+                    checked={formData.selectedParams.has(param)}
+                    onChange={() => onParamToggle(param)}
+                    class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
                   <label
                     htmlFor={`param-${param}`}
-                    class="text-sm text-gray-700 cursor-pointer"
+                    class="text-sm text-gray-700 cursor-pointer font-medium"
                   >
                     {formatParamName(param)}
                   </label>
-                  {formData.selectedParams.has(param) && (
-                    <div class="mt-1 fade-in">
+                </div>
+                {formData.selectedParams.has(param) && (
+                  <div class="mt-2 ml-6 fade-in">
+                    <div class="relative">
+                      <span class="absolute left-2 top-1.5 text-xs text-gray-500">$</span>
                       <input
                         type="number"
                         value={formData.parameterValues[param] as number}
@@ -658,11 +686,16 @@ function ParameterSelector({
                             parseFloat((e.target as HTMLInputElement).value),
                           )}
                         step="0.01"
-                        class="input-field text-sm"
+                        min="0"
+                        class="w-full pl-6 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter value"
                       />
                     </div>
-                  )}
-                </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Current: ${(config.baseParameters[param] as number)?.toFixed(2) || "0.00"}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>

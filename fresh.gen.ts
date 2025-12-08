@@ -12,6 +12,7 @@ import * as $test_simulation from "./routes/test-simulation.tsx";
 import * as $test_visualization from "./routes/test-visualization.tsx";
 import * as $ComparisonIsland from "./islands/ComparisonIsland.tsx";
 import * as $Counter from "./islands/Counter.tsx";
+import * as $ExpenseManagerIsland from "./islands/ExpenseManagerIsland.tsx";
 import * as $InputIsland from "./islands/InputIsland.tsx";
 import * as $MainIsland from "./islands/MainIsland.tsx";
 import * as $SimulationIsland from "./islands/SimulationIsland.tsx";
@@ -33,6 +34,7 @@ const manifest = {
   islands: {
     "./islands/ComparisonIsland.tsx": $ComparisonIsland,
     "./islands/Counter.tsx": $Counter,
+    "./islands/ExpenseManagerIsland.tsx": $ExpenseManagerIsland,
     "./islands/InputIsland.tsx": $InputIsland,
     "./islands/MainIsland.tsx": $MainIsland,
     "./islands/SimulationIsland.tsx": $SimulationIsland,

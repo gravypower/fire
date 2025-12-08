@@ -55,11 +55,11 @@ export default function MainIsland() {
   };
 
   return (
-    <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <main class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <ErrorBoundary>
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Left Column: Input Parameters and Transitions - Narrower */}
-          <div class="lg:col-span-4 xl:col-span-3 space-y-4 sm:space-y-6">
+          <div class="lg:col-span-3 xl:col-span-2 space-y-4 sm:space-y-6">
             <ErrorBoundary>
               <InputIsland 
                 config={config}
@@ -79,7 +79,7 @@ export default function MainIsland() {
           </div>
 
           {/* Right Column: Simulation and Visualization - Wider */}
-          <div class="lg:col-span-8 xl:col-span-9 space-y-4 sm:space-y-6">
+          <div class="lg:col-span-9 xl:col-span-10 space-y-4 sm:space-y-6">
             {/* Comparison Island - Only show if config has transitions */}
             {config && config.transitions.length > 0 && (
               <ErrorBoundary>

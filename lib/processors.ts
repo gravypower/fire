@@ -7,6 +7,7 @@ import type {
   FinancialState,
   TimeInterval,
   UserParameters,
+  TaxBracket,
 } from "../types/financial.ts";
 
 /**
@@ -36,6 +37,46 @@ function convertAnnualRateToInterval(
 }
 
 /**
+ * Calculates tax using progressive tax brackets
+ * @param income Annual income amount
+ * @param brackets Tax brackets to apply
+ * @returns Total tax amount
+ */
+export function calculateTaxWithBrackets(income: number, brackets: TaxBracket[]): number {
+  let totalTax = 0;
+  
+  for (const bracket of brackets) {
+    const bracketMin = bracket.min;
+    const bracketMax = bracket.max ?? Infinity;
+    
+    if (income <= bracketMin) {
+      // Income doesn't reach this bracket
+      break;
+    }
+    
+    // Calculate taxable amount in this bracket
+    const taxableInBracket = Math.min(income, bracketMax) - bracketMin;
+    
+    if (taxableInBracket > 0) {
+      totalTax += taxableInBracket * (bracket.rate / 100);
+    }
+  }
+  
+  return totalTax;
+}
+
+/**
+ * Default Australian tax brackets for 2024-25
+ */
+export const DEFAULT_AU_TAX_BRACKETS: TaxBracket[] = [
+  { min: 0, max: 18200, rate: 0 },
+  { min: 18200, max: 45000, rate: 19 },
+  { min: 45000, max: 120000, rate: 32.5 },
+  { min: 120000, max: 180000, rate: 37 },
+  { min: 180000, max: null, rate: 45 },
+];
+
+/**
  * Income Processor
  * Calculates income for a given time interval
  */
@@ -57,12 +98,30 @@ export const IncomeProcessor = {
 
   /**
    * Calculates tax on income for the specified time interval
-   * @param income Gross income amount
-   * @param taxRate Tax rate as a percentage (e.g., 30 for 30%)
-   * @returns Tax amount
+   * @param params User financial parameters
+   * @param annualIncome Annual gross income amount
+   * @returns Tax amount for the year
    */
-  calculateTax(income: number, taxRate: number): number {
-    return income * (taxRate / 100);
+  calculateAnnualTax(params: UserParameters, annualIncome: number): number {
+    // Use tax brackets if provided, otherwise fall back to flat rate
+    if (params.taxBrackets && params.taxBrackets.length > 0) {
+      return calculateTaxWithBrackets(annualIncome, params.taxBrackets);
+    } else {
+      // Fallback to simple percentage
+      return annualIncome * (params.incomeTaxRate / 100);
+    }
+  },
+
+  /**
+   * Calculates tax for a specific interval
+   * @param params User financial parameters
+   * @param interval Time interval for calculation
+   * @returns Tax amount for the interval
+   */
+  calculateTax(params: UserParameters, interval: TimeInterval): number {
+    const annualTax = this.calculateAnnualTax(params, params.annualSalary);
+    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+    return annualTax / intervalPeriodsPerYear;
   },
 };
 
@@ -78,16 +137,65 @@ export const ExpenseProcessor = {
    * @returns Total expense amount for the interval
    */
   calculateExpenses(params: UserParameters, interval: TimeInterval): number {
+    // Use individual expense items if provided, otherwise fall back to legacy fields
+    if (params.expenseItems && params.expenseItems.length > 0) {
+      return this.calculateExpensesFromItems(params.expenseItems, interval);
+    }
+    
+    // Legacy calculation
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
-
-    // Monthly living expenses converted to interval
-    // Note: monthlyRentOrMortgage is kept for backwards compatibility but should be 0
-    // if using loan payments. For renters, use this field and set loan fields to 0.
     const monthlyExpenses = params.monthlyLivingExpenses +
       params.monthlyRentOrMortgage;
     const expensesPerInterval = (monthlyExpenses * 12) / intervalPeriodsPerYear;
 
     return expensesPerInterval;
+  },
+
+  /**
+   * Calculates expenses from individual expense items
+   * @param items Array of expense items
+   * @param interval Target time interval
+   * @returns Total expense amount for the interval
+   */
+  calculateExpensesFromItems(
+    items: import("../types/expenses.ts").ExpenseItem[],
+    interval: TimeInterval
+  ): number {
+    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+    let totalExpenses = 0;
+
+    for (const item of items) {
+      if (!item.enabled) continue;
+
+      // Convert item frequency to annual amount
+      let annualAmount: number;
+      switch (item.frequency) {
+        case "weekly":
+          annualAmount = item.amount * 52;
+          break;
+        case "fortnightly":
+          annualAmount = item.amount * 26;
+          break;
+        case "monthly":
+          annualAmount = item.amount * 12;
+          break;
+      }
+
+      // Convert annual to target interval
+      const intervalAmount = annualAmount / intervalPeriodsPerYear;
+      totalExpenses += intervalAmount;
+    }
+
+    return totalExpenses;
+  },
+
+  /**
+   * Calculates monthly total from expense items
+   * @param items Array of expense items
+   * @returns Monthly total
+   */
+  calculateMonthlyTotal(items: import("../types/expenses.ts").ExpenseItem[]): number {
+    return this.calculateExpensesFromItems(items, "month");
   },
 };
 
