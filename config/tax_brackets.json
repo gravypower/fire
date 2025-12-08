@@ -1,41 +1,83 @@
 {
   "country": "Australia",
-  "taxYear": "2024-25",
   "description": "Australian tax brackets for residents",
-  "brackets": [
-    {
-      "min": 0,
-      "max": 18200,
-      "rate": 0,
-      "description": "Tax-free threshold"
+  "years": {
+    "2024-25": {
+      "brackets": [
+        {
+          "min": 0,
+          "max": 18200,
+          "rate": 0,
+          "description": "Tax-free threshold"
+        },
+        {
+          "min": 18200,
+          "max": 45000,
+          "rate": 19,
+          "description": "Low income bracket"
+        },
+        {
+          "min": 45000,
+          "max": 120000,
+          "rate": 32.5,
+          "description": "Middle income bracket"
+        },
+        {
+          "min": 120000,
+          "max": 180000,
+          "rate": 37,
+          "description": "High income bracket"
+        },
+        {
+          "min": 180000,
+          "max": null,
+          "rate": 45,
+          "description": "Top income bracket"
+        }
+      ],
+      "medicareLevy": {
+        "rate": 2.0,
+        "description": "Medicare levy (not included in brackets above)"
+      }
     },
-    {
-      "min": 18200,
-      "max": 45000,
-      "rate": 19,
-      "description": "Low income bracket"
-    },
-    {
-      "min": 45000,
-      "max": 120000,
-      "rate": 32.5,
-      "description": "Middle income bracket"
-    },
-    {
-      "min": 120000,
-      "max": 180000,
-      "rate": 37,
-      "description": "High income bracket"
-    },
-    {
-      "min": 180000,
-      "max": null,
-      "rate": 45,
-      "description": "Top income bracket"
+    "2025-26": {
+      "brackets": [
+        {
+          "min": 0,
+          "max": 18200,
+          "rate": 0,
+          "description": "Tax-free threshold"
+        },
+        {
+          "min": 18200,
+          "max": 45000,
+          "rate": 16,
+          "description": "Low income bracket"
+        },
+        {
+          "min": 45000,
+          "max": 135000,
+          "rate": 30,
+          "description": "Middle income bracket"
+        },
+        {
+          "min": 135000,
+          "max": 190000,
+          "rate": 37,
+          "description": "High income bracket"
+        },
+        {
+          "min": 190000,
+          "max": null,
+          "rate": 45,
+          "description": "Top income bracket"
+        }
+      ],
+      "medicareLevy": {
+        "rate": 2.0,
+        "description": "Medicare levy (not included in brackets above)"
+      }
     }
-  ],
-  "medicareLevy": {
-    "rate": 2.0,
-    "description": "Medicare levy (not included in brackets above)"
-  }
+  },
+  "defaultYear": "2024-25"
 }

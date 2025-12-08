@@ -66,10 +66,32 @@ export default function Help() {
 
               <div class="border-l-4 border-purple-500 pl-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-2">Tax Calculation</h3>
-                <p class="text-gray-700">
-                  The tool calculates taxes using tiered tax brackets. You can configure federal and state 
-                  tax rates, standard deductions, and tax-advantaged account contributions.
+                <p class="text-gray-700 mb-3">
+                  The tool calculates taxes using progressive tiered tax brackets. Tax is calculated automatically 
+                  based on your income, with support for tax deductions like debt recycling interest.
                 </p>
+                <div class="bg-purple-50 p-3 rounded-lg mt-2">
+                  <p class="text-sm font-semibold text-purple-900 mb-2">Australian Tax Brackets (2024-25):</p>
+                  <ul class="text-sm text-purple-800 space-y-1">
+                    <li>• $0 - $18,200: 0% (Tax-free threshold)</li>
+                    <li>• $18,200 - $45,000: 19%</li>
+                    <li>• $45,000 - $120,000: 32.5%</li>
+                    <li>• $120,000 - $180,000: 37%</li>
+                    <li>• $180,000+: 45%</li>
+                  </ul>
+                  <p class="text-xs text-purple-700 mt-2">Plus 2% Medicare Levy</p>
+                </div>
+                <div class="bg-blue-50 p-3 rounded-lg mt-2">
+                  <p class="text-sm font-semibold text-blue-900 mb-2">Australian Tax Brackets (2025-26):</p>
+                  <ul class="text-sm text-blue-800 space-y-1">
+                    <li>• $0 - $18,200: 0% (Tax-free threshold)</li>
+                    <li>• $18,200 - $45,000: 16%</li>
+                    <li>• $45,000 - $135,000: 30%</li>
+                    <li>• $135,000 - $190,000: 37%</li>
+                    <li>• $190,000+: 45%</li>
+                  </ul>
+                  <p class="text-xs text-blue-700 mt-2">Plus 2% Medicare Levy</p>
+                </div>
               </div>
 
               <div class="border-l-4 border-orange-500 pl-4">

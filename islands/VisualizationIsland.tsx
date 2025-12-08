@@ -10,6 +10,7 @@ import NetWorthChart from "../components/NetWorthChart.tsx";
 import CashFlowChart from "../components/CashFlowChart.tsx";
 import ChartErrorBoundary from "../components/ChartErrorBoundary.tsx";
 import TimelineSummary from "../components/TimelineSummary.tsx";
+import { SummaryTable, LoansTable, InvestmentsTable, TaxTable, CashFlowTable } from "../components/FinancialTimelineTables.tsx";
 
 interface VisualizationIslandProps {
   result: SimulationResult | EnhancedSimulationResult;
@@ -37,7 +38,10 @@ export default function VisualizationIsland({
   desiredRetirementAge,
 }: VisualizationIslandProps) {
   // State for time granularity selection
-  const [selectedGranularity, setSelectedGranularity] = useState<TimeInterval>("month");
+  const [selectedGranularity, setSelectedGranularity] = useState<TimeInterval>("year");
+  
+  // State for which detailed table to show
+  const [selectedDetailTable, setSelectedDetailTable] = useState<"summary" | "loans" | "tax" | "investments" | "cashflow">("summary");
 
   // Check if result is an EnhancedSimulationResult
   const isEnhancedResult = (res: SimulationResult | EnhancedSimulationResult): res is EnhancedSimulationResult => {
@@ -434,12 +438,113 @@ export default function VisualizationIsland({
           </p>
         </div>
 
+        {/* Table View Selector */}
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Table View
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedDetailTable("summary")}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "summary"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
+            >
+              Summary
+            </button>
+            <button
+              onClick={() => setSelectedDetailTable("loans")}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "loans"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
+            >
+              Loans & Debt
+            </button>
+            <button
+              onClick={() => setSelectedDetailTable("investments")}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "investments"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
+            >
+              Investments & Super
+            </button>
+            <button
+              onClick={() => setSelectedDetailTable("tax")}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "tax"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
+            >
+              Tax & Deductions
+            </button>
+            <button
+              onClick={() => setSelectedDetailTable("cashflow")}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "cashflow"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
+            >
+              Cash Flow & Expenses
+            </button>
+          </div>
+        </div>
+
         <p class="text-sm text-gray-600 mb-4">
-          Note: Tax, Interest Saved, and Cash Flow values in the table show cumulative amounts for each {selectedGranularity === "fortnight" ? "fortnight" : selectedGranularity} period. The header shows the total across all displayed periods.
+          Note: Period values show cumulative amounts for each {selectedGranularity === "fortnight" ? "fortnight" : selectedGranularity}. Headers show final or total values.
         </p>
 
-        {/* Data Table */}
-        <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
+        {/* Render Selected Table */}
+        {selectedDetailTable === "summary" && (
+          <SummaryTable 
+            states={statesWithPeriodTotals}
+            transitionPoints={effectiveTransitionPoints}
+            retirementDate={result.retirementDate}
+            allStates={result.states}
+          />
+        )}
+        {selectedDetailTable === "loans" && (
+          <LoansTable 
+            states={statesWithPeriodTotals}
+            transitionPoints={effectiveTransitionPoints}
+            retirementDate={result.retirementDate}
+            allStates={result.states}
+          />
+        )}
+        {selectedDetailTable === "investments" && (
+          <InvestmentsTable 
+            states={statesWithPeriodTotals}
+            transitionPoints={effectiveTransitionPoints}
+            retirementDate={result.retirementDate}
+            allStates={result.states}
+          />
+        )}
+        {selectedDetailTable === "tax" && (
+          <TaxTable 
+            states={statesWithPeriodTotals}
+            transitionPoints={effectiveTransitionPoints}
+            retirementDate={result.retirementDate}
+            allStates={result.states}
+          />
+        )}
+        {selectedDetailTable === "cashflow" && (
+          <CashFlowTable 
+            states={statesWithPeriodTotals}
+            transitionPoints={effectiveTransitionPoints}
+            retirementDate={result.retirementDate}
+            allStates={result.states}
+          />
+        )}
+
+        {/* Old table removed - replaced with component-based tables above */}
+        <div style="display: none;">
           <table class="data-table">
             <thead class="sticky top-0 z-10 bg-gray-50 shadow-sm">
               <tr>

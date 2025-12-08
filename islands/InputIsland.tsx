@@ -82,52 +82,6 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   const [parameters, setParameters] = useState<UserParameters>(getDefaultParameters());
   const [errors, setErrors] = useState<FieldErrors>({});
   const [storageError, setStorageError] = useState<string | null>(null);
-  const [showTaxBrackets, setShowTaxBrackets] = useState(false);
-  const [taxConfigLoading, setTaxConfigLoading] = useState(false);
-  const [taxConfigInfo, setTaxConfigInfo] = useState<{ country: string; taxYear: string; description: string } | null>(null);
-
-  // Load tax configuration from server on mount
-  useEffect(() => {
-    const loadTaxConfig = async () => {
-      setTaxConfigLoading(true);
-      try {
-        const response = await fetch('/api/tax-config');
-        if (response.ok) {
-          const taxConfig = await response.json();
-          setTaxConfigInfo({
-            country: taxConfig.country,
-            taxYear: taxConfig.taxYear,
-            description: taxConfig.description,
-          });
-          
-          // Update parameters with server tax brackets
-          setParameters(prev => ({
-            ...prev,
-            taxBrackets: taxConfig.brackets,
-          }));
-          
-          // If config exists, update it with new tax brackets
-          if (config) {
-            const updatedConfig = {
-              ...config,
-              baseParameters: {
-                ...config.baseParameters,
-                taxBrackets: taxConfig.brackets,
-              },
-            };
-            onConfigurationChange(updatedConfig);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load tax config:', error);
-        // Fall back to default tax brackets
-      } finally {
-        setTaxConfigLoading(false);
-      }
-    };
-    
-    loadTaxConfig();
-  }, []); // Run once on mount
 
   // Initialize parameters from config or defaults
   // Update when config prop changes (e.g., when loaded from storage)
@@ -332,60 +286,6 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
       }
     }
   };
-
-  /**
-   * Handles tax bracket changes
-   */
-  const handleTaxBracketChange = (index: number, field: 'min' | 'max' | 'rate', value: string) => {
-    const brackets = [...(parameters.taxBrackets || DEFAULT_AU_TAX_BRACKETS)];
-    const numValue = field === 'max' && value === '' ? null : parseFloat(value);
-    
-    if (field === 'max' && value === '') {
-      brackets[index] = { ...brackets[index], max: null };
-    } else if (!isNaN(numValue as number)) {
-      brackets[index] = { ...brackets[index], [field]: numValue };
-    }
-    
-    const updatedParams = { ...parameters, taxBrackets: brackets };
-    setParameters(updatedParams);
-
-    if (config) {
-      try {
-        const updatedConfig: SimulationConfiguration = {
-          ...config,
-          baseParameters: updatedParams,
-        };
-        onConfigurationChange(updatedConfig);
-        if (storageError) {
-          setStorageError(null);
-        }
-      } catch (e) {
-        console.error("Failed to update configuration:", e);
-      }
-    }
-  };
-
-  /**
-   * Resets tax brackets to Australian defaults
-   */
-  const resetTaxBrackets = () => {
-    const updatedParams = { ...parameters, taxBrackets: DEFAULT_AU_TAX_BRACKETS };
-    setParameters(updatedParams);
-
-    if (config) {
-      try {
-        const updatedConfig: SimulationConfiguration = {
-          ...config,
-          baseParameters: updatedParams,
-        };
-        onConfigurationChange(updatedConfig);
-      } catch (e) {
-        console.error("Failed to update configuration:", e);
-      }
-    }
-  };
-
-
 
   /**
    * Adds a new loan
@@ -645,106 +545,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
       {/* Grid Layout for Cards */}
       <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         
-        {/* Tax Configuration Section */}
-        <div class="card p-6">
-          <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            Tax Configuration
-          </h3>
-          <div class="p-4 bg-blue-50 rounded-md border border-blue-200">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center">
-              <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              <span class="text-sm font-medium text-gray-700">Tax Brackets (Progressive)</span>
-            </div>
-            <button
-              onClick={() => setShowTaxBrackets(!showTaxBrackets)}
-              class="text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              {showTaxBrackets ? 'Hide' : 'Edit'}
-            </button>
-          </div>
-          
-          {!showTaxBrackets && (
-            <div>
-              <p class="text-xs text-gray-700 font-medium mb-1">Australian Tax Rates (2024-25):</p>
-              <ul class="text-xs text-gray-600 space-y-0.5">
-                {(parameters.taxBrackets || DEFAULT_AU_TAX_BRACKETS).map((bracket, i) => (
-                  <li key={i}>
-                    • ${bracket.min.toLocaleString()} - {bracket.max ? `$${bracket.max.toLocaleString()}` : '+'}: {bracket.rate}%
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          
-          {showTaxBrackets && (
-            <div class="space-y-3 fade-in">
-              <div class="flex justify-between items-center mb-2">
-                <p class="text-xs text-gray-600">Edit tax brackets below:</p>
-                <button
-                  onClick={resetTaxBrackets}
-                  class="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Reset to AU Defaults
-                </button>
-              </div>
-              
-              {(parameters.taxBrackets || DEFAULT_AU_TAX_BRACKETS).map((bracket, index) => (
-                <div key={index} class="grid grid-cols-3 gap-2 p-2 bg-white rounded border border-blue-200">
-                  <div>
-                    <label class="text-xs text-gray-600">Min ($)</label>
-                    <input
-                      type="number"
-                      value={bracket.min}
-                      onInput={(e) => handleTaxBracketChange(index, 'min', (e.target as HTMLInputElement).value)}
-                      class="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                      step="1000"
-                    />
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-600">Max ($)</label>
-                    <input
-                      type="number"
-                      value={bracket.max ?? ''}
-                      placeholder="No limit"
-                      onInput={(e) => handleTaxBracketChange(index, 'max', (e.target as HTMLInputElement).value)}
-                      class="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                      step="1000"
-                    />
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-600">Rate (%)</label>
-                    <input
-                      type="number"
-                      value={bracket.rate}
-                      onInput={(e) => handleTaxBracketChange(index, 'rate', (e.target as HTMLInputElement).value)}
-                      class="w-full px-2 py-1 text-xs border border-gray-300 rounded"
-                      step="0.5"
-                      min="0"
-                      max="100"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-        {/* Advertisement Placeholder */}
-        <AdPlaceholder variant="premium" />
-
-        {/* Loans Section - Spans 2 columns on large screens */}
-        <div class="card p-6 lg:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-700 flex items-center">
-              <svg class="w-5 h-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        {/* Tax configuration removed - see Help page for tax bracket information */}
               </svg>
               Loans & Mortgages
             </h3>
@@ -1055,3 +856,4 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
     </div>
   );
 }
+
