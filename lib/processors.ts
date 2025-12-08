@@ -369,7 +369,8 @@ export const LoanProcessor = {
    * @param payment Payment amount
    * @param interval Time interval for calculation
    * @param useOffset Whether to use offset account
-   * @returns Object with new balance, interest paid, principal paid, and interest saved
+   * @param isDebtRecycling Whether this loan is used for debt recycling (interest is tax deductible)
+   * @returns Object with new balance, interest paid, principal paid, interest saved, and deductible interest
    */
   calculateLoanPayment(
     balance: number,
@@ -378,15 +379,17 @@ export const LoanProcessor = {
     payment: number,
     interval: TimeInterval,
     useOffset: boolean = false,
+    isDebtRecycling: boolean = false,
   ): { 
     newBalance: number; 
     interestPaid: number; 
     principalPaid: number;
     interestSaved: number;
+    deductibleInterest: number;
   } {
     // If no balance, no payment needed
     if (balance <= 0) {
-      return { newBalance: 0, interestPaid: 0, principalPaid: 0, interestSaved: 0 };
+      return { newBalance: 0, interestPaid: 0, principalPaid: 0, interestSaved: 0, deductibleInterest: 0 };
     }
 
     // Convert annual interest rate to interval rate
@@ -405,6 +408,10 @@ export const LoanProcessor = {
     const interestWithoutOffset = balance * intervalRate;
     const interestSaved = useOffset ? (interestWithoutOffset - interestPaid) : 0;
 
+    // Calculate deductible interest for debt recycling loans
+    // Only the interest actually paid (not saved by offset) is deductible
+    const deductibleInterest = isDebtRecycling ? interestPaid : 0;
+
     // Principal paid is the payment minus interest (but can't exceed remaining balance)
     const principalPaid = Math.max(0, Math.min(payment - interestPaid, balance));
 
@@ -417,6 +424,7 @@ export const LoanProcessor = {
       interestPaid,
       principalPaid,
       interestSaved,
+      deductibleInterest,
     };
   },
 

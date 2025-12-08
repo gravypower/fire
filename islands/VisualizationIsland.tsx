@@ -82,6 +82,7 @@ export default function VisualizationIsland({
     const periodTaxPaid = periodStates.reduce((sum, s) => sum + (s.taxPaid || 0), 0);
     const periodExpenses = periodStates.reduce((sum, s) => sum + (s.expenses || 0), 0);
     const periodInterestSaved = periodStates.reduce((sum, s) => sum + (s.interestSaved || 0), 0);
+    const periodDeductibleInterest = periodStates.reduce((sum, s) => sum + (s.deductibleInterest || 0), 0);
     const periodCashFlow = periodStates.reduce((sum, s) => sum + (s.cashFlow || 0), 0);
     
     return {
@@ -89,6 +90,7 @@ export default function VisualizationIsland({
       periodTaxPaid,
       periodExpenses,
       periodInterestSaved,
+      periodDeductibleInterest,
       periodCashFlow,
     };
   });
@@ -125,11 +127,13 @@ export default function VisualizationIsland({
   // Calculate total tax paid and interest saved (full simulation)
   const totalTaxPaid = result.states.reduce((sum, state) => sum + (state.taxPaid || 0), 0);
   const totalInterestSaved = result.states.reduce((sum, state) => sum + (state.interestSaved || 0), 0);
+  const totalDeductibleInterest = result.states.reduce((sum, state) => sum + (state.deductibleInterest || 0), 0);
 
   // Calculate cumulative totals for filtered states (sum of all period totals)
   const filteredTaxPaid = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodTaxPaid || 0), 0);
   const filteredExpenses = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodExpenses || 0), 0);
   const filteredInterestSaved = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodInterestSaved || 0), 0);
+  const filteredDeductibleInterest = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodDeductibleInterest || 0), 0);
 
   // Find loan payoff date
   const loanPayoffDate = findLoanPayoffDate(result.states);
@@ -513,6 +517,14 @@ export default function VisualizationIsland({
                     </div>
                   </th>
                 )}
+                {filteredDeductibleInterest > 0 && (
+                  <th class="text-right sticky-header bg-blue-50">
+                    <div class="text-blue-700">Tax Deduction</div>
+                    <div class="text-xs font-normal text-blue-600 mt-1">
+                      Cumulative: {formatCurrency(filteredDeductibleInterest)}
+                    </div>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -615,6 +627,11 @@ export default function VisualizationIsland({
                     {filteredInterestSaved > 0 && (
                       <td class="text-gray-900 text-right text-sm">
                         {formatCurrency(state.periodInterestSaved || 0)}
+                      </td>
+                    )}
+                    {filteredDeductibleInterest > 0 && (
+                      <td class="text-gray-900 text-right text-sm">
+                        {formatCurrency(state.periodDeductibleInterest || 0)}
                       </td>
                     )}
                   </tr>

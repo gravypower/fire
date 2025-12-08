@@ -160,6 +160,7 @@ export const SimulationEngine = {
       taxPaid: 0,
       expenses: 0,
       interestSaved: 0,
+      deductibleInterest: 0,
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
@@ -253,12 +254,13 @@ export const SimulationEngine = {
     let offsetBalance = currentState.offsetBalance;
     let taxPaid = 0;
     let interestSaved = 0;
+    let deductibleInterest = 0;
 
-    // Phase 1: Income - Add salary income and deduct tax
+    // Phase 1: Income - Add salary income and calculate initial tax (will be adjusted for deductions later)
     const grossIncome = IncomeProcessor.calculateIncome(params, interval);
-    taxPaid = IncomeProcessor.calculateTax(params, interval);
-    const netIncome = grossIncome - taxPaid;
-    cash += netIncome;
+    // Tax will be recalculated after we know deductible interest
+    let netIncome = 0;
+    cash += netIncome; // Will add after tax calculation
 
     // Phase 2: Expenses - Deduct living expenses only
     // Note: Mortgage payments are handled in the loan phase
@@ -269,6 +271,7 @@ export const SimulationEngine = {
     // Cash can go negative, representing debt or overdraft
 
     // Phase 3: Loan - Process loan payments with offset account
+    // Track deductible interest for debt recycling loans
     // If loans array exists (even if empty), use it; otherwise use legacy single loan
     let loanBalances: { [loanId: string]: number } = {};
     let offsetBalances: { [loanId: string]: number } = {};
@@ -299,9 +302,11 @@ export const SimulationEngine = {
             loanPayment,
             interval,
             loan.hasOffset || false,
+            loan.isDebtRecycling || false,
           );
           loanBalances[loan.id] = loanResult.newBalance;
           interestSaved += loanResult.interestSaved;
+          deductibleInterest += loanResult.deductibleInterest;
           cash -= loanPayment;
         } else if (currentLoanBalance > 0) {
           // Partial payment scenario
@@ -313,9 +318,11 @@ export const SimulationEngine = {
             partialPayment,
             interval,
             loan.hasOffset || false,
+            loan.isDebtRecycling || false,
           );
           loanBalances[loan.id] = loanResult.newBalance;
           interestSaved += loanResult.interestSaved;
+          deductibleInterest += loanResult.deductibleInterest;
           cash -= partialPayment;
         } else {
           loanBalances[loan.id] = 0;
@@ -345,6 +352,7 @@ export const SimulationEngine = {
             loanPayment,
             interval,
             params.useOffsetAccount || false,
+            false, // Legacy loans don't support debt recycling
           );
           loanBalance = loanResult.newBalance;
           interestSaved = loanResult.interestSaved;
@@ -361,6 +369,7 @@ export const SimulationEngine = {
             partialPayment,
             interval,
             params.useOffsetAccount || false,
+            false, // Legacy loans don't support debt recycling
           );
           loanBalance = loanResult.newBalance;
           interestSaved = loanResult.interestSaved;
@@ -373,6 +382,23 @@ export const SimulationEngine = {
       offsetBalance = 0;
       totalLoanPayment = 0;
     }
+
+    // Now calculate tax with deductible interest deduction
+    // Convert deductible interest to annual amount for tax calculation
+    const periodsPerYear = intervalToPeriodsPerYear(interval);
+    const annualDeductibleInterest = deductibleInterest * periodsPerYear;
+    
+    // Calculate taxable income (gross income minus deductible interest)
+    const annualGrossIncome = IncomeProcessor.calculateTotalAnnualIncome(params);
+    const taxableIncome = Math.max(0, annualGrossIncome - annualDeductibleInterest);
+    
+    // Calculate tax on taxable income
+    const annualTax = IncomeProcessor.calculateAnnualTax(params, taxableIncome);
+    taxPaid = annualTax / periodsPerYear;
+    
+    // Calculate net income and add to cash
+    netIncome = grossIncome - taxPaid;
+    cash += netIncome;
 
     // Phase 4: Investment - Add contributions and apply growth
     // Convert monthly contribution to interval
@@ -433,30 +459,72 @@ export const SimulationEngine = {
 
     // Phase 6: Offset Account - Move leftover cash to offset account
     // For multiple loans, add to the biggest loan with offset enabled
+    // Handle excess offset (when offset > loan balance) as cash
     if (cash > 0 && loanBalance > 0) {
       if (params.loans !== undefined && params.loans.length > 0) {
         // Find the biggest loan with offset enabled
-        let biggestLoanWithOffset: { id: string; balance: number } | null = null;
+        let biggestLoanWithOffset: { id: string; balance: number; loan: typeof params.loans[0] } | null = null;
         
         for (const loan of params.loans) {
           if (loan.hasOffset) {
             const currentBalance = loanBalances[loan.id] || 0;
             if (currentBalance > 0 && (!biggestLoanWithOffset || currentBalance > biggestLoanWithOffset.balance)) {
-              biggestLoanWithOffset = { id: loan.id, balance: currentBalance };
+              biggestLoanWithOffset = { id: loan.id, balance: currentBalance, loan };
             }
           }
         }
         
         // Add leftover cash to the biggest loan's offset
         if (biggestLoanWithOffset) {
-          offsetBalances[biggestLoanWithOffset.id] = (offsetBalances[biggestLoanWithOffset.id] || 0) + cash;
-          offsetBalance += cash;
-          cash = 0;
+          const currentOffsetBalance = offsetBalances[biggestLoanWithOffset.id] || 0;
+          const loanBalance = biggestLoanWithOffset.balance;
+          
+          // Calculate how much we can add to offset (capped at loan balance)
+          const maxOffsetIncrease = Math.max(0, loanBalance - currentOffsetBalance);
+          const offsetIncrease = Math.min(cash, maxOffsetIncrease);
+          
+          // Add to offset
+          offsetBalances[biggestLoanWithOffset.id] = currentOffsetBalance + offsetIncrease;
+          offsetBalance += offsetIncrease;
+          cash -= offsetIncrease;
+          
+          // Any remaining cash stays as cash (excess offset scenario)
+          // This cash is now held as savings and will show on the timeline
         }
       } else if (params.loans === undefined && params.useOffsetAccount) {
         // Legacy single loan offset (only if loans array doesn't exist)
-        offsetBalance += cash;
-        cash = 0;
+        const maxOffsetIncrease = Math.max(0, loanBalance - offsetBalance);
+        const offsetIncrease = Math.min(cash, maxOffsetIncrease);
+        
+        offsetBalance += offsetIncrease;
+        cash -= offsetIncrease;
+        // Excess cash stays as cash
+      }
+    }
+    
+    // Phase 6b: Auto-payout loans when offset equals outstanding principal
+    if (params.loans !== undefined && params.loans.length > 0) {
+      for (const loan of params.loans) {
+        if (loan.hasOffset && loan.autoPayoutWhenOffsetFull) {
+          const currentLoanBalance = loanBalances[loan.id] || 0;
+          const currentOffsetBalance = offsetBalances[loan.id] || 0;
+          
+          // If offset equals or exceeds loan balance, pay out the loan
+          if (currentLoanBalance > 0 && currentOffsetBalance >= currentLoanBalance) {
+            // Pay out the loan (set balance to 0)
+            loanBalances[loan.id] = 0;
+            
+            // Clear the offset for this loan and convert to cash
+            offsetBalances[loan.id] = 0;
+            
+            // Add the offset amount to cash (it was already saved, now it's liquid)
+            cash += currentOffsetBalance;
+            
+            // Update totals
+            loanBalance = Object.values(loanBalances).reduce((sum, bal) => sum + bal, 0);
+            offsetBalance = Object.values(offsetBalances).reduce((sum, bal) => sum + bal, 0);
+          }
+        }
       }
     }
 
@@ -477,6 +545,7 @@ export const SimulationEngine = {
       taxPaid,
       expenses,
       interestSaved,
+      deductibleInterest,
       loanBalances: params.loans && params.loans.length > 0 ? loanBalances : undefined,
       superBalances: params.superAccounts && params.superAccounts.length > 0 ? superBalances : undefined,
       offsetBalances: params.loans && params.loans.length > 0 ? offsetBalances : undefined,
@@ -589,6 +658,7 @@ export const SimulationEngine = {
       taxPaid: 0,
       expenses: 0,
       interestSaved: 0,
+      deductibleInterest: 0,
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,

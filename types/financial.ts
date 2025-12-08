@@ -100,6 +100,10 @@ export interface Loan {
   hasOffset?: boolean;
   /** Current offset balance for this loan */
   offsetBalance?: number;
+  /** Whether to automatically pay out the loan when offset equals outstanding principal */
+  autoPayoutWhenOffsetFull?: boolean;
+  /** Whether this loan is used for debt recycling (interest is tax deductible) */
+  isDebtRecycling?: boolean;
 }
 
 /**
@@ -129,6 +133,8 @@ export interface FinancialState {
   expenses: number;
   /** Interest saved due to offset account */
   interestSaved: number;
+  /** Tax deductible interest paid this period (from debt recycling loans) */
+  deductibleInterest?: number;
   /** Individual loan balances by loan ID (optional, falls back to loanBalance) */
   loanBalances?: { [loanId: string]: number };
   /** Individual super balances by super ID (optional, falls back to superannuation) */

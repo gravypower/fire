@@ -855,15 +855,61 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                       Leftover cash will be added to this loan's offset to reduce interest
                     </p>
                     {loan.hasOffset && (
-                      <div class="fade-in">
-                        <label class="text-xs text-gray-600">Current Offset Balance ($)</label>
-                        <input
-                          type="number"
-                          value={loan.offsetBalance || 0}
-                          onInput={(e) => updateLoan(index, 'offsetBalance', parseFloat((e.target as HTMLInputElement).value))}
-                          class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                          step="100"
-                        />
+                      <div class="fade-in space-y-2">
+                        <div>
+                          <label class="text-xs text-gray-600">Current Offset Balance ($)</label>
+                          <input
+                            type="number"
+                            value={loan.offsetBalance || 0}
+                            onInput={(e) => updateLoan(index, 'offsetBalance', parseFloat((e.target as HTMLInputElement).value))}
+                            class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            step="100"
+                          />
+                        </div>
+                        <label class="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={loan.autoPayoutWhenOffsetFull || false}
+                            onChange={(e) => updateLoan(index, 'autoPayoutWhenOffsetFull', (e.target as HTMLInputElement).checked)}
+                            class="w-3 h-3 text-green-600 border-gray-300 rounded"
+                          />
+                          <span class="ml-2 text-xs text-gray-700">
+                            Auto-payout loan when offset equals outstanding principal
+                          </span>
+                        </label>
+                        <p class="text-xs text-gray-500 ml-5">
+                          When enabled, the loan will be paid out automatically once the offset balance reaches the outstanding principal amount
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Debt Recycling for this loan */}
+                  <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
+                    <label class="flex items-center cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        checked={loan.isDebtRecycling || false}
+                        onChange={(e) => updateLoan(index, 'isDebtRecycling', (e.target as HTMLInputElement).checked)}
+                        class="w-3 h-3 text-green-600 border-gray-300 rounded"
+                      />
+                      <span class="ml-2 text-xs font-medium text-gray-700">
+                        Enable Debt Recycling (Tax Deductible Interest)
+                      </span>
+                    </label>
+                    <p class="text-xs text-gray-600">
+                      When enabled, interest paid on this loan is tax deductible, reducing your taxable income. Use this for investment loans where interest can be claimed against your tax.
+                    </p>
+                    {loan.isDebtRecycling && (
+                      <div class="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded fade-in">
+                        <div class="flex items-start">
+                          <svg class="w-3 h-3 text-yellow-600 mr-1 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                          </svg>
+                          <p class="text-xs text-yellow-800">
+                            <strong>Important:</strong> Only use debt recycling for loans where the borrowed funds are used for income-producing investments. Consult a tax professional to ensure compliance with tax laws.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
