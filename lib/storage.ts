@@ -58,8 +58,10 @@ const CONFIG_STORAGE_KEY = "finance-simulation-config";
 
 /**
  * Serializable version of UserParameters (Date converted to string)
+ * Note: This interface is intentionally flexible to support both legacy and new fields
  */
 interface SerializableUserParameters {
+  // Legacy fields (for backward compatibility)
   annualSalary: number;
   salaryFrequency: "weekly" | "fortnightly" | "monthly";
   incomeTaxRate: number;
@@ -82,6 +84,15 @@ interface SerializableUserParameters {
   currentAge: number;
   simulationYears: number;
   startDate: string; // ISO date string
+  
+  // New fields (optional for backward compatibility)
+  householdMode?: "single" | "couple";
+  people?: any[]; // Simplified - will be serialized as-is
+  incomeSources?: any[];
+  taxBrackets?: any[];
+  expenseItems?: any[];
+  loans?: any[];
+  superAccounts?: any[];
 }
 
 /**
@@ -236,7 +247,8 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
 
   const params = data as Record<string, unknown>;
 
-  // Check all required fields exist and have correct types
+  // Check core required fields exist and have correct types
+  // Made more lenient to support new optional fields
   const requiredFields = [
     "annualSalary",
     "incomeTaxRate",
@@ -270,7 +282,7 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
   }
 
   // Check frequency fields
-  const validFrequencies = ["weekly", "fortnightly", "monthly"];
+  const validFrequencies = ["weekly", "fortnightly", "monthly", "yearly"];
   if (
     typeof params.salaryFrequency !== "string" ||
     !validFrequencies.includes(params.salaryFrequency)
@@ -292,6 +304,36 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
 
   const date = new Date(params.startDate);
   if (isNaN(date.getTime())) {
+    return false;
+  }
+
+  // New optional fields - just check they're the right type if present
+  if (params.householdMode !== undefined && 
+      typeof params.householdMode !== "string") {
+    return false;
+  }
+
+  if (params.people !== undefined && !Array.isArray(params.people)) {
+    return false;
+  }
+
+  if (params.incomeSources !== undefined && !Array.isArray(params.incomeSources)) {
+    return false;
+  }
+
+  if (params.taxBrackets !== undefined && !Array.isArray(params.taxBrackets)) {
+    return false;
+  }
+
+  if (params.expenseItems !== undefined && !Array.isArray(params.expenseItems)) {
+    return false;
+  }
+
+  if (params.loans !== undefined && !Array.isArray(params.loans)) {
+    return false;
+  }
+
+  if (params.superAccounts !== undefined && !Array.isArray(params.superAccounts)) {
     return false;
   }
 
@@ -486,7 +528,18 @@ export class LocalStorageService implements StorageService {
     }
 
     try {
-      const serializable = configToSerializable(config);
+      // Sync legacy fields with people array before saving
+      const configToSave = { ...config };
+      if (configToSave.baseParameters.people && configToSave.baseParameters.people.length > 0) {
+        const firstPerson = configToSave.baseParameters.people[0];
+        configToSave.baseParameters = {
+          ...configToSave.baseParameters,
+          currentAge: firstPerson.currentAge,
+          retirementAge: firstPerson.retirementAge,
+        };
+      }
+      
+      const serializable = configToSerializable(configToSave);
       const json = JSON.stringify(serializable);
       this.storage.setItem(CONFIG_STORAGE_KEY, json);
     } catch (error) {
@@ -529,7 +582,43 @@ export class LocalStorageService implements StorageService {
         return this.migrateFromLegacyFormat();
       }
 
-      return configFromSerializable(parsed);
+      const config = configFromSerializable(parsed);
+      
+      // Sync legacy fields with people array if present
+      if (config.baseParameters.people && config.baseParameters.people.length > 0) {
+        const firstPerson = config.baseParameters.people[0];
+        config.baseParameters.currentAge = firstPerson.currentAge;
+        config.baseParameters.retirementAge = firstPerson.retirementAge;
+      }
+      
+      // Ensure loans array exists (migrate from legacy single loan if needed)
+      if (config.baseParameters.loans === undefined) {
+        // Check if there's a legacy loan to migrate
+        if (config.baseParameters.loanPrincipal > 0) {
+          config.baseParameters.loans = [{
+            id: `loan-migrated-${Date.now()}`,
+            label: "Migrated Loan",
+            principal: config.baseParameters.loanPrincipal,
+            interestRate: config.baseParameters.loanInterestRate,
+            paymentAmount: config.baseParameters.loanPaymentAmount,
+            paymentFrequency: config.baseParameters.loanPaymentFrequency,
+            hasOffset: config.baseParameters.useOffsetAccount,
+            offsetBalance: config.baseParameters.currentOffsetBalance || 0,
+          }];
+          // Clear legacy fields
+          config.baseParameters.loanPrincipal = 0;
+          config.baseParameters.loanPaymentAmount = 0;
+          config.baseParameters.useOffsetAccount = false;
+          config.baseParameters.currentOffsetBalance = 0;
+        } else {
+          // No legacy loan, just initialize empty array
+          config.baseParameters.loans = [];
+        }
+        // Save the migrated config
+        this.saveConfiguration(config);
+      }
+      
+      return config;
     } catch (error) {
       // Handle corrupted data
       console.error("Failed to load configuration, data may be corrupted:", error);
@@ -567,6 +656,30 @@ export class LocalStorageService implements StorageService {
       
       if (legacyParams === null) {
         return null;
+      }
+
+      // Migrate legacy single loan to loans array if present
+      if (legacyParams.loans === undefined) {
+        if (legacyParams.loanPrincipal > 0) {
+          legacyParams.loans = [{
+            id: `loan-migrated-${Date.now()}`,
+            label: "Migrated Loan",
+            principal: legacyParams.loanPrincipal,
+            interestRate: legacyParams.loanInterestRate,
+            paymentAmount: legacyParams.loanPaymentAmount,
+            paymentFrequency: legacyParams.loanPaymentFrequency,
+            hasOffset: legacyParams.useOffsetAccount,
+            offsetBalance: legacyParams.currentOffsetBalance || 0,
+          }];
+          // Clear legacy fields
+          legacyParams.loanPrincipal = 0;
+          legacyParams.loanPaymentAmount = 0;
+          legacyParams.useOffsetAccount = false;
+          legacyParams.currentOffsetBalance = 0;
+        } else {
+          // No legacy loan, initialize empty array
+          legacyParams.loans = [];
+        }
       }
 
       // Create configuration with empty transitions array

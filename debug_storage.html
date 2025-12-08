@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Storage Debug Tool</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        button.danger:hover {
+            background: #c82333;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #28a745;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Finance Simulation - Storage Debug Tool</h1>
+    
+    <div class="section">
+        <h2>Current Storage Data</h2>
+        <button onclick="showStorage()">Show Storage Contents</button>
+        <button onclick="checkLoans()">Check Loan Configuration</button>
+        <div id="storage-output"></div>
+    </div>
+
+    <div class="section">
+        <h2>Migration Tools</h2>
+        <button onclick="migrateLoans()">Migrate Legacy Loans</button>
+        <button onclick="fixLoansArray()">Force Initialize Loans Array</button>
+        <div id="migration-output"></div>
+    </div>
+
+    <div class="section">
+        <h2>Danger Zone</h2>
+        <button class="danger" onclick="clearStorage()">Clear All Storage</button>
+        <div id="clear-output"></div>
+    </div>
+
+    <script>
+        const CONFIG_KEY = 'finance-simulation-config-v2';
+        const LEGACY_KEY = 'finance-simulation-params';
+
+        function showStorage() {
+            const output = document.getElementById('storage-output');
+            const config = localStorage.getItem(CONFIG_KEY);
+            const legacy = localStorage.getItem(LEGACY_KEY);
+            
+            let html = '<h3>Storage Keys Found:</h3>';
+            
+            if (config) {
+                html += '<h4>Modern Config (v2):</h4>';
+                try {
+                    const parsed = JSON.parse(config);
+                    html += '<pre>' + JSON.stringify(parsed, null, 2) + '</pre>';
+                } catch (e) {
+                    html += '<p style="color: red;">Error parsing: ' + e.message + '</p>';
+                }
+            } else {
+                html += '<p>No modern config found</p>';
+            }
+            
+            if (legacy) {
+                html += '<h4>Legacy Config:</h4>';
+                try {
+                    const parsed = JSON.parse(legacy);
+                    html += '<pre>' + JSON.stringify(parsed, null, 2) + '</pre>';
+                } catch (e) {
+                    html += '<p style="color: red;">Error parsing: ' + e.message + '</p>';
+                }
+            } else {
+                html += '<p>No legacy config found</p>';
+            }
+            
+            output.innerHTML = html;
+        }
+
+        function checkLoans() {
+            const output = document.getElementById('storage-output');
+            const config = localStorage.getItem(CONFIG_KEY);
+            
+            if (!config) {
+                output.innerHTML = '<div class="warning">No config found in storage</div>';
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(config);
+                const params = parsed.baseParameters;
+                
+                let html = '<h3>Loan Configuration Analysis:</h3>';
+                
+                // Check loans array
+                if (params.loans === undefined) {
+                    html += '<div class="warning"><strong>⚠️ PROBLEM FOUND:</strong> loans array is undefined</div>';
+                } else if (params.loans.length === 0) {
+                    html += '<div class="success">✓ loans array exists and is empty (no loans)</div>';
+                } else {
+                    html += '<div class="success">✓ loans array exists with ' + params.loans.length + ' loan(s)</div>';
+                    html += '<pre>' + JSON.stringify(params.loans, null, 2) + '</pre>';
+                }
+                
+                // Check legacy fields
+                html += '<h4>Legacy Loan Fields:</h4>';
+                html += '<ul>';
+                html += '<li>loanPrincipal: $' + (params.loanPrincipal || 0).toLocaleString() + '</li>';
+                html += '<li>loanInterestRate: ' + (params.loanInterestRate || 0) + '%</li>';
+                html += '<li>loanPaymentAmount: $' + (params.loanPaymentAmount || 0).toLocaleString() + '</li>';
+                html += '<li>loanPaymentFrequency: ' + (params.loanPaymentFrequency || 'N/A') + '</li>';
+                html += '<li>useOffsetAccount: ' + (params.useOffsetAccount || false) + '</li>';
+                html += '<li>currentOffsetBalance: $' + (params.currentOffsetBalance || 0).toLocaleString() + '</li>';
+                html += '</ul>';
+                
+                if (params.loans === undefined && params.loanPrincipal > 0) {
+                    html += '<div class="warning"><strong>⚠️ MIGRATION NEEDED:</strong> You have a legacy loan that needs to be migrated</div>';
+                    html += '<p>Click "Migrate Legacy Loans" button above to fix this.</p>';
+                }
+                
+                output.innerHTML = html;
+            } catch (e) {
+                output.innerHTML = '<div class="warning">Error: ' + e.message + '</div>';
+            }
+        }
+
+        function migrateLoans() {
+            const output = document.getElementById('migration-output');
+            const config = localStorage.getItem(CONFIG_KEY);
+            
+            if (!config) {
+                output.innerHTML = '<div class="warning">No config found to migrate</div>';
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(config);
+                const params = parsed.baseParameters;
+                
+                // Check if migration is needed
+                if (params.loans !== undefined) {
+                    output.innerHTML = '<div class="success">✓ loans array already exists, no migration needed</div>';
+                    return;
+                }
+                
+                // Perform migration
+                if (params.loanPrincipal > 0) {
+                    params.loans = [{
+                        id: 'loan-migrated-' + Date.now(),
+                        label: 'Migrated Loan',
+                        principal: params.loanPrincipal,
+                        interestRate: params.loanInterestRate,
+                        paymentAmount: params.loanPaymentAmount,
+                        paymentFrequency: params.loanPaymentFrequency,
+                        hasOffset: params.useOffsetAccount || false,
+                        offsetBalance: params.currentOffsetBalance || 0
+                    }];
+                    
+                    // Clear legacy fields
+                    params.loanPrincipal = 0;
+                    params.loanPaymentAmount = 0;
+                    params.useOffsetAccount = false;
+                    params.currentOffsetBalance = 0;
+                    
+                    output.innerHTML = '<div class="success">✓ Successfully migrated legacy loan to loans array</div>';
+                } else {
+                    params.loans = [];
+                    output.innerHTML = '<div class="success">✓ Initialized empty loans array (no legacy loan found)</div>';
+                }
+                
+                // Save back to storage
+                localStorage.setItem(CONFIG_KEY, JSON.stringify(parsed));
+                output.innerHTML += '<div class="success">✓ Saved migrated config to storage</div>';
+                output.innerHTML += '<p><strong>Now refresh the main application page to see the changes!</strong></p>';
+                
+            } catch (e) {
+                output.innerHTML = '<div class="warning">Error during migration: ' + e.message + '</div>';
+            }
+        }
+
+        function fixLoansArray() {
+            const output = document.getElementById('migration-output');
+            const config = localStorage.getItem(CONFIG_KEY);
+            
+            if (!config) {
+                output.innerHTML = '<div class="warning">No config found</div>';
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(config);
+                const params = parsed.baseParameters;
+                
+                if (params.loans === undefined) {
+                    params.loans = [];
+                    localStorage.setItem(CONFIG_KEY, JSON.stringify(parsed));
+                    output.innerHTML = '<div class="success">✓ Initialized loans array to empty</div>';
+                    output.innerHTML += '<p><strong>Now refresh the main application page!</strong></p>';
+                } else {
+                    output.innerHTML = '<div class="success">✓ loans array already exists</div>';
+                }
+            } catch (e) {
+                output.innerHTML = '<div class="warning">Error: ' + e.message + '</div>';
+            }
+        }
+
+        function clearStorage() {
+            if (!confirm('Are you sure? This will delete ALL your saved data!')) {
+                return;
+            }
+            
+            const output = document.getElementById('clear-output');
+            localStorage.removeItem(CONFIG_KEY);
+            localStorage.removeItem(LEGACY_KEY);
+            output.innerHTML = '<div class="success">✓ Storage cleared. Refresh the main application to start fresh.</div>';
+        }
+
+        // Auto-check on load
+        window.onload = function() {
+            checkLoans();
+        };
+    </script>
+</body>
+</html>

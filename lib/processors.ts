@@ -8,6 +8,7 @@ import type {
   TimeInterval,
   UserParameters,
   TaxBracket,
+  PaymentFrequency,
 } from "../types/financial.ts";
 
 /**
@@ -21,6 +22,10 @@ function intervalToPeriodsPerYear(interval: TimeInterval): number {
       return 12;
     case "year":
       return 1;
+    case "fortnight":
+      return 26;
+    default:
+      return 12; // Default to monthly
   }
 }
 
@@ -82,18 +87,90 @@ export const DEFAULT_AU_TAX_BRACKETS: TaxBracket[] = [
  */
 export const IncomeProcessor = {
   /**
-   * Calculates income for the specified time interval
+   * Calculates total annual income from all sources (before tax)
+   * @param params User financial parameters
+   * @returns Total annual income before tax
+   */
+  calculateTotalAnnualIncome(params: UserParameters): number {
+    // If household mode, sum income from all people
+    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+      let totalAnnual = 0;
+      for (const person of params.people) {
+        if (person.incomeSources && person.incomeSources.length > 0) {
+          for (const source of person.incomeSources) {
+            if (source.isBeforeTax) {
+              totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+            }
+          }
+        }
+      }
+      return totalAnnual;
+    }
+
+    // Use income sources if provided, otherwise fall back to annualSalary
+    if (params.incomeSources && params.incomeSources.length > 0) {
+      let totalAnnual = 0;
+      for (const source of params.incomeSources) {
+        // Only count before-tax income for tax calculation
+        if (!source.isBeforeTax) continue;
+        
+        totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+      }
+      return totalAnnual;
+    }
+    
+    // Legacy: use annualSalary
+    return params.annualSalary;
+  },
+
+  /**
+   * Calculates total annual after-tax income
+   * @param params User financial parameters
+   * @returns Total annual after-tax income
+   */
+  calculateTotalAnnualAfterTaxIncome(params: UserParameters): number {
+    // If household mode, sum after-tax income from all people
+    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+      let totalAnnual = 0;
+      for (const person of params.people) {
+        if (person.incomeSources && person.incomeSources.length > 0) {
+          for (const source of person.incomeSources) {
+            if (!source.isBeforeTax) {
+              totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+            }
+          }
+        }
+      }
+      return totalAnnual;
+    }
+
+    if (params.incomeSources && params.incomeSources.length > 0) {
+      let totalAnnual = 0;
+      for (const source of params.incomeSources) {
+        // Only count after-tax income
+        if (source.isBeforeTax) continue;
+        
+        totalAnnual += this.convertToAnnual(source.amount, source.frequency);
+      }
+      return totalAnnual;
+    }
+    
+    return 0;
+  },
+
+  /**
+   * Calculates income for the specified time interval (gross before-tax income)
    * @param params User financial parameters
    * @param interval Time interval for calculation
-   * @returns Income amount for the interval
+   * @returns Gross income amount for the interval
    */
   calculateIncome(params: UserParameters, interval: TimeInterval): number {
+    const beforeTaxAnnual = this.calculateTotalAnnualIncome(params);
+    const afterTaxAnnual = this.calculateTotalAnnualAfterTaxIncome(params);
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
-
-    // Calculate how much salary is received per interval
-    const salaryPerInterval = params.annualSalary / intervalPeriodsPerYear;
-
-    return salaryPerInterval;
+    
+    // Return before-tax income (for tax calculation) + after-tax income
+    return (beforeTaxAnnual + afterTaxAnnual) / intervalPeriodsPerYear;
   },
 
   /**
@@ -119,9 +196,84 @@ export const IncomeProcessor = {
    * @returns Tax amount for the interval
    */
   calculateTax(params: UserParameters, interval: TimeInterval): number {
-    const annualTax = this.calculateAnnualTax(params, params.annualSalary);
+    // If household mode is couple, calculate tax per person
+    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+      return this.calculateHouseholdTax(params, interval);
+    }
+
+    // Legacy single-person calculation
+    const totalAnnual = this.calculateTotalAnnualIncome(params);
+    const annualTax = this.calculateAnnualTax(params, totalAnnual);
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     return annualTax / intervalPeriodsPerYear;
+  },
+
+  /**
+   * Calculates tax for a household (couple mode)
+   * Each person's income is taxed separately using their own tax brackets
+   * @param params User financial parameters
+   * @param interval Time interval for calculation
+   * @returns Total household tax amount for the interval
+   */
+  calculateHouseholdTax(params: UserParameters, interval: TimeInterval): number {
+    if (!params.people || params.people.length === 0) {
+      return 0;
+    }
+
+    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+    let totalTax = 0;
+
+    // Calculate tax for each person separately
+    for (const person of params.people) {
+      // Calculate this person's annual income
+      let personAnnualIncome = 0;
+
+      // Sum up all before-tax income sources for this person
+      if (person.incomeSources && person.incomeSources.length > 0) {
+        for (const source of person.incomeSources) {
+          if (source.isBeforeTax) {
+            const annualAmount = this.convertToAnnual(source.amount, source.frequency);
+            personAnnualIncome += annualAmount;
+          }
+        }
+      }
+
+      // Calculate tax for this person using household tax brackets
+      let personAnnualTax = 0;
+      if (params.taxBrackets && params.taxBrackets.length > 0) {
+        // Use household tax brackets
+        personAnnualTax = calculateTaxWithBrackets(personAnnualIncome, params.taxBrackets);
+      } else {
+        // Fall back to flat rate
+        personAnnualTax = personAnnualIncome * (params.incomeTaxRate / 100);
+      }
+
+      totalTax += personAnnualTax;
+    }
+
+    // Convert annual tax to interval tax
+    return totalTax / intervalPeriodsPerYear;
+  },
+
+  /**
+   * Converts an amount from a specific frequency to annual
+   * @param amount Amount per frequency period
+   * @param frequency Payment frequency
+   * @returns Annual amount
+   */
+  convertToAnnual(amount: number, frequency: PaymentFrequency): number {
+    switch (frequency) {
+      case "weekly":
+        return amount * 52;
+      case "fortnightly":
+        return amount * 26;
+      case "monthly":
+        return amount * 12;
+      case "yearly":
+        return amount;
+      default:
+        return amount * 12; // Default to monthly
+    }
   },
 };
 
@@ -179,6 +331,11 @@ export const ExpenseProcessor = {
         case "monthly":
           annualAmount = item.amount * 12;
           break;
+        case "yearly":
+          annualAmount = item.amount;
+          break;
+        default:
+          annualAmount = item.amount * 12; // Default to monthly
       }
 
       // Convert annual to target interval
@@ -262,6 +419,67 @@ export const LoanProcessor = {
       interestSaved,
     };
   },
+
+  /**
+   * Calculates total payment amount for all loans in an interval
+   * @param params User financial parameters
+   * @param interval Time interval for calculation
+   * @returns Total payment amount for the interval
+   */
+  calculateTotalLoanPayment(params: UserParameters, interval: TimeInterval): number {
+    // Use loans array if provided, otherwise fall back to legacy fields
+    if (params.loans && params.loans.length > 0) {
+      const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+      let totalPayment = 0;
+      
+      for (const loan of params.loans) {
+        // Convert loan payment to annual
+        let annualPayment: number;
+        switch (loan.paymentFrequency) {
+          case "weekly":
+            annualPayment = loan.paymentAmount * 52;
+            break;
+          case "fortnightly":
+            annualPayment = loan.paymentAmount * 26;
+            break;
+          case "monthly":
+            annualPayment = loan.paymentAmount * 12;
+            break;
+          case "yearly":
+            annualPayment = loan.paymentAmount;
+            break;
+          default:
+            annualPayment = loan.paymentAmount * 12; // Default to monthly
+        }
+        
+        // Convert to target interval
+        totalPayment += annualPayment / intervalPeriodsPerYear;
+      }
+      
+      return totalPayment;
+    }
+    
+    // Legacy: use single loan fields
+    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+    let annualPayment: number;
+    switch (params.loanPaymentFrequency) {
+      case "weekly":
+        annualPayment = params.loanPaymentAmount * 52;
+        break;
+      case "fortnightly":
+        annualPayment = params.loanPaymentAmount * 26;
+        break;
+      case "monthly":
+        annualPayment = params.loanPaymentAmount * 12;
+        break;
+      case "yearly":
+        annualPayment = params.loanPaymentAmount;
+        break;
+      default:
+        annualPayment = params.loanPaymentAmount * 12; // Default to monthly
+    }
+    return annualPayment / intervalPeriodsPerYear;
+  },
 };
 
 /**
@@ -322,7 +540,47 @@ export const RetirementCalculator = {
 
     const startDate = states[0].date;
 
-    // Iterate through states to find first point where retirement is feasible
+    // First, check if retirement is feasible at the desired retirement age
+    // Find the state closest to the desired retirement age
+    let stateAtDesiredAge: FinancialState | null = null;
+    let closestAgeDiff = Infinity;
+
+    for (let i = 0; i < states.length; i++) {
+      const state = states[i];
+      const yearsElapsed = (state.date.getTime() - startDate.getTime()) /
+        (1000 * 60 * 60 * 24 * 365.25);
+      const ageAtState = currentAge + yearsElapsed;
+
+      // Find state closest to desired retirement age
+      const ageDiff = Math.abs(ageAtState - retirementAge);
+      if (ageDiff < closestAgeDiff && ageAtState >= retirementAge) {
+        closestAgeDiff = ageDiff;
+        stateAtDesiredAge = state;
+      }
+    }
+
+    // Check if we can retire at the desired age
+    if (stateAtDesiredAge) {
+      const yearsElapsed = (stateAtDesiredAge.date.getTime() - startDate.getTime()) /
+        (1000 * 60 * 60 * 24 * 365.25);
+      const ageAtDesiredRetirement = currentAge + yearsElapsed;
+
+      const safeWithdrawal = this.calculateSafeWithdrawal(
+        stateAtDesiredAge.investments,
+        stateAtDesiredAge.superannuation,
+        ageAtDesiredRetirement,
+      );
+
+      // If we can afford it at desired age, return that
+      if (safeWithdrawal >= desiredIncome) {
+        return {
+          date: stateAtDesiredAge.date,
+          age: ageAtDesiredRetirement,
+        };
+      }
+    }
+
+    // If not feasible at desired age, find the earliest age where it becomes feasible
     for (let i = 0; i < states.length; i++) {
       const state = states[i];
 

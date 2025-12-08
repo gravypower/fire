@@ -5,7 +5,9 @@
 import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
 import * as $api_joke from "./routes/api/joke.ts";
+import * as $api_tax_config from "./routes/api/tax-config.ts";
 import * as $greet_name_ from "./routes/greet/[name].tsx";
+import * as $help from "./routes/help.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $test_input from "./routes/test-input.tsx";
 import * as $test_simulation from "./routes/test-simulation.tsx";
@@ -13,6 +15,7 @@ import * as $test_visualization from "./routes/test-visualization.tsx";
 import * as $ComparisonIsland from "./islands/ComparisonIsland.tsx";
 import * as $Counter from "./islands/Counter.tsx";
 import * as $ExpenseManagerIsland from "./islands/ExpenseManagerIsland.tsx";
+import * as $HouseholdManagerIsland from "./islands/HouseholdManagerIsland.tsx";
 import * as $InputIsland from "./islands/InputIsland.tsx";
 import * as $MainIsland from "./islands/MainIsland.tsx";
 import * as $SimulationIsland from "./islands/SimulationIsland.tsx";
@@ -25,7 +28,9 @@ const manifest = {
     "./routes/_404.tsx": $_404,
     "./routes/_app.tsx": $_app,
     "./routes/api/joke.ts": $api_joke,
+    "./routes/api/tax-config.ts": $api_tax_config,
     "./routes/greet/[name].tsx": $greet_name_,
+    "./routes/help.tsx": $help,
     "./routes/index.tsx": $index,
     "./routes/test-input.tsx": $test_input,
     "./routes/test-simulation.tsx": $test_simulation,
@@ -35,6 +40,7 @@ const manifest = {
     "./islands/ComparisonIsland.tsx": $ComparisonIsland,
     "./islands/Counter.tsx": $Counter,
     "./islands/ExpenseManagerIsland.tsx": $ExpenseManagerIsland,
+    "./islands/HouseholdManagerIsland.tsx": $HouseholdManagerIsland,
     "./islands/InputIsland.tsx": $InputIsland,
     "./islands/MainIsland.tsx": $MainIsland,
     "./islands/SimulationIsland.tsx": $SimulationIsland,

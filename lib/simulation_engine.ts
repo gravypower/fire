@@ -21,7 +21,7 @@ import {
   LoanProcessor,
   RetirementCalculator,
 } from "./processors.ts";
-import { generateWarnings } from "./result_utils.ts";
+import { generateWarnings, formatCurrency } from "./result_utils.ts";
 import {
   resolveParametersForDate,
   buildParameterPeriods,
@@ -38,6 +38,10 @@ function intervalToPeriodsPerYear(interval: TimeInterval): number {
       return 12;
     case "year":
       return 1;
+    case "fortnight":
+      return 26;
+    default:
+      return 12; // Default to monthly
   }
 }
 
@@ -58,7 +62,7 @@ export function convertAnnualRateToInterval(
  */
 function convertPaymentToInterval(
   paymentAmount: number,
-  paymentFrequency: "weekly" | "fortnightly" | "monthly",
+  paymentFrequency: "weekly" | "fortnightly" | "monthly" | "yearly",
   targetInterval: TimeInterval,
 ): number {
   // First convert payment to annual
@@ -73,6 +77,11 @@ function convertPaymentToInterval(
     case "monthly":
       annualPayment = paymentAmount * 12;
       break;
+    case "yearly":
+      annualPayment = paymentAmount;
+      break;
+    default:
+      annualPayment = paymentAmount * 12; // Default to monthly
   }
 
   // Then convert annual to target interval
@@ -114,17 +123,46 @@ export const SimulationEngine = {
     const warnings: string[] = [];
 
     // Initialize starting state
+    // If loans array exists (even if empty), use it; otherwise fall back to legacy
+    const initialLoanBalance = params.loans !== undefined
+      ? (params.loans.length > 0 ? params.loans.reduce((sum, loan) => sum + loan.principal, 0) : 0)
+      : params.loanPrincipal;
+    
+    const initialLoanBalances = params.loans !== undefined && params.loans.length > 0
+      ? params.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.principal }), {} as { [loanId: string]: number })
+      : undefined;
+
+    const initialSuperBalance = params.superAccounts && params.superAccounts.length > 0
+      ? params.superAccounts.reduce((sum, superAcc) => sum + superAcc.balance, 0)
+      : params.currentSuperBalance;
+    
+    const initialSuperBalances = params.superAccounts && params.superAccounts.length > 0
+      ? params.superAccounts.reduce((acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }), {} as { [superId: string]: number })
+      : undefined;
+
+    const initialOffsetBalance = params.loans !== undefined
+      ? (params.loans.length > 0 ? params.loans.reduce((sum, loan) => sum + (loan.offsetBalance || 0), 0) : 0)
+      : (params.currentOffsetBalance || 0);
+    
+    const initialOffsetBalances = params.loans && params.loans.length > 0
+      ? params.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.offsetBalance || 0 }), {} as { [loanId: string]: number })
+      : undefined;
+
     let currentState: FinancialState = {
       date: new Date(params.startDate),
       cash: 0, // Starting with zero cash
       investments: params.currentInvestmentBalance,
-      superannuation: params.currentSuperBalance,
-      loanBalance: params.loanPrincipal,
-      offsetBalance: params.currentOffsetBalance || 0,
+      superannuation: initialSuperBalance,
+      loanBalance: initialLoanBalance,
+      offsetBalance: initialOffsetBalance,
       netWorth: 0,
       cashFlow: 0,
       taxPaid: 0,
+      expenses: 0,
       interestSaved: 0,
+      loanBalances: initialLoanBalances,
+      superBalances: initialSuperBalances,
+      offsetBalances: initialOffsetBalances,
     };
 
     // Calculate initial net worth
@@ -157,6 +195,24 @@ export const SimulationEngine = {
     // Generate warnings and alerts for unsustainable scenarios
     const financialWarnings = generateWarnings(states);
     const warningMessages = financialWarnings.map(w => w.message);
+
+    // Add warning if retirement is not achievable at desired age
+    if (retirement.date === null) {
+      const yearsSimulated = params.simulationYears;
+      const finalAge = params.currentAge + yearsSimulated;
+      warningMessages.push(
+        `⚠️ RETIREMENT NOT ACHIEVABLE: You want to retire at age ${params.retirementAge}, but your assets will not support ${formatCurrency(params.desiredAnnualRetirementIncome)}/year income at that age. ` +
+        `Even by age ${Math.floor(finalAge)}, you won't have enough saved. ` +
+        `To retire at ${params.retirementAge}, you need to: save more aggressively, reduce expenses, lower your retirement income target, or work longer.`
+      );
+    } else if (retirement.age && retirement.age > params.retirementAge + 1) {
+      // Retirement is achievable but much later than desired
+      warningMessages.push(
+        `⚠️ DELAYED RETIREMENT: You want to retire at age ${params.retirementAge}, but you won't have enough assets until age ${Math.floor(retirement.age)}. ` +
+        `That's ${Math.floor(retirement.age - params.retirementAge)} years later than planned. ` +
+        `To retire earlier, consider: increasing savings, reducing expenses, or lowering your retirement income target from ${formatCurrency(params.desiredAnnualRetirementIncome)}/year.`
+      );
+    }
 
     // Check sustainability (basic check)
     const isSustainable = this.checkSustainability(states, warnings);
@@ -212,44 +268,110 @@ export const SimulationEngine = {
     // Requirements 7.1: Handle negative cash flow by reducing available cash
     // Cash can go negative, representing debt or overdraft
 
-    // Phase 3: Loan - Process loan payment with offset account
-    const loanPayment = convertPaymentToInterval(
-      params.loanPaymentAmount,
-      params.loanPaymentFrequency,
-      interval,
-    );
-
-    if (loanBalance > 0) {
-      // Check if we have enough cash for loan payment
-      if (cash >= loanPayment) {
-        const loanResult = LoanProcessor.calculateLoanPayment(
-          loanBalance,
-          offsetBalance,
-          params.loanInterestRate / 100, // Convert percentage to decimal
-          loanPayment,
+    // Phase 3: Loan - Process loan payments with offset account
+    // If loans array exists (even if empty), use it; otherwise use legacy single loan
+    let loanBalances: { [loanId: string]: number } = {};
+    let offsetBalances: { [loanId: string]: number } = {};
+    let totalLoanPayment = 0;
+    
+    if (params.loans !== undefined && params.loans.length > 0) {
+      // Multiple loans - process each loan with its own offset
+      for (const loan of params.loans) {
+        const loanPayment = convertPaymentToInterval(
+          loan.paymentAmount,
+          loan.paymentFrequency,
           interval,
-          params.useOffsetAccount || false,
         );
-        loanBalance = loanResult.newBalance;
-        interestSaved = loanResult.interestSaved;
-        cash -= loanPayment;
-      } else {
-        // Negative cash flow scenario - can't make full loan payment
-        // Requirements 7.1, 7.2: Handle negative cash flow
-        // Pay what we can, but this creates an unsustainable situation
-        const partialPayment = Math.max(0, cash);
-        const loanResult = LoanProcessor.calculateLoanPayment(
-          loanBalance,
-          offsetBalance,
-          params.loanInterestRate / 100,
-          partialPayment,
-          interval,
-          params.useOffsetAccount || false,
-        );
-        loanBalance = loanResult.newBalance;
-        interestSaved = loanResult.interestSaved;
-        cash = 0; // All cash used for partial loan payment
+        totalLoanPayment += loanPayment;
+        
+        // Get current balance for this loan
+        const currentLoanBalance = currentState.loanBalances?.[loan.id] ?? loan.principal;
+        
+        // Get current offset balance for this loan
+        const currentOffsetBalance = currentState.offsetBalances?.[loan.id] ?? (loan.offsetBalance || 0);
+        offsetBalances[loan.id] = currentOffsetBalance;
+        
+        if (currentLoanBalance > 0 && cash >= loanPayment) {
+          const loanResult = LoanProcessor.calculateLoanPayment(
+            currentLoanBalance,
+            currentOffsetBalance,
+            loan.interestRate / 100,
+            loanPayment,
+            interval,
+            loan.hasOffset || false,
+          );
+          loanBalances[loan.id] = loanResult.newBalance;
+          interestSaved += loanResult.interestSaved;
+          cash -= loanPayment;
+        } else if (currentLoanBalance > 0) {
+          // Partial payment scenario
+          const partialPayment = Math.max(0, Math.min(cash, loanPayment));
+          const loanResult = LoanProcessor.calculateLoanPayment(
+            currentLoanBalance,
+            currentOffsetBalance,
+            loan.interestRate / 100,
+            partialPayment,
+            interval,
+            loan.hasOffset || false,
+          );
+          loanBalances[loan.id] = loanResult.newBalance;
+          interestSaved += loanResult.interestSaved;
+          cash -= partialPayment;
+        } else {
+          loanBalances[loan.id] = 0;
+        }
       }
+      
+      // Calculate total loan balance for legacy field
+      loanBalance = Object.values(loanBalances).reduce((sum, bal) => sum + bal, 0);
+      // Calculate total offset balance for legacy field
+      offsetBalance = Object.values(offsetBalances).reduce((sum, bal) => sum + bal, 0);
+    } else if (params.loans === undefined) {
+      // Legacy single loan (only if loans array doesn't exist)
+      const loanPayment = convertPaymentToInterval(
+        params.loanPaymentAmount,
+        params.loanPaymentFrequency,
+        interval,
+      );
+      totalLoanPayment = loanPayment;
+
+      if (loanBalance > 0) {
+        // Check if we have enough cash for loan payment
+        if (cash >= loanPayment) {
+          const loanResult = LoanProcessor.calculateLoanPayment(
+            loanBalance,
+            offsetBalance,
+            params.loanInterestRate / 100, // Convert percentage to decimal
+            loanPayment,
+            interval,
+            params.useOffsetAccount || false,
+          );
+          loanBalance = loanResult.newBalance;
+          interestSaved = loanResult.interestSaved;
+          cash -= loanPayment;
+        } else {
+          // Negative cash flow scenario - can't make full loan payment
+          // Requirements 7.1, 7.2: Handle negative cash flow
+          // Pay what we can, but this creates an unsustainable situation
+          const partialPayment = Math.max(0, cash);
+          const loanResult = LoanProcessor.calculateLoanPayment(
+            loanBalance,
+            offsetBalance,
+            params.loanInterestRate / 100,
+            partialPayment,
+            interval,
+            params.useOffsetAccount || false,
+          );
+          loanBalance = loanResult.newBalance;
+          interestSaved = loanResult.interestSaved;
+          cash = 0; // All cash used for partial loan payment
+        }
+      }
+    } else {
+      // loans array exists but is empty - no loans to process
+      loanBalance = 0;
+      offsetBalance = 0;
+      totalLoanPayment = 0;
     }
 
     // Phase 4: Investment - Add contributions and apply growth
@@ -275,29 +397,72 @@ export const SimulationEngine = {
     );
 
     // Phase 5: Superannuation - Add contributions and apply growth
-    const superContribution = (grossIncome * params.superContributionRate) / 100;
-    const superGrowthRate = params.superReturnRate / 100; // Convert percentage to decimal
-    const intervalSuperRate = convertAnnualRateToInterval(
-      superGrowthRate,
-      interval,
-    );
+    // Handle multiple super accounts if provided, otherwise use legacy single super
+    let superBalances: { [superId: string]: number } = {};
+    
+    if (params.superAccounts && params.superAccounts.length > 0) {
+      // Multiple super accounts
+      superannuation = 0;
+      for (const superAcc of params.superAccounts) {
+        const currentBalance = currentState.superBalances?.[superAcc.id] ?? superAcc.balance;
+        const superContribution = (grossIncome * superAcc.contributionRate) / 100;
+        const superGrowthRate = superAcc.returnRate / 100;
+        const intervalSuperRate = convertAnnualRateToInterval(superGrowthRate, interval);
+        
+        // Apply growth to existing balance
+        const superAfterGrowth = currentBalance * (1 + intervalSuperRate);
+        // Add contribution (which also grows for this period)
+        const contributionAfterGrowth = superContribution * (1 + intervalSuperRate);
+        const newBalance = superAfterGrowth + contributionAfterGrowth;
+        
+        superBalances[superAcc.id] = newBalance;
+        superannuation += newBalance;
+      }
+    } else {
+      // Legacy single super account
+      const superContribution = (grossIncome * params.superContributionRate) / 100;
+      const superGrowthRate = params.superReturnRate / 100;
+      const intervalSuperRate = convertAnnualRateToInterval(superGrowthRate, interval);
 
-    // Apply growth to existing balance
-    const superAfterGrowth = superannuation * (1 + intervalSuperRate);
-    // Add contribution (which also grows for this period)
-    const contributionAfterGrowth = superContribution * (1 + intervalSuperRate);
-    superannuation = superAfterGrowth + contributionAfterGrowth;
+      // Apply growth to existing balance
+      const superAfterGrowth = superannuation * (1 + intervalSuperRate);
+      // Add contribution (which also grows for this period)
+      const contributionAfterGrowth = superContribution * (1 + intervalSuperRate);
+      superannuation = superAfterGrowth + contributionAfterGrowth;
+    }
 
     // Phase 6: Offset Account - Move leftover cash to offset account
-    if (params.useOffsetAccount && cash > 0 && loanBalance > 0) {
-      // Transfer all positive cash to offset account
-      offsetBalance += cash;
-      cash = 0;
+    // For multiple loans, add to the biggest loan with offset enabled
+    if (cash > 0 && loanBalance > 0) {
+      if (params.loans !== undefined && params.loans.length > 0) {
+        // Find the biggest loan with offset enabled
+        let biggestLoanWithOffset: { id: string; balance: number } | null = null;
+        
+        for (const loan of params.loans) {
+          if (loan.hasOffset) {
+            const currentBalance = loanBalances[loan.id] || 0;
+            if (currentBalance > 0 && (!biggestLoanWithOffset || currentBalance > biggestLoanWithOffset.balance)) {
+              biggestLoanWithOffset = { id: loan.id, balance: currentBalance };
+            }
+          }
+        }
+        
+        // Add leftover cash to the biggest loan's offset
+        if (biggestLoanWithOffset) {
+          offsetBalances[biggestLoanWithOffset.id] = (offsetBalances[biggestLoanWithOffset.id] || 0) + cash;
+          offsetBalance += cash;
+          cash = 0;
+        }
+      } else if (params.loans === undefined && params.useOffsetAccount) {
+        // Legacy single loan offset (only if loans array doesn't exist)
+        offsetBalance += cash;
+        cash = 0;
+      }
     }
 
     // Phase 7: Calculate net worth and cash flow
     const netWorth = cash + investments + superannuation + offsetBalance - loanBalance;
-    const cashFlow = netIncome - expenses - loanPayment -
+    const cashFlow = netIncome - expenses - totalLoanPayment -
       actualInvestmentContribution;
 
     return {
@@ -310,7 +475,11 @@ export const SimulationEngine = {
       netWorth,
       cashFlow,
       taxPaid,
+      expenses,
       interestSaved,
+      loanBalances: params.loans && params.loans.length > 0 ? loanBalances : undefined,
+      superBalances: params.superAccounts && params.superAccounts.length > 0 ? superBalances : undefined,
+      offsetBalances: params.loans && params.loans.length > 0 ? offsetBalances : undefined,
     };
   },
 
@@ -383,17 +552,46 @@ export const SimulationEngine = {
     );
 
     // Initialize starting state
+    // If loans array exists (even if empty), use it; otherwise fall back to legacy
+    const initialLoanBalance = currentParams.loans !== undefined
+      ? (currentParams.loans.length > 0 ? currentParams.loans.reduce((sum, loan) => sum + loan.principal, 0) : 0)
+      : currentParams.loanPrincipal;
+    
+    const initialLoanBalances = currentParams.loans !== undefined && currentParams.loans.length > 0
+      ? currentParams.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.principal }), {} as { [loanId: string]: number })
+      : undefined;
+
+    const initialSuperBalance = currentParams.superAccounts && currentParams.superAccounts.length > 0
+      ? currentParams.superAccounts.reduce((sum, superAcc) => sum + superAcc.balance, 0)
+      : currentParams.currentSuperBalance;
+    
+    const initialSuperBalances = currentParams.superAccounts && currentParams.superAccounts.length > 0
+      ? currentParams.superAccounts.reduce((acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }), {} as { [superId: string]: number })
+      : undefined;
+
+    const initialOffsetBalance = currentParams.loans !== undefined
+      ? (currentParams.loans.length > 0 ? currentParams.loans.reduce((sum, loan) => sum + (loan.offsetBalance || 0), 0) : 0)
+      : (currentParams.currentOffsetBalance || 0);
+    
+    const initialOffsetBalances = currentParams.loans !== undefined && currentParams.loans.length > 0
+      ? currentParams.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.offsetBalance || 0 }), {} as { [loanId: string]: number })
+      : undefined;
+
     let currentState: FinancialState = {
       date: new Date(config.baseParameters.startDate),
       cash: 0,
       investments: currentParams.currentInvestmentBalance,
-      superannuation: currentParams.currentSuperBalance,
-      loanBalance: currentParams.loanPrincipal,
-      offsetBalance: currentParams.currentOffsetBalance || 0,
+      superannuation: initialSuperBalance,
+      loanBalance: initialLoanBalance,
+      offsetBalance: initialOffsetBalance,
       netWorth: 0,
       cashFlow: 0,
       taxPaid: 0,
+      expenses: 0,
       interestSaved: 0,
+      loanBalances: initialLoanBalances,
+      superBalances: initialSuperBalances,
+      offsetBalances: initialOffsetBalances,
     };
 
     // Calculate initial net worth
@@ -469,6 +667,24 @@ export const SimulationEngine = {
     // Generate warnings
     const financialWarnings = generateWarnings(states);
     const warningMessages = financialWarnings.map((w) => w.message);
+
+    // Add warning if retirement is not achievable at desired age
+    if (retirement.date === null) {
+      const yearsSimulated = config.baseParameters.simulationYears;
+      const finalAge = config.baseParameters.currentAge + yearsSimulated;
+      warningMessages.push(
+        `⚠️ RETIREMENT NOT ACHIEVABLE: You want to retire at age ${config.baseParameters.retirementAge}, but your assets will not support ${formatCurrency(config.baseParameters.desiredAnnualRetirementIncome)}/year income at that age. ` +
+        `Even by age ${Math.floor(finalAge)}, you won't have enough saved. ` +
+        `To retire at ${config.baseParameters.retirementAge}, you need to: save more aggressively, reduce expenses, lower your retirement income target, or work longer.`
+      );
+    } else if (retirement.age && retirement.age > config.baseParameters.retirementAge + 1) {
+      // Retirement is achievable but much later than desired
+      warningMessages.push(
+        `⚠️ DELAYED RETIREMENT: You want to retire at age ${config.baseParameters.retirementAge}, but you won't have enough assets until age ${Math.floor(retirement.age)}. ` +
+        `That's ${Math.floor(retirement.age - config.baseParameters.retirementAge)} years later than planned. ` +
+        `To retire earlier, consider: increasing savings, reducing expenses, or lowering your retirement income target from ${formatCurrency(config.baseParameters.desiredAnnualRetirementIncome)}/year.`
+      );
+    }
 
     // Check sustainability
     const isSustainable = this.checkSustainability(states, warnings);

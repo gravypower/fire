@@ -14,6 +14,7 @@ import TimelineSummary from "../components/TimelineSummary.tsx";
 interface VisualizationIslandProps {
   result: SimulationResult | EnhancedSimulationResult;
   transitionPoints?: TransitionPoint[];
+  desiredRetirementAge?: number;
 }
 
 /**
@@ -33,6 +34,7 @@ interface VisualizationIslandProps {
 export default function VisualizationIsland({
   result,
   transitionPoints = [],
+  desiredRetirementAge,
 }: VisualizationIslandProps) {
   // State for time granularity selection
   const [selectedGranularity, setSelectedGranularity] = useState<TimeInterval>("month");
@@ -78,12 +80,14 @@ export default function VisualizationIsland({
     );
     
     const periodTaxPaid = periodStates.reduce((sum, s) => sum + (s.taxPaid || 0), 0);
+    const periodExpenses = periodStates.reduce((sum, s) => sum + (s.expenses || 0), 0);
     const periodInterestSaved = periodStates.reduce((sum, s) => sum + (s.interestSaved || 0), 0);
     const periodCashFlow = periodStates.reduce((sum, s) => sum + (s.cashFlow || 0), 0);
     
     return {
       ...state,
       periodTaxPaid,
+      periodExpenses,
       periodInterestSaved,
       periodCashFlow,
     };
@@ -124,6 +128,7 @@ export default function VisualizationIsland({
 
   // Calculate cumulative totals for filtered states (sum of all period totals)
   const filteredTaxPaid = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodTaxPaid || 0), 0);
+  const filteredExpenses = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodExpenses || 0), 0);
   const filteredInterestSaved = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodInterestSaved || 0), 0);
 
   // Find loan payoff date
@@ -140,7 +145,11 @@ export default function VisualizationIsland({
         {/* Retirement Date - Requirements 4.4 */}
         <div
           class={`metric-card ${
-            result.retirementDate ? "bg-blue-50" : "bg-gray-50"
+            result.retirementDate 
+              ? (desiredRetirementAge && result.retirementAge && result.retirementAge > desiredRetirementAge + 1 
+                  ? "bg-orange-50" 
+                  : "bg-blue-50")
+              : "bg-red-50"
           }`}
         >
           <h3 class="text-sm font-medium text-gray-600 mb-1">
@@ -148,7 +157,11 @@ export default function VisualizationIsland({
           </h3>
           <p
             class={`text-2xl font-bold ${
-              result.retirementDate ? "text-blue-600" : "text-gray-500"
+              result.retirementDate 
+                ? (desiredRetirementAge && result.retirementAge && result.retirementAge > desiredRetirementAge + 1 
+                    ? "text-orange-600" 
+                    : "text-blue-600")
+                : "text-red-600"
             }`}
           >
             {result.retirementDate
@@ -157,7 +170,17 @@ export default function VisualizationIsland({
           </p>
           {result.retirementAge && (
             <p class="text-sm text-gray-600 mt-1">
-              Age {result.retirementAge}
+              Age {Math.floor(result.retirementAge)}
+              {desiredRetirementAge && result.retirementAge > desiredRetirementAge + 1 && (
+                <span class="text-orange-600 font-semibold">
+                  {" "}(Goal: {desiredRetirementAge})
+                </span>
+              )}
+            </p>
+          )}
+          {!result.retirementDate && desiredRetirementAge && (
+            <p class="text-sm text-red-600 mt-1 font-semibold">
+              Goal: Age {desiredRetirementAge}
             </p>
           )}
         </div>
@@ -248,7 +271,7 @@ export default function VisualizationIsland({
                 <p>
                   Based on your current financial trajectory, you can retire on{" "}
                   <span class="font-semibold">{result.retirementDate.toLocaleDateString()}</span> at age{" "}
-                  <span class="font-semibold">{result.retirementAge}</span>. Your financial plan is sustainable.
+                  <span class="font-semibold">{Math.floor(result.retirementAge)}</span>. Your financial plan is sustainable.
                 </p>
               </div>
             </div>
@@ -375,62 +398,36 @@ export default function VisualizationIsland({
           Showing {statesWithPeriodTotals.length} data points
         </p>
 
-        {/* Summary Statistics */}
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
-          <div class="bg-gray-50 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200">
-            <p class="text-xs text-gray-600 mb-1">Final Cash</p>
-            <p class="text-lg font-semibold text-gray-800">
-              {formatCurrency(finalCash)}
-            </p>
+        {/* Event Legend */}
+        <div class="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+          <h4 class="text-sm font-semibold text-gray-700 mb-2">Timeline Events:</h4>
+          <div class="flex flex-wrap gap-4 text-xs">
+            {result.retirementDate && (
+              <div class="flex items-center">
+                <span class="text-green-600 font-semibold mr-1">🎉</span>
+                <span class="text-gray-700">Retirement Date</span>
+              </div>
+            )}
+            {initialLoanBalance > 0 && (
+              <div class="flex items-center">
+                <svg class="w-4 h-4 text-blue-600 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-gray-700">Loan Paid Off</span>
+              </div>
+            )}
+            {effectiveTransitionPoints.length > 0 && (
+              <div class="flex items-center">
+                <svg class="w-4 h-4 text-purple-600 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-gray-700">Parameter Transition</span>
+              </div>
+            )}
           </div>
-          <div class="bg-gray-50 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200">
-            <p class="text-xs text-gray-600 mb-1">Final Investments</p>
-            <p class="text-lg font-semibold text-gray-800">
-              {formatCurrency(finalInvestments)}
-            </p>
-          </div>
-          <div class="bg-gray-50 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200">
-            <p class="text-xs text-gray-600 mb-1">Final Super</p>
-            <p class="text-lg font-semibold text-gray-800">
-              {formatCurrency(finalSuper)}
-            </p>
-          </div>
-          <div class="bg-gray-50 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200">
-            <p class="text-xs text-gray-600 mb-1">Final Loan</p>
-            <p class="text-lg font-semibold text-gray-800">
-              {formatCurrency(finalLoanBalance)}
-            </p>
-          </div>
-          {finalOffsetBalance > 0 && (
-            <div class="bg-blue-50 p-3 rounded-md hover:bg-blue-100 transition-colors duration-200">
-              <p class="text-xs text-blue-600 mb-1">Offset Balance</p>
-              <p class="text-lg font-semibold text-blue-800">
-                {formatCurrency(finalOffsetBalance)}
-              </p>
-            </div>
-          )}
-          <div class="bg-gray-50 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200">
-            <p class="text-xs text-gray-600 mb-1">Net Worth</p>
-            <p class="text-lg font-semibold text-gray-800">
-              {formatCurrency(currentNetWorth)}
-            </p>
-          </div>
-          {filteredTaxPaid > 0 && (
-            <div class="bg-red-50 p-3 rounded-md hover:bg-red-100 transition-colors duration-200">
-              <p class="text-xs text-red-600 mb-1">Tax Paid (Filtered)</p>
-              <p class="text-lg font-semibold text-red-800">
-                {formatCurrency(filteredTaxPaid)}
-              </p>
-            </div>
-          )}
-          {filteredInterestSaved > 0 && (
-            <div class="bg-green-50 p-3 rounded-md hover:bg-green-100 transition-colors duration-200">
-              <p class="text-xs text-green-600 mb-1">Interest Saved (Filtered)</p>
-              <p class="text-lg font-semibold text-green-800">
-                {formatCurrency(filteredInterestSaved)}
-              </p>
-            </div>
-          )}
+          <p class="text-xs text-gray-600 mt-2">
+            Look for highlighted rows in the table below to see when these events occur.
+          </p>
         </div>
 
         <p class="text-sm text-gray-600 mb-4">
@@ -492,6 +489,14 @@ export default function VisualizationIsland({
                     {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.periodCashFlow || 0)}
                   </div>
                 </th>
+                {filteredExpenses > 0 && (
+                  <th class="text-right sticky-header bg-orange-50">
+                    <div class="text-orange-700">Expenses</div>
+                    <div class="text-xs font-normal text-orange-600 mt-1">
+                      Cumulative: {formatCurrency(filteredExpenses)}
+                    </div>
+                  </th>
+                )}
                 {filteredTaxPaid > 0 && (
                   <th class="text-right sticky-header bg-red-50">
                     <div class="text-red-700">Tax</div>
@@ -511,58 +516,110 @@ export default function VisualizationIsland({
               </tr>
             </thead>
             <tbody>
-              {statesWithPeriodTotals.map((state, index) => (
-                <tr key={index}>
-                  <td class="text-gray-900 font-medium">
-                    {state.date.toLocaleDateString()}
-                  </td>
-                  <td
-                    class={`text-right ${
-                      state.cash < 0 ? "text-red-600 font-semibold" : "text-gray-900"
-                    }`}
-                  >
-                    {formatCurrency(state.cash)}
-                  </td>
-                  <td class="text-gray-900 text-right">
-                    {formatCurrency(state.investments)}
-                  </td>
-                  <td class="text-gray-900 text-right">
-                    {formatCurrency(state.superannuation)}
-                  </td>
-                  <td class="text-gray-900 text-right">
-                    {formatCurrency(state.loanBalance)}
-                  </td>
-                  {finalOffsetBalance > 0 && (
+              {statesWithPeriodTotals.map((state, index) => {
+                // Find the original state index in the full states array
+                const originalIndex = result.states.findIndex(s => s.date.getTime() === state.date.getTime());
+                
+                // Check if this date matches retirement date
+                const isRetirementDate = result.retirementDate && 
+                  state.date.toDateString() === result.retirementDate.toDateString();
+                
+                // Check if there's a transition at this state
+                const transitionAtThisState = effectiveTransitionPoints.find(
+                  tp => tp.stateIndex === originalIndex
+                );
+                
+                // Check if loan was paid off at this date
+                const isPreviousLoanBalance = index > 0 && statesWithPeriodTotals[index - 1].loanBalance > 0;
+                const isLoanPayoff = isPreviousLoanBalance && state.loanBalance === 0;
+                
+                // Determine row styling based on events
+                const hasEvent = isRetirementDate || transitionAtThisState || isLoanPayoff;
+                let rowClass = "";
+                if (isRetirementDate) rowClass = "bg-green-50 border-l-4 border-green-500";
+                else if (isLoanPayoff) rowClass = "bg-blue-50 border-l-4 border-blue-500";
+                else if (transitionAtThisState) rowClass = "bg-purple-50 border-l-4 border-purple-500";
+                
+                return (
+                  <tr key={index} class={rowClass}>
+                    <td class="text-gray-900 font-medium">
+                      <div class={hasEvent ? "font-bold" : ""}>{state.date.toLocaleDateString()}</div>
+                      {isRetirementDate && (
+                        <div class="text-xs font-bold text-green-700 mt-1 flex items-center bg-green-100 px-2 py-1 rounded">
+                          <span class="mr-1">🎉</span>
+                          Retirement Date
+                        </div>
+                      )}
+                      {isLoanPayoff && (
+                        <div class="text-xs font-bold text-blue-700 mt-1 flex items-center bg-blue-100 px-2 py-1 rounded">
+                          <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                          </svg>
+                          Loan Paid Off
+                        </div>
+                      )}
+                      {transitionAtThisState && (
+                        <div class="text-xs font-bold text-purple-700 mt-1 flex items-center bg-purple-100 px-2 py-1 rounded">
+                          <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                          </svg>
+                          {transitionAtThisState.transition.label || "Transition"}
+                        </div>
+                      )}
+                    </td>
+                    <td
+                      class={`text-right ${
+                        state.cash < 0 ? "text-red-600 font-semibold" : "text-gray-900"
+                      }`}
+                    >
+                      {formatCurrency(state.cash)}
+                    </td>
                     <td class="text-gray-900 text-right">
-                      {formatCurrency(state.offsetBalance)}
+                      {formatCurrency(state.investments)}
                     </td>
-                  )}
-                  <td
-                    class={`text-right font-semibold ${
-                      state.netWorth < 0 ? "text-red-600" : "text-green-600"
-                    }`}
-                  >
-                    {formatCurrency(state.netWorth)}
-                  </td>
-                  <td
-                    class={`text-right font-medium ${
-                      state.periodCashFlow < 0 ? "text-red-600" : "text-green-600"
-                    }`}
-                  >
-                    {formatCurrency(state.periodCashFlow)}
-                  </td>
-                  {filteredTaxPaid > 0 && (
-                    <td class="text-gray-900 text-right text-sm">
-                      {formatCurrency(state.periodTaxPaid || 0)}
+                    <td class="text-gray-900 text-right">
+                      {formatCurrency(state.superannuation)}
                     </td>
-                  )}
-                  {filteredInterestSaved > 0 && (
-                    <td class="text-gray-900 text-right text-sm">
-                      {formatCurrency(state.periodInterestSaved || 0)}
+                    <td class="text-gray-900 text-right">
+                      {formatCurrency(state.loanBalance)}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    {finalOffsetBalance > 0 && (
+                      <td class="text-gray-900 text-right">
+                        {formatCurrency(state.offsetBalance)}
+                      </td>
+                    )}
+                    <td
+                      class={`text-right font-semibold ${
+                        state.netWorth < 0 ? "text-red-600" : "text-green-600"
+                      }`}
+                    >
+                      {formatCurrency(state.netWorth)}
+                    </td>
+                    <td
+                      class={`text-right font-medium ${
+                        state.periodCashFlow < 0 ? "text-red-600" : "text-green-600"
+                      }`}
+                    >
+                      {formatCurrency(state.periodCashFlow)}
+                    </td>
+                    {filteredExpenses > 0 && (
+                      <td class="text-gray-900 text-right text-sm">
+                        {formatCurrency(state.periodExpenses || 0)}
+                      </td>
+                    )}
+                    {filteredTaxPaid > 0 && (
+                      <td class="text-gray-900 text-right text-sm">
+                        {formatCurrency(state.periodTaxPaid || 0)}
+                      </td>
+                    )}
+                    {filteredInterestSaved > 0 && (
+                      <td class="text-gray-900 text-right text-sm">
+                        {formatCurrency(state.periodInterestSaved || 0)}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

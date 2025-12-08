@@ -165,7 +165,7 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
               </p>
               {withTransitions.retirementAge && (
                 <p class="text-sm text-gray-600">
-                  Age {withTransitions.retirementAge}
+                  Age {Math.floor(withTransitions.retirementAge)}
                 </p>
               )}
             </div>
@@ -236,7 +236,7 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
               </p>
               {withoutTransitions.retirementAge && (
                 <p class="text-sm text-gray-600">
-                  Age {withoutTransitions.retirementAge}
+                  Age {Math.floor(withoutTransitions.retirementAge)}
                 </p>
               )}
             </div>

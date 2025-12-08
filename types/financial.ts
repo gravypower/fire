@@ -12,7 +12,7 @@ export type TimeInterval = "week" | "fortnight" | "month" | "year";
 /**
  * Payment frequency options
  */
-export type PaymentFrequency = "weekly" | "fortnightly" | "monthly";
+export type PaymentFrequency = "weekly" | "fortnightly" | "monthly" | "yearly";
 
 /**
  * Tax bracket definition
@@ -27,6 +27,82 @@ export interface TaxBracket {
 }
 
 /**
+ * Income source definition
+ */
+export interface IncomeSource {
+  /** Unique identifier */
+  id: string;
+  /** Label/description for this income source */
+  label: string;
+  /** Amount per frequency period */
+  amount: number;
+  /** Payment frequency */
+  frequency: PaymentFrequency;
+  /** Whether this income is before tax (true) or after tax (false) */
+  isBeforeTax: boolean;
+  /** Which person this income belongs to (for household mode) */
+  personId?: string;
+}
+
+/**
+ * Person in a household
+ */
+export interface Person {
+  /** Unique identifier */
+  id: string;
+  /** Person's name/label */
+  name: string;
+  /** Current age */
+  currentAge: number;
+  /** Desired retirement age */
+  retirementAge: number;
+  /** Income sources for this person */
+  incomeSources: IncomeSource[];
+  /** Super accounts for this person */
+  superAccounts: SuperAccount[];
+}
+
+/**
+ * Superannuation account definition
+ */
+export interface SuperAccount {
+  /** Unique identifier */
+  id: string;
+  /** Label/description for this super account */
+  label: string;
+  /** Current balance */
+  balance: number;
+  /** Contribution rate as percentage of gross income */
+  contributionRate: number;
+  /** Expected annual return rate as percentage */
+  returnRate: number;
+  /** Which person this super account belongs to (for household mode) */
+  personId?: string;
+}
+
+/**
+ * Loan definition
+ */
+export interface Loan {
+  /** Unique identifier */
+  id: string;
+  /** Label/description for this loan */
+  label: string;
+  /** Outstanding principal amount */
+  principal: number;
+  /** Annual interest rate as a percentage */
+  interestRate: number;
+  /** Regular payment amount */
+  paymentAmount: number;
+  /** Payment frequency */
+  paymentFrequency: PaymentFrequency;
+  /** Whether this loan has an offset account attached */
+  hasOffset?: boolean;
+  /** Current offset balance for this loan */
+  offsetBalance?: number;
+}
+
+/**
  * Financial state at a specific point in time
  * Represents a snapshot of all financial metrics
  */
@@ -37,9 +113,9 @@ export interface FinancialState {
   cash: number;
   /** Total investment balance */
   investments: number;
-  /** Superannuation (retirement savings) balance */
+  /** Superannuation (retirement savings) balance - DEPRECATED: Use superBalances instead */
   superannuation: number;
-  /** Outstanding loan balance */
+  /** Outstanding loan balance - DEPRECATED: Use loanBalances instead */
   loanBalance: number;
   /** Offset account balance (reduces loan interest) */
   offsetBalance: number;
@@ -49,8 +125,16 @@ export interface FinancialState {
   cashFlow: number;
   /** Tax paid this period */
   taxPaid: number;
+  /** Expenses paid this period */
+  expenses: number;
   /** Interest saved due to offset account */
   interestSaved: number;
+  /** Individual loan balances by loan ID (optional, falls back to loanBalance) */
+  loanBalances?: { [loanId: string]: number };
+  /** Individual super balances by super ID (optional, falls back to superannuation) */
+  superBalances?: { [superId: string]: number };
+  /** Individual offset balances by loan ID (optional, falls back to offsetBalance) */
+  offsetBalances?: { [loanId: string]: number };
 }
 
 /**
@@ -58,15 +142,23 @@ export interface FinancialState {
  * All monetary values are in the user's currency
  */
 export interface UserParameters {
-  // Income
-  /** Annual salary amount */
+  // Household Configuration
+  /** Household mode: 'single' or 'couple' */
+  householdMode?: "single" | "couple";
+  /** People in the household (for couple mode) */
+  people?: Person[];
+
+  // Income (Legacy - for backward compatibility)
+  /** Annual salary amount - DEPRECATED: Use incomeSources or people instead */
   annualSalary: number;
-  /** How often salary is paid */
+  /** How often salary is paid - DEPRECATED: Use incomeSources or people instead */
   salaryFrequency: PaymentFrequency;
-  /** Income tax rate as a percentage (e.g., 30 for 30%) - DEPRECATED: Use taxBrackets instead */
+  /** Income tax rate as a percentage (e.g., 30 for 30%) - DEPRECATED: Use taxBrackets or people instead */
   incomeTaxRate: number;
   /** Tax brackets for progressive taxation (optional, falls back to incomeTaxRate if not provided) */
   taxBrackets?: TaxBracket[];
+  /** Multiple income sources (optional, falls back to annualSalary if not provided) */
+  incomeSources?: IncomeSource[];
 
   // Expenses
   /** Monthly living expenses (food, utilities, etc.) - DEPRECATED: Use expenseItems instead */
@@ -77,18 +169,20 @@ export interface UserParameters {
   expenseItems?: ExpenseItem[];
 
   // Loans
-  /** Outstanding loan principal amount */
+  /** Outstanding loan principal amount - DEPRECATED: Use loans instead */
   loanPrincipal: number;
-  /** Annual interest rate as a percentage (e.g., 5.5 for 5.5%) */
+  /** Annual interest rate as a percentage (e.g., 5.5 for 5.5%) - DEPRECATED: Use loans instead */
   loanInterestRate: number;
-  /** Regular loan payment amount */
+  /** Regular loan payment amount - DEPRECATED: Use loans instead */
   loanPaymentAmount: number;
-  /** How often loan payments are made */
+  /** How often loan payments are made - DEPRECATED: Use loans instead */
   loanPaymentFrequency: PaymentFrequency;
   /** Whether to use an offset account (leftover funds reduce loan interest) */
   useOffsetAccount: boolean;
   /** Current offset account balance */
   currentOffsetBalance: number;
+  /** Multiple loans (optional, falls back to loanPrincipal if not provided) */
+  loans?: Loan[];
 
   // Investments
   /** Monthly contribution to investments */
@@ -99,12 +193,14 @@ export interface UserParameters {
   currentInvestmentBalance: number;
 
   // Superannuation
-  /** Percentage of salary contributed to super (e.g., 11 for 11%) */
+  /** Percentage of salary contributed to super (e.g., 11 for 11%) - DEPRECATED: Use superAccounts instead */
   superContributionRate: number;
-  /** Expected annual return rate for super as a percentage */
+  /** Expected annual return rate for super as a percentage - DEPRECATED: Use superAccounts instead */
   superReturnRate: number;
-  /** Current superannuation balance */
+  /** Current superannuation balance - DEPRECATED: Use superAccounts instead */
   currentSuperBalance: number;
+  /** Multiple super accounts (optional, falls back to single super fields if not provided) */
+  superAccounts?: SuperAccount[];
 
   // Retirement
   /** Desired annual income in retirement */

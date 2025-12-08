@@ -184,7 +184,7 @@ export default function SimulationIsland({
             </p>
             {result.retirementAge && (
               <p class="text-sm text-gray-600 mt-1">
-                Age {result.retirementAge}
+                Age {Math.floor(result.retirementAge)}
               </p>
             )}
           </div>
