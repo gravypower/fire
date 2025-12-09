@@ -618,6 +618,128 @@ export const InvestmentProcessor = {
 
     return balanceAfterGrowth + contributionAfterGrowth;
   },
+
+  /**
+   * Calculates total investment value from individual holdings
+   * @param params User financial parameters
+   * @param currentDate Current simulation date (optional, for date-based filtering)
+   * @param currentBalances Current balances for each holding (optional)
+   * @param interval Time interval for calculation
+   * @param availableCash Available cash for contributions
+   * @returns Object with new total balance, individual balances, and cash used for contributions
+   */
+  calculateInvestmentHoldings(
+    params: UserParameters,
+    currentDate: Date,
+    currentBalances: { [holdingId: string]: number } | undefined,
+    interval: TimeInterval,
+    availableCash: number,
+  ): {
+    totalBalance: number;
+    holdingBalances: { [holdingId: string]: number };
+    cashUsed: number;
+  } {
+    // If no individual holdings, fall back to legacy calculation
+    if (!params.investmentHoldings || params.investmentHoldings.length === 0) {
+      const contribution = (params.monthlyInvestmentContribution * 12) / intervalToPeriodsPerYear(interval);
+      const actualContribution = Math.min(availableCash, contribution);
+      const newBalance = this.calculateInvestmentGrowth(
+        params.currentInvestmentBalance,
+        actualContribution,
+        params.investmentReturnRate / 100,
+        interval,
+      );
+      return {
+        totalBalance: newBalance,
+        holdingBalances: {},
+        cashUsed: actualContribution,
+      };
+    }
+
+    // Process individual holdings
+    let totalBalance = 0;
+    let totalCashUsed = 0;
+    const holdingBalances: { [holdingId: string]: number } = {};
+
+    for (const holding of params.investmentHoldings) {
+      // Skip disabled holdings
+      if (!holding.enabled) {
+        holdingBalances[holding.id] = currentBalances?.[holding.id] || holding.currentValue;
+        continue;
+      }
+
+      // Check date range
+      if (holding.startDate && currentDate < holding.startDate) {
+        holdingBalances[holding.id] = currentBalances?.[holding.id] || holding.currentValue;
+        continue;
+      }
+      if (holding.endDate && currentDate > holding.endDate) {
+        holdingBalances[holding.id] = currentBalances?.[holding.id] || holding.currentValue;
+        continue;
+      }
+
+      // Get current balance for this holding
+      const currentBalance = currentBalances?.[holding.id] || holding.currentValue;
+
+      // Calculate contribution for this interval
+      let contribution = 0;
+      if (holding.contributionAmount && holding.contributionFrequency) {
+        // Convert contribution to interval amount
+        const annualContribution = this.convertPaymentToAnnual(
+          holding.contributionAmount,
+          holding.contributionFrequency,
+        );
+        contribution = annualContribution / intervalToPeriodsPerYear(interval);
+
+        // Check if we have enough cash
+        if (availableCash - totalCashUsed >= contribution) {
+          totalCashUsed += contribution;
+        } else {
+          // Not enough cash for this contribution
+          contribution = Math.max(0, availableCash - totalCashUsed);
+          totalCashUsed = availableCash;
+        }
+      }
+
+      // Calculate growth
+      const newBalance = this.calculateInvestmentGrowth(
+        currentBalance,
+        contribution,
+        holding.returnRate / 100,
+        interval,
+      );
+
+      holdingBalances[holding.id] = newBalance;
+      totalBalance += newBalance;
+    }
+
+    return {
+      totalBalance,
+      holdingBalances,
+      cashUsed: totalCashUsed,
+    };
+  },
+
+  /**
+   * Converts a payment amount to annual
+   */
+  convertPaymentToAnnual(
+    amount: number,
+    frequency: PaymentFrequency,
+  ): number {
+    switch (frequency) {
+      case "weekly":
+        return amount * 52;
+      case "fortnightly":
+        return amount * 26;
+      case "monthly":
+        return amount * 12;
+      case "yearly":
+        return amount;
+      default:
+        return amount * 12;
+    }
+  },
 };
 
 /**

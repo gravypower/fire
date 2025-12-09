@@ -401,26 +401,45 @@ export const SimulationEngine = {
     cash += netIncome;
 
     // Phase 4: Investment - Add contributions and apply growth
-    // Convert monthly contribution to interval
-    const investmentContribution = (params.monthlyInvestmentContribution * 12) /
-      intervalToPeriodsPerYear(interval);
-
-    // Requirements 7.2: Prevent investment contributions if cash is negative or insufficient
+    // Handle individual investment holdings if provided
+    let investmentBalances: { [holdingId: string]: number } = {};
     let actualInvestmentContribution = 0;
-    if (cash > 0 && cash >= investmentContribution) {
-      actualInvestmentContribution = investmentContribution;
-      cash -= investmentContribution;
+    
+    if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+      // Use individual holdings
+      const investmentResult = InvestmentProcessor.calculateInvestmentHoldings(
+        params,
+        currentState.date,
+        currentState.investmentBalances,
+        interval,
+        cash,
+      );
+      
+      investments = investmentResult.totalBalance;
+      investmentBalances = investmentResult.holdingBalances;
+      actualInvestmentContribution = investmentResult.cashUsed;
+      cash -= actualInvestmentContribution;
     } else {
-      // Can't afford investment contribution - skip it
-      actualInvestmentContribution = 0;
-    }
+      // Legacy single investment calculation
+      const investmentContribution = (params.monthlyInvestmentContribution * 12) /
+        intervalToPeriodsPerYear(interval);
 
-    investments = InvestmentProcessor.calculateInvestmentGrowth(
-      investments,
-      actualInvestmentContribution,
-      params.investmentReturnRate / 100, // Convert percentage to decimal
-      interval,
-    );
+      // Requirements 7.2: Prevent investment contributions if cash is negative or insufficient
+      if (cash > 0 && cash >= investmentContribution) {
+        actualInvestmentContribution = investmentContribution;
+        cash -= investmentContribution;
+      } else {
+        // Can't afford investment contribution - skip it
+        actualInvestmentContribution = 0;
+      }
+
+      investments = InvestmentProcessor.calculateInvestmentGrowth(
+        investments,
+        actualInvestmentContribution,
+        params.investmentReturnRate / 100, // Convert percentage to decimal
+        interval,
+      );
+    }
 
     // Phase 5: Superannuation - Add contributions and apply growth
     // Handle multiple super accounts if provided, otherwise use legacy single super
@@ -549,6 +568,7 @@ export const SimulationEngine = {
       loanBalances: params.loans && params.loans.length > 0 ? loanBalances : undefined,
       superBalances: params.superAccounts && params.superAccounts.length > 0 ? superBalances : undefined,
       offsetBalances: params.loans && params.loans.length > 0 ? offsetBalances : undefined,
+      investmentBalances: params.investmentHoldings && params.investmentHoldings.length > 0 ? investmentBalances : undefined,
     };
   },
 

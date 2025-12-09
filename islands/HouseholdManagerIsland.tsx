@@ -16,6 +16,18 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
     config.baseParameters.householdMode || "single"
   );
 
+  // Income source management state
+  const [isAddingIncome, setIsAddingIncome] = useState(false);
+  const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [incomeFormData, setIncomeFormData] = useState<Partial<IncomeSource>>({});
+  const [incomePersonId, setIncomePersonId] = useState<string | null>(null);
+
+  // Super account management state
+  const [isAddingSuper, setIsAddingSuper] = useState(false);
+  const [editingSuperId, setEditingSuperId] = useState<string | null>(null);
+  const [superFormData, setSuperFormData] = useState<Partial<import("../types/financial.ts").SuperAccount>>({});
+  const [superPersonId, setSuperPersonId] = useState<string | null>(null);
+
   /**
    * Switches between single and couple mode
    */
@@ -100,26 +112,69 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
   };
 
   /**
-   * Adds an income source to a person
+   * Starts adding a new income source
    */
-  const addIncomeSource = (personId: string) => {
-    if (!config.baseParameters.people) return;
-
-    const newIncome: IncomeSource = {
-      id: `income-${Date.now()}`,
+  const startAddIncome = (personId: string) => {
+    setIncomeFormData({
       label: "New Income",
       amount: 0,
       frequency: "yearly" as PaymentFrequency,
       isBeforeTax: true,
-      personId,
-    };
+      isOneOff: false,
+    });
+    setIncomePersonId(personId);
+    setIsAddingIncome(true);
+    setEditingIncomeId(null);
+  };
+
+  /**
+   * Starts editing an income source
+   */
+  const startEditIncome = (personId: string, income: IncomeSource) => {
+    setIncomeFormData({ ...income });
+    setIncomePersonId(personId);
+    setIsAddingIncome(false);
+    setEditingIncomeId(income.id);
+  };
+
+  /**
+   * Cancels income add/edit
+   */
+  const cancelIncomeForm = () => {
+    setIncomeFormData({});
+    setIncomePersonId(null);
+    setIsAddingIncome(false);
+    setEditingIncomeId(null);
+  };
+
+  /**
+   * Saves an income source (add or update)
+   */
+  const saveIncome = () => {
+    if (!incomePersonId || !config.baseParameters.people) return;
+    if (!incomeFormData.label || incomeFormData.amount === undefined || incomeFormData.amount < 0) {
+      alert("Please enter a valid income label and amount");
+      return;
+    }
 
     const updatedPeople = config.baseParameters.people.map(person => {
-      if (person.id === personId) {
-        return {
-          ...person,
-          incomeSources: [...(person.incomeSources || []), newIncome],
-        };
+      if (person.id === incomePersonId) {
+        let updatedIncomeSources;
+        if (editingIncomeId) {
+          // Update existing income
+          updatedIncomeSources = person.incomeSources.map(inc =>
+            inc.id === editingIncomeId ? { ...inc, ...incomeFormData } as IncomeSource : inc
+          );
+        } else {
+          // Add new income
+          const newIncome: IncomeSource = {
+            id: `income-${Date.now()}`,
+            personId: incomePersonId,
+            ...incomeFormData as any,
+          };
+          updatedIncomeSources = [...person.incomeSources, newIncome];
+        }
+        return { ...person, incomeSources: updatedIncomeSources };
       }
       return person;
     });
@@ -131,12 +186,15 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
         people: updatedPeople,
       },
     });
+
+    cancelIncomeForm();
   };
 
   /**
    * Removes an income source from a person
    */
   const removeIncomeSource = (personId: string, incomeId: string) => {
+    if (!confirm("Delete this income source?")) return;
     if (!config.baseParameters.people) return;
 
     const updatedPeople = config.baseParameters.people.map(person => {
@@ -159,53 +217,68 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
   };
 
   /**
-   * Updates an income source for a person
+   * Starts adding a new super account
    */
-  const updateIncomeSource = (personId: string, incomeId: string, updates: Partial<IncomeSource>) => {
-    if (!config.baseParameters.people) return;
-
-    const updatedPeople = config.baseParameters.people.map(person => {
-      if (person.id === personId) {
-        return {
-          ...person,
-          incomeSources: person.incomeSources.map(inc =>
-            inc.id === incomeId ? { ...inc, ...updates } : inc
-          ),
-        };
-      }
-      return person;
-    });
-
-    onConfigChange({
-      ...config,
-      baseParameters: {
-        ...config.baseParameters,
-        people: updatedPeople,
-      },
-    });
-  };
-
-  /**
-   * Adds a super account to a person
-   */
-  const addSuperAccount = (personId: string) => {
-    if (!config.baseParameters.people) return;
-
-    const newSuper: import("../types/financial.ts").SuperAccount = {
-      id: `super-${Date.now()}`,
+  const startAddSuper = (personId: string) => {
+    setSuperFormData({
       label: "New Super Account",
       balance: 0,
       contributionRate: 11,
       returnRate: 7,
-      personId,
-    };
+    });
+    setSuperPersonId(personId);
+    setIsAddingSuper(true);
+    setEditingSuperId(null);
+  };
+
+  /**
+   * Starts editing a super account
+   */
+  const startEditSuper = (personId: string, superAcc: import("../types/financial.ts").SuperAccount) => {
+    setSuperFormData({ ...superAcc });
+    setSuperPersonId(personId);
+    setIsAddingSuper(false);
+    setEditingSuperId(superAcc.id);
+  };
+
+  /**
+   * Cancels super add/edit
+   */
+  const cancelSuperForm = () => {
+    setSuperFormData({});
+    setSuperPersonId(null);
+    setIsAddingSuper(false);
+    setEditingSuperId(null);
+  };
+
+  /**
+   * Saves a super account (add or update)
+   */
+  const saveSuper = () => {
+    if (!superPersonId || !config.baseParameters.people) return;
+    if (!superFormData.label || superFormData.balance === undefined || superFormData.balance < 0) {
+      alert("Please enter a valid super account label and balance");
+      return;
+    }
 
     const updatedPeople = config.baseParameters.people.map(person => {
-      if (person.id === personId) {
-        return {
-          ...person,
-          superAccounts: [...(person.superAccounts || []), newSuper],
-        };
+      if (person.id === superPersonId) {
+        let updatedSuperAccounts;
+        if (editingSuperId) {
+          // Update existing super
+          updatedSuperAccounts = person.superAccounts.map(sup =>
+            sup.id === editingSuperId ? { ...sup, ...superFormData } as import("../types/financial.ts").SuperAccount : sup
+          );
+        } else {
+          // Add new super
+          const newSuper: import("../types/financial.ts").SuperAccount = {
+            id: `super-${Date.now()}`,
+            personId: superPersonId,
+            ...superFormData as any,
+          };
+          updatedSuperAccounts = [...person.superAccounts, newSuper];
+        }
+        return { ...person, superAccounts: updatedSuperAccounts };
       }
       return person;
     });
@@ -217,12 +290,15 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
         people: updatedPeople,
       },
     });
+
+    cancelSuperForm();
   };
 
   /**
    * Removes a super account from a person
    */
   const removeSuperAccount = (personId: string, superId: string) => {
+    if (!confirm("Delete this super account?")) return;
     if (!config.baseParameters.people) return;
 
     const updatedPeople = config.baseParameters.people.map(person => {
@@ -230,33 +306,6 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
         return {
           ...person,
           superAccounts: person.superAccounts.filter(sup => sup.id !== superId),
-        };
-      }
-      return person;
-    });
-
-    onConfigChange({
-      ...config,
-      baseParameters: {
-        ...config.baseParameters,
-        people: updatedPeople,
-      },
-    });
-  };
-
-  /**
-   * Updates a super account for a person
-   */
-  const updateSuperAccount = (personId: string, superId: string, updates: Partial<import("../types/financial.ts").SuperAccount>) => {
-    if (!config.baseParameters.people) return;
-
-    const updatedPeople = config.baseParameters.people.map(person => {
-      if (person.id === personId) {
-        return {
-          ...person,
-          superAccounts: person.superAccounts.map(sup =>
-            sup.id === superId ? { ...sup, ...updates } : sup
-          ),
         };
       }
       return person;
@@ -382,120 +431,185 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
               <div class="mb-3">
                 <div class="flex items-center justify-between mb-2">
                   <label class="text-sm font-medium text-gray-700">Income Sources</label>
-                  <button
-                    onClick={() => addIncomeSource(person.id)}
-                    class="text-xs px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
-                  >
-                    + Add Income
-                  </button>
+                  {(!isAddingIncome || incomePersonId !== person.id) && (!editingIncomeId || incomePersonId !== person.id) && (
+                    <button
+                      onClick={() => startAddIncome(person.id)}
+                      class="text-xs px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
+                    >
+                      + Add Income
+                    </button>
+                  )}
                 </div>
 
-                {person.incomeSources && person.incomeSources.length > 0 ? (
-                  <div class="space-y-2">
-                    {person.incomeSources.map((income) => (
-                      <div key={income.id} class="p-3 bg-white rounded border border-gray-200">
-                        <div class="flex items-center justify-between mb-2">
-                          <input
-                            type="text"
-                            value={income.label}
-                            onInput={(e) => updateIncomeSource(person.id, income.id, { label: (e.target as HTMLInputElement).value })}
-                            placeholder="Income label"
-                            class="text-sm font-medium px-2 py-1 border border-gray-300 rounded flex-1 mr-2"
-                          />
-                          <button
-                            onClick={() => removeIncomeSource(person.id, income.id)}
-                            class="text-red-600 hover:text-red-700 text-xs"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 mb-2">
-                          <div>
-                            <label class="text-xs text-gray-600">Amount</label>
-                            <input
-                              type="number"
-                              value={income.amount}
-                              onInput={(e) => updateIncomeSource(person.id, income.id, { amount: parseFloat((e.target as HTMLInputElement).value) })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                              step="100"
-                            />
-                          </div>
-                          <div>
-                            <label class="text-xs text-gray-600">Frequency</label>
-                            <select
-                              value={income.frequency}
-                              onChange={(e) => updateIncomeSource(person.id, income.id, { frequency: (e.target as HTMLSelectElement).value as PaymentFrequency })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            >
-                              <option value="weekly">Weekly</option>
-                              <option value="fortnightly">Fortnightly</option>
-                              <option value="monthly">Monthly</option>
-                              <option value="yearly">Yearly</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div class="mb-2">
-                          <label class="flex items-center cursor-pointer text-xs">
-                            <input
-                              type="checkbox"
-                              checked={income.isBeforeTax}
-                              onChange={(e) => updateIncomeSource(person.id, income.id, { isBeforeTax: (e.target as HTMLInputElement).checked })}
-                              class="w-3 h-3 text-purple-600 border-gray-300 rounded mr-1"
-                            />
-                            <span class="text-gray-600">Before tax (taxable income)</span>
-                          </label>
-                        </div>
-                        <div class="mb-2">
-                          <label class="flex items-center cursor-pointer text-xs">
-                            <input
-                              type="checkbox"
-                              checked={income.isOneOff || false}
-                              onChange={(e) => updateIncomeSource(person.id, income.id, { isOneOff: (e.target as HTMLInputElement).checked })}
-                              class="w-3 h-3 text-green-600 border-gray-300 rounded mr-1"
-                            />
-                            <span class="text-gray-600">One-off income (e.g., car sale)</span>
-                          </label>
-                        </div>
-                        {income.isOneOff && (
-                          <div class="mb-2 fade-in">
-                            <label class="text-xs text-gray-600">One-off Date</label>
-                            <input
-                              type="date"
-                              value={income.oneOffDate ? new Date(income.oneOffDate).toISOString().split('T')[0] : ""}
-                              onInput={(e) => updateIncomeSource(person.id, income.id, { oneOffDate: new Date((e.target as HTMLInputElement).value) })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            />
-                          </div>
-                        )}
-                        {!income.isOneOff && (
-                          <div class="grid grid-cols-2 gap-2 fade-in">
-                            <div>
-                              <label class="text-xs text-gray-600">Start Date (Optional)</label>
-                              <input
-                                type="date"
-                                value={income.startDate ? new Date(income.startDate).toISOString().split('T')[0] : ""}
-                                onInput={(e) => updateIncomeSource(person.id, income.id, { startDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
-                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                              />
-                            </div>
-                            <div>
-                              <label class="text-xs text-gray-600">End Date (Optional)</label>
-                              <input
-                                type="date"
-                                value={income.endDate ? new Date(income.endDate).toISOString().split('T')[0] : ""}
-                                onInput={(e) => updateIncomeSource(person.id, income.id, { endDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
-                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                              />
-                            </div>
-                          </div>
-                        )}
+                {/* Income Form (Add/Edit) */}
+                {((isAddingIncome && incomePersonId === person.id) || (editingIncomeId && incomePersonId === person.id)) && (
+                  <div class="border border-purple-300 rounded-lg p-3 bg-purple-50 mb-2 fade-in">
+                    <h5 class="text-sm font-semibold mb-2 text-gray-800">
+                      {editingIncomeId ? "Edit Income" : "Add New Income"}
+                    </h5>
+
+                    <div class="mb-2">
+                      <label class="block text-xs font-medium text-gray-700 mb-1">Income Label *</label>
+                      <input
+                        type="text"
+                        value={incomeFormData.label || ""}
+                        onInput={(e) => setIncomeFormData({ ...incomeFormData, label: (e.target as HTMLInputElement).value })}
+                        placeholder="e.g., Salary, Freelance"
+                        class="input-field text-sm"
+                      />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Amount *</label>
+                        <input
+                          type="number"
+                          value={incomeFormData.amount ?? ""}
+                          onInput={(e) => setIncomeFormData({ ...incomeFormData, amount: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                          class="input-field text-sm"
+                          step="100"
+                        />
                       </div>
-                    ))}
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Frequency *</label>
+                        <select
+                          value={incomeFormData.frequency || "yearly"}
+                          onChange={(e) => setIncomeFormData({ ...incomeFormData, frequency: (e.target as HTMLSelectElement).value as PaymentFrequency })}
+                          class="input-field text-sm"
+                        >
+                          <option value="weekly">Weekly</option>
+                          <option value="fortnightly">Fortnightly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="flex items-center cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={incomeFormData.isBeforeTax ?? true}
+                          onChange={(e) => setIncomeFormData({ ...incomeFormData, isBeforeTax: (e.target as HTMLInputElement).checked })}
+                          class="w-3 h-3 text-purple-600 border-gray-300 rounded mr-1"
+                        />
+                        <span class="text-gray-700">Before tax (taxable income)</span>
+                      </label>
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="flex items-center cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={incomeFormData.isOneOff || false}
+                          onChange={(e) => setIncomeFormData({ ...incomeFormData, isOneOff: (e.target as HTMLInputElement).checked })}
+                          class="w-3 h-3 text-green-600 border-gray-300 rounded mr-1"
+                        />
+                        <span class="text-gray-700">One-off income (e.g., car sale)</span>
+                      </label>
+                    </div>
+
+                    {incomeFormData.isOneOff && (
+                      <div class="mb-2 fade-in">
+                        <label class="block text-xs font-medium text-gray-700 mb-1">One-off Date *</label>
+                        <input
+                          type="date"
+                          value={incomeFormData.oneOffDate ? new Date(incomeFormData.oneOffDate).toISOString().split('T')[0] : ""}
+                          onInput={(e) => setIncomeFormData({ ...incomeFormData, oneOffDate: new Date((e.target as HTMLInputElement).value) })}
+                          class="input-field text-sm"
+                        />
+                      </div>
+                    )}
+
+                    {!incomeFormData.isOneOff && (
+                      <div class="grid grid-cols-2 gap-2 mb-2 fade-in">
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Start Date (Optional)</label>
+                          <input
+                            type="date"
+                            value={incomeFormData.startDate ? new Date(incomeFormData.startDate).toISOString().split('T')[0] : ""}
+                            onInput={(e) => setIncomeFormData({ ...incomeFormData, startDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                            class="input-field text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">End Date (Optional)</label>
+                          <input
+                            type="date"
+                            value={incomeFormData.endDate ? new Date(incomeFormData.endDate).toISOString().split('T')[0] : ""}
+                            onInput={(e) => setIncomeFormData({ ...incomeFormData, endDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                            class="input-field text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div class="flex gap-2 mt-3">
+                      <button onClick={saveIncome} class="btn-primary flex-1 text-xs py-1">
+                        {editingIncomeId ? "Update" : "Add"} Income
+                      </button>
+                      <button onClick={cancelIncomeForm} class="btn-secondary flex-1 text-xs py-1">
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
-                    No income sources yet. Click "+ Add Income" to add one.
-                  </p>
+                )}
+
+                {/* Income List (Summary View) */}
+                {(!isAddingIncome || incomePersonId !== person.id) && (!editingIncomeId || incomePersonId !== person.id) && (
+                  <>
+                    {person.incomeSources && person.incomeSources.length > 0 ? (
+                      <div class="space-y-2">
+                        {person.incomeSources.map((income) => (
+                          <div key={income.id} class="p-2 bg-white rounded border border-gray-200">
+                            <div class="flex items-center justify-between mb-1">
+                              <h5 class="text-sm font-semibold text-gray-800">{income.label}</h5>
+                              <div class="flex gap-2">
+                                <button
+                                  onClick={() => startEditIncome(person.id, income)}
+                                  class="text-blue-600 hover:text-blue-800 text-xs px-1"
+                                  title="Edit"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => removeIncomeSource(person.id, income.id)}
+                                  class="text-red-600 hover:text-red-700 text-xs px-1"
+                                  title="Delete"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                              <div>
+                                <span class="text-gray-500">Amount:</span> <span class="font-medium text-gray-800">${income.amount.toLocaleString()}/{income.frequency}</span>
+                              </div>
+                              <div>
+                                <span class="text-gray-500">Tax:</span> <span class="font-medium text-gray-800">{income.isBeforeTax ? "Before tax" : "After tax"}</span>
+                              </div>
+                              {income.isOneOff && (
+                                <div class="col-span-2">
+                                  <span class="text-green-600 font-medium">One-off{income.oneOffDate ? ` on ${new Date(income.oneOffDate).toLocaleDateString()}` : ""}</span>
+                                </div>
+                              )}
+                              {!income.isOneOff && (income.startDate || income.endDate) && (
+                                <div class="col-span-2 text-xs text-gray-500">
+                                  {income.startDate && `From: ${new Date(income.startDate).toLocaleDateString()}`}
+                                  {income.startDate && income.endDate && " | "}
+                                  {income.endDate && `To: ${new Date(income.endDate).toLocaleDateString()}`}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
+                        No income sources yet. Click "+ Add Income" to add one.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -503,74 +617,125 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
               <div class="mb-3">
                 <div class="flex items-center justify-between mb-2">
                   <label class="text-sm font-medium text-gray-700">Super Accounts</label>
-                  <button
-                    onClick={() => addSuperAccount(person.id)}
-                    class="text-xs px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-                  >
-                    + Add Super
-                  </button>
+                  {(!isAddingSuper || superPersonId !== person.id) && (!editingSuperId || superPersonId !== person.id) && (
+                    <button
+                      onClick={() => startAddSuper(person.id)}
+                      class="text-xs px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                    >
+                      + Add Super
+                    </button>
+                  )}
                 </div>
 
-                {person.superAccounts && person.superAccounts.length > 0 ? (
-                  <div class="space-y-2">
-                    {person.superAccounts.map((superAcc) => (
-                      <div key={superAcc.id} class="p-3 bg-white rounded border border-gray-200">
-                        <div class="flex items-center justify-between mb-2">
-                          <input
-                            type="text"
-                            value={superAcc.label}
-                            onInput={(e) => updateSuperAccount(person.id, superAcc.id, { label: (e.target as HTMLInputElement).value })}
-                            placeholder="Super account label"
-                            class="text-sm font-medium px-2 py-1 border border-gray-300 rounded flex-1 mr-2"
-                          />
-                          <button
-                            onClick={() => removeSuperAccount(person.id, superAcc.id)}
-                            class="text-red-600 hover:text-red-700 text-xs"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div class="grid grid-cols-1 gap-2">
-                          <div>
-                            <label class="text-xs text-gray-600">Current Balance ($)</label>
-                            <input
-                              type="number"
-                              value={superAcc.balance}
-                              onInput={(e) => updateSuperAccount(person.id, superAcc.id, { balance: parseFloat((e.target as HTMLInputElement).value) })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                              step="1000"
-                            />
-                          </div>
-                          <div class="grid grid-cols-2 gap-2">
-                            <div>
-                              <label class="text-xs text-gray-600">Contribution Rate (%)</label>
-                              <input
-                                type="number"
-                                value={superAcc.contributionRate}
-                                onInput={(e) => updateSuperAccount(person.id, superAcc.id, { contributionRate: parseFloat((e.target as HTMLInputElement).value) })}
-                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                step="0.5"
-                              />
-                            </div>
-                            <div>
-                              <label class="text-xs text-gray-600">Return Rate (%)</label>
-                              <input
-                                type="number"
-                                value={superAcc.returnRate}
-                                onInput={(e) => updateSuperAccount(person.id, superAcc.id, { returnRate: parseFloat((e.target as HTMLInputElement).value) })}
-                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                step="0.1"
-                              />
-                            </div>
-                          </div>
-                        </div>
+                {/* Super Form (Add/Edit) */}
+                {((isAddingSuper && superPersonId === person.id) || (editingSuperId && superPersonId === person.id)) && (
+                  <div class="border border-yellow-300 rounded-lg p-3 bg-yellow-50 mb-2 fade-in">
+                    <h5 class="text-sm font-semibold mb-2 text-gray-800">
+                      {editingSuperId ? "Edit Super Account" : "Add New Super Account"}
+                    </h5>
+
+                    <div class="mb-2">
+                      <label class="block text-xs font-medium text-gray-700 mb-1">Account Name *</label>
+                      <input
+                        type="text"
+                        value={superFormData.label || ""}
+                        onInput={(e) => setSuperFormData({ ...superFormData, label: (e.target as HTMLInputElement).value })}
+                        placeholder="e.g., AustralianSuper, REST"
+                        class="input-field text-sm"
+                      />
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="block text-xs font-medium text-gray-700 mb-1">Current Balance ($) *</label>
+                      <input
+                        type="number"
+                        value={superFormData.balance ?? ""}
+                        onInput={(e) => setSuperFormData({ ...superFormData, balance: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                        class="input-field text-sm"
+                        step="1000"
+                      />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Contribution Rate (%) *</label>
+                        <input
+                          type="number"
+                          value={superFormData.contributionRate ?? ""}
+                          onInput={(e) => setSuperFormData({ ...superFormData, contributionRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                          class="input-field text-sm"
+                          step="0.5"
+                        />
                       </div>
-                    ))}
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Return Rate (%) *</label>
+                        <input
+                          type="number"
+                          value={superFormData.returnRate ?? ""}
+                          onInput={(e) => setSuperFormData({ ...superFormData, returnRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                          class="input-field text-sm"
+                          step="0.1"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="flex gap-2 mt-3">
+                      <button onClick={saveSuper} class="btn-primary flex-1 text-xs py-1">
+                        {editingSuperId ? "Update" : "Add"} Super Account
+                      </button>
+                      <button onClick={cancelSuperForm} class="btn-secondary flex-1 text-xs py-1">
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
-                    No super accounts yet. Click "+ Add Super" to add one.
-                  </p>
+                )}
+
+                {/* Super List (Summary View) */}
+                {(!isAddingSuper || superPersonId !== person.id) && (!editingSuperId || superPersonId !== person.id) && (
+                  <>
+                    {person.superAccounts && person.superAccounts.length > 0 ? (
+                      <div class="space-y-2">
+                        {person.superAccounts.map((superAcc) => (
+                          <div key={superAcc.id} class="p-2 bg-white rounded border border-gray-200">
+                            <div class="flex items-center justify-between mb-1">
+                              <h5 class="text-sm font-semibold text-gray-800">{superAcc.label}</h5>
+                              <div class="flex gap-2">
+                                <button
+                                  onClick={() => startEditSuper(person.id, superAcc)}
+                                  class="text-blue-600 hover:text-blue-800 text-xs px-1"
+                                  title="Edit"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => removeSuperAccount(person.id, superAcc.id)}
+                                  class="text-red-600 hover:text-red-700 text-xs px-1"
+                                  title="Delete"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-xs text-gray-600">
+                              <div>
+                                <span class="text-gray-500">Balance:</span> <span class="font-medium text-gray-800">${superAcc.balance.toLocaleString()}</span>
+                              </div>
+                              <div>
+                                <span class="text-gray-500">Contribution:</span> <span class="font-medium text-gray-800">{superAcc.contributionRate}%</span>
+                              </div>
+                              <div>
+                                <span class="text-gray-500">Return:</span> <span class="font-medium text-gray-800">{superAcc.returnRate}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
+                        No super accounts yet. Click "+ Add Super" to add one.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -619,76 +784,185 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
               <div class="mb-3">
                 <div class="flex items-center justify-between mb-2">
                   <label class="text-sm font-medium text-gray-700">Income Sources</label>
-                  <button
-                    onClick={() => addIncomeSource(person.id)}
-                    class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    + Add Income
-                  </button>
+                  {(!isAddingIncome || incomePersonId !== person.id) && (!editingIncomeId || incomePersonId !== person.id) && (
+                    <button
+                      onClick={() => startAddIncome(person.id)}
+                      class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      + Add Income
+                    </button>
+                  )}
                 </div>
 
-                {person.incomeSources && person.incomeSources.length > 0 ? (
-                  <div class="space-y-2">
-                    {person.incomeSources.map((income) => (
-                      <div key={income.id} class="p-3 bg-white rounded border border-gray-200">
-                        <div class="flex items-center justify-between mb-2">
+                {/* Income Form (Add/Edit) - Same as couple mode */}
+                {((isAddingIncome && incomePersonId === person.id) || (editingIncomeId && incomePersonId === person.id)) && (
+                  <div class="border border-blue-300 rounded-lg p-3 bg-blue-50 mb-2 fade-in">
+                    <h5 class="text-sm font-semibold mb-2 text-gray-800">
+                      {editingIncomeId ? "Edit Income" : "Add New Income"}
+                    </h5>
+
+                    <div class="mb-2">
+                      <label class="block text-xs font-medium text-gray-700 mb-1">Income Label *</label>
+                      <input
+                        type="text"
+                        value={incomeFormData.label || ""}
+                        onInput={(e) => setIncomeFormData({ ...incomeFormData, label: (e.target as HTMLInputElement).value })}
+                        placeholder="e.g., Salary, Freelance"
+                        class="input-field text-sm"
+                      />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Amount *</label>
+                        <input
+                          type="number"
+                          value={incomeFormData.amount ?? ""}
+                          onInput={(e) => setIncomeFormData({ ...incomeFormData, amount: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                          class="input-field text-sm"
+                          step="100"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Frequency *</label>
+                        <select
+                          value={incomeFormData.frequency || "yearly"}
+                          onChange={(e) => setIncomeFormData({ ...incomeFormData, frequency: (e.target as HTMLSelectElement).value as PaymentFrequency })}
+                          class="input-field text-sm"
+                        >
+                          <option value="weekly">Weekly</option>
+                          <option value="fortnightly">Fortnightly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="flex items-center cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={incomeFormData.isBeforeTax ?? true}
+                          onChange={(e) => setIncomeFormData({ ...incomeFormData, isBeforeTax: (e.target as HTMLInputElement).checked })}
+                          class="w-3 h-3 text-blue-600 border-gray-300 rounded mr-1"
+                        />
+                        <span class="text-gray-700">Before tax (taxable income)</span>
+                      </label>
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="flex items-center cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={incomeFormData.isOneOff || false}
+                          onChange={(e) => setIncomeFormData({ ...incomeFormData, isOneOff: (e.target as HTMLInputElement).checked })}
+                          class="w-3 h-3 text-green-600 border-gray-300 rounded mr-1"
+                        />
+                        <span class="text-gray-700">One-off income (e.g., car sale)</span>
+                      </label>
+                    </div>
+
+                    {incomeFormData.isOneOff && (
+                      <div class="mb-2 fade-in">
+                        <label class="block text-xs font-medium text-gray-700 mb-1">One-off Date *</label>
+                        <input
+                          type="date"
+                          value={incomeFormData.oneOffDate ? new Date(incomeFormData.oneOffDate).toISOString().split('T')[0] : ""}
+                          onInput={(e) => setIncomeFormData({ ...incomeFormData, oneOffDate: new Date((e.target as HTMLInputElement).value) })}
+                          class="input-field text-sm"
+                        />
+                      </div>
+                    )}
+
+                    {!incomeFormData.isOneOff && (
+                      <div class="grid grid-cols-2 gap-2 mb-2 fade-in">
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Start Date (Optional)</label>
                           <input
-                            type="text"
-                            value={income.label}
-                            onInput={(e) => updateIncomeSource(person.id, income.id, { label: (e.target as HTMLInputElement).value })}
-                            placeholder="Income label"
-                            class="text-sm font-medium px-2 py-1 border border-gray-300 rounded flex-1 mr-2"
+                            type="date"
+                            value={incomeFormData.startDate ? new Date(incomeFormData.startDate).toISOString().split('T')[0] : ""}
+                            onInput={(e) => setIncomeFormData({ ...incomeFormData, startDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                            class="input-field text-sm"
                           />
-                          <button
-                            onClick={() => removeIncomeSource(person.id, income.id)}
-                            class="text-red-600 hover:text-red-700 text-xs"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 mb-2">
-                          <div>
-                            <label class="text-xs text-gray-600">Amount</label>
-                            <input
-                              type="number"
-                              value={income.amount}
-                              onInput={(e) => updateIncomeSource(person.id, income.id, { amount: parseFloat((e.target as HTMLInputElement).value) })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                              step="100"
-                            />
-                          </div>
-                          <div>
-                            <label class="text-xs text-gray-600">Frequency</label>
-                            <select
-                              value={income.frequency}
-                              onChange={(e) => updateIncomeSource(person.id, income.id, { frequency: (e.target as HTMLSelectElement).value as PaymentFrequency })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            >
-                              <option value="weekly">Weekly</option>
-                              <option value="fortnightly">Fortnightly</option>
-                              <option value="monthly">Monthly</option>
-                              <option value="yearly">Yearly</option>
-                            </select>
-                          </div>
                         </div>
                         <div>
-                          <label class="flex items-center cursor-pointer text-xs">
-                            <input
-                              type="checkbox"
-                              checked={income.isBeforeTax}
-                              onChange={(e) => updateIncomeSource(person.id, income.id, { isBeforeTax: (e.target as HTMLInputElement).checked })}
-                              class="w-3 h-3 text-blue-600 border-gray-300 rounded mr-1"
-                            />
-                            <span class="text-gray-600">Before tax (taxable income)</span>
-                          </label>
+                          <label class="block text-xs font-medium text-gray-700 mb-1">End Date (Optional)</label>
+                          <input
+                            type="date"
+                            value={incomeFormData.endDate ? new Date(incomeFormData.endDate).toISOString().split('T')[0] : ""}
+                            onInput={(e) => setIncomeFormData({ ...incomeFormData, endDate: (e.target as HTMLInputElement).value ? new Date((e.target as HTMLInputElement).value) : undefined })}
+                            class="input-field text-sm"
+                          />
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    <div class="flex gap-2 mt-3">
+                      <button onClick={saveIncome} class="btn-primary flex-1 text-xs py-1">
+                        {editingIncomeId ? "Update" : "Add"} Income
+                      </button>
+                      <button onClick={cancelIncomeForm} class="btn-secondary flex-1 text-xs py-1">
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
-                    No income sources yet. Click "+ Add Income" to add one.
-                  </p>
+                )}
+
+                {/* Income List (Summary View) */}
+                {(!isAddingIncome || incomePersonId !== person.id) && (!editingIncomeId || incomePersonId !== person.id) && (
+                  <>
+                    {person.incomeSources && person.incomeSources.length > 0 ? (
+                      <div class="space-y-2">
+                        {person.incomeSources.map((income) => (
+                          <div key={income.id} class="p-2 bg-white rounded border border-gray-200">
+                            <div class="flex items-center justify-between mb-1">
+                              <h5 class="text-sm font-semibold text-gray-800">{income.label}</h5>
+                              <div class="flex gap-2">
+                                <button
+                                  onClick={() => startEditIncome(person.id, income)}
+                                  class="text-blue-600 hover:text-blue-800 text-xs px-1"
+                                  title="Edit"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => removeIncomeSource(person.id, income.id)}
+                                  class="text-red-600 hover:text-red-700 text-xs px-1"
+                                  title="Delete"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                              <div>
+                                <span class="text-gray-500">Amount:</span> <span class="font-medium text-gray-800">${income.amount.toLocaleString()}/{income.frequency}</span>
+                              </div>
+                              <div>
+                                <span class="text-gray-500">Tax:</span> <span class="font-medium text-gray-800">{income.isBeforeTax ? "Before tax" : "After tax"}</span>
+                              </div>
+                              {income.isOneOff && (
+                                <div class="col-span-2">
+                                  <span class="text-green-600 font-medium">One-off{income.oneOffDate ? ` on ${new Date(income.oneOffDate).toLocaleDateString()}` : ""}</span>
+                                </div>
+                              )}
+                              {!income.isOneOff && (income.startDate || income.endDate) && (
+                                <div class="col-span-2 text-xs text-gray-500">
+                                  {income.startDate && `From: ${new Date(income.startDate).toLocaleDateString()}`}
+                                  {income.startDate && income.endDate && " | "}
+                                  {income.endDate && `To: ${new Date(income.endDate).toLocaleDateString()}`}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
+                        No income sources yet. Click "+ Add Income" to add one.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -696,74 +970,125 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
               <div class="mb-3">
                 <div class="flex items-center justify-between mb-2">
                   <label class="text-sm font-medium text-gray-700">Super Accounts</label>
-                  <button
-                    onClick={() => addSuperAccount(person.id)}
-                    class="text-xs px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-                  >
-                    + Add Super
-                  </button>
+                  {(!isAddingSuper || superPersonId !== person.id) && (!editingSuperId || superPersonId !== person.id) && (
+                    <button
+                      onClick={() => startAddSuper(person.id)}
+                      class="text-xs px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                    >
+                      + Add Super
+                    </button>
+                  )}
                 </div>
 
-                {person.superAccounts && person.superAccounts.length > 0 ? (
-                  <div class="space-y-2">
-                    {person.superAccounts.map((superAcc) => (
-                      <div key={superAcc.id} class="p-3 bg-white rounded border border-gray-200">
-                        <div class="flex items-center justify-between mb-2">
-                          <input
-                            type="text"
-                            value={superAcc.label}
-                            onInput={(e) => updateSuperAccount(person.id, superAcc.id, { label: (e.target as HTMLInputElement).value })}
-                            placeholder="Super account label"
-                            class="text-sm font-medium px-2 py-1 border border-gray-300 rounded flex-1 mr-2"
-                          />
-                          <button
-                            onClick={() => removeSuperAccount(person.id, superAcc.id)}
-                            class="text-red-600 hover:text-red-700 text-xs"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div class="grid grid-cols-1 gap-2">
-                          <div>
-                            <label class="text-xs text-gray-600">Current Balance ($)</label>
-                            <input
-                              type="number"
-                              value={superAcc.balance}
-                              onInput={(e) => updateSuperAccount(person.id, superAcc.id, { balance: parseFloat((e.target as HTMLInputElement).value) })}
-                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                              step="1000"
-                            />
-                          </div>
-                          <div class="grid grid-cols-2 gap-2">
-                            <div>
-                              <label class="text-xs text-gray-600">Contribution Rate (%)</label>
-                              <input
-                                type="number"
-                                value={superAcc.contributionRate}
-                                onInput={(e) => updateSuperAccount(person.id, superAcc.id, { contributionRate: parseFloat((e.target as HTMLInputElement).value) })}
-                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                step="0.5"
-                              />
-                            </div>
-                            <div>
-                              <label class="text-xs text-gray-600">Return Rate (%)</label>
-                              <input
-                                type="number"
-                                value={superAcc.returnRate}
-                                onInput={(e) => updateSuperAccount(person.id, superAcc.id, { returnRate: parseFloat((e.target as HTMLInputElement).value) })}
-                                class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                step="0.1"
-                              />
-                            </div>
-                          </div>
-                        </div>
+                {/* Super Form (Add/Edit) - Same as couple mode */}
+                {((isAddingSuper && superPersonId === person.id) || (editingSuperId && superPersonId === person.id)) && (
+                  <div class="border border-yellow-300 rounded-lg p-3 bg-yellow-50 mb-2 fade-in">
+                    <h5 class="text-sm font-semibold mb-2 text-gray-800">
+                      {editingSuperId ? "Edit Super Account" : "Add New Super Account"}
+                    </h5>
+
+                    <div class="mb-2">
+                      <label class="block text-xs font-medium text-gray-700 mb-1">Account Name *</label>
+                      <input
+                        type="text"
+                        value={superFormData.label || ""}
+                        onInput={(e) => setSuperFormData({ ...superFormData, label: (e.target as HTMLInputElement).value })}
+                        placeholder="e.g., AustralianSuper, REST"
+                        class="input-field text-sm"
+                      />
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="block text-xs font-medium text-gray-700 mb-1">Current Balance ($) *</label>
+                      <input
+                        type="number"
+                        value={superFormData.balance ?? ""}
+                        onInput={(e) => setSuperFormData({ ...superFormData, balance: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                        class="input-field text-sm"
+                        step="1000"
+                      />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Contribution Rate (%) *</label>
+                        <input
+                          type="number"
+                          value={superFormData.contributionRate ?? ""}
+                          onInput={(e) => setSuperFormData({ ...superFormData, contributionRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                          class="input-field text-sm"
+                          step="0.5"
+                        />
                       </div>
-                    ))}
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Return Rate (%) *</label>
+                        <input
+                          type="number"
+                          value={superFormData.returnRate ?? ""}
+                          onInput={(e) => setSuperFormData({ ...superFormData, returnRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                          class="input-field text-sm"
+                          step="0.1"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="flex gap-2 mt-3">
+                      <button onClick={saveSuper} class="btn-primary flex-1 text-xs py-1">
+                        {editingSuperId ? "Update" : "Add"} Super Account
+                      </button>
+                      <button onClick={cancelSuperForm} class="btn-secondary flex-1 text-xs py-1">
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
-                    No super accounts yet. Click "+ Add Super" to add one.
-                  </p>
+                )}
+
+                {/* Super List (Summary View) */}
+                {(!isAddingSuper || superPersonId !== person.id) && (!editingSuperId || superPersonId !== person.id) && (
+                  <>
+                    {person.superAccounts && person.superAccounts.length > 0 ? (
+                      <div class="space-y-2">
+                        {person.superAccounts.map((superAcc) => (
+                          <div key={superAcc.id} class="p-2 bg-white rounded border border-gray-200">
+                            <div class="flex items-center justify-between mb-1">
+                              <h5 class="text-sm font-semibold text-gray-800">{superAcc.label}</h5>
+                              <div class="flex gap-2">
+                                <button
+                                  onClick={() => startEditSuper(person.id, superAcc)}
+                                  class="text-blue-600 hover:text-blue-800 text-xs px-1"
+                                  title="Edit"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => removeSuperAccount(person.id, superAcc.id)}
+                                  class="text-red-600 hover:text-red-700 text-xs px-1"
+                                  title="Delete"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-xs text-gray-600">
+                              <div>
+                                <span class="text-gray-500">Balance:</span> <span class="font-medium text-gray-800">${superAcc.balance.toLocaleString()}</span>
+                              </div>
+                              <div>
+                                <span class="text-gray-500">Contribution:</span> <span class="font-medium text-gray-800">{superAcc.contributionRate}%</span>
+                              </div>
+                              <div>
+                                <span class="text-gray-500">Return:</span> <span class="font-medium text-gray-800">{superAcc.returnRate}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
+                        No super accounts yet. Click "+ Add Super" to add one.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -17,6 +17,7 @@ import ComparisonIsland from "./ComparisonIsland.tsx";
 import TransitionManagerIsland from "./TransitionManagerIsland.tsx";
 import ExpenseManagerIsland from "./ExpenseManagerIsland.tsx";
 import HouseholdManagerIsland from "./HouseholdManagerIsland.tsx";
+import InvestmentManagerIsland from "./InvestmentManagerIsland.tsx";
 import ErrorBoundary from "../components/ErrorBoundary.tsx";
 import { SimulationEngine } from "../lib/simulation_engine.ts";
 import { storageService } from "../lib/storage.ts";
@@ -24,7 +25,7 @@ import { storageService } from "../lib/storage.ts";
 export default function MainIsland() {
   const [config, setConfig] = useState<SimulationConfiguration | null>(null);
   const [simulationResult, setSimulationResult] = useState<EnhancedSimulationResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"configure" | "results">("configure");
+  const [activeTab, setActiveTab] = useState<"configure" | "results" | "investments">("configure");
 
   // Load configuration on mount
   useEffect(() => {
@@ -79,6 +80,24 @@ export default function MainIsland() {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Configure
+              </button>
+              <button
+                onClick={() => setActiveTab("investments")}
+                class={`${
+                  activeTab === "investments"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                Investments
+                {config && config.baseParameters.investmentHoldings && config.baseParameters.investmentHoldings.length > 0 && (
+                  <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {config.baseParameters.investmentHoldings.length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActiveTab("results")}
@@ -187,6 +206,44 @@ export default function MainIsland() {
                     Your data is stored locally and never leaves your device
                   </span>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Investments Tab */}
+        {activeTab === "investments" && (
+          <div class="space-y-4 sm:space-y-6 fade-in">
+            {config && (
+              <ErrorBoundary>
+                <InvestmentManagerIsland
+                  config={config}
+                  onConfigChange={handleConfigurationChange}
+                />
+              </ErrorBoundary>
+            )}
+            {!config && (
+              <div class="card p-8 text-center fade-in">
+                <svg
+                  class="mx-auto h-16 w-16 text-blue-400 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">
+                  Investment Portfolio
+                </h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Configure your financial parameters first to start tracking investments.
+                </p>
+                <button
+                  onClick={() => setActiveTab("configure")}
+                  class="btn-primary inline-flex items-center"
+                >
+                  Go to Configure
+                </button>
               </div>
             )}
           </div>

@@ -3,6 +3,7 @@
  */
 
 import type { ExpenseItem } from "./expenses.ts";
+import type { InvestmentHolding } from "./investments.ts";
 
 /**
  * Time interval granularity for simulation calculations
@@ -149,6 +150,8 @@ export interface FinancialState {
   superBalances?: { [superId: string]: number };
   /** Individual offset balances by loan ID (optional, falls back to offsetBalance) */
   offsetBalances?: { [loanId: string]: number };
+  /** Individual investment balances by holding ID (optional, falls back to investments) */
+  investmentBalances?: { [holdingId: string]: number };
 }
 
 /**
@@ -199,12 +202,14 @@ export interface UserParameters {
   loans?: Loan[];
 
   // Investments
-  /** Monthly contribution to investments */
+  /** Monthly contribution to investments - DEPRECATED: Use investmentHoldings instead */
   monthlyInvestmentContribution: number;
-  /** Expected annual return rate as a percentage (e.g., 7 for 7%) */
+  /** Expected annual return rate as a percentage (e.g., 7 for 7%) - DEPRECATED: Use investmentHoldings instead */
   investmentReturnRate: number;
-  /** Current investment balance */
+  /** Current investment balance - DEPRECATED: Use investmentHoldings instead */
   currentInvestmentBalance: number;
+  /** Individual investment holdings (optional, falls back to legacy fields if not provided) */
+  investmentHoldings?: InvestmentHolding[];
 
   // Superannuation
   /** Percentage of salary contributed to super (e.g., 11 for 11%) - DEPRECATED: Use superAccounts instead */

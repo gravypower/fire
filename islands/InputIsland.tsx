@@ -287,24 +287,75 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
     }
   };
 
+  // Loan management state
+  const [isAddingLoan, setIsAddingLoan] = useState(false);
+  const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
+  const [loanFormData, setLoanFormData] = useState<Partial<import("../types/financial.ts").Loan>>({});
+
   /**
-   * Adds a new loan
+   * Starts adding a new loan
    */
-  const addLoan = (e?: Event) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    
-    const newLoan: import("../types/financial.ts").Loan = {
-      id: `loan-${Date.now()}`,
+  const startAddLoan = () => {
+    setLoanFormData({
       label: "New Loan",
       principal: 0,
       interestRate: 5.5,
       paymentAmount: 0,
       paymentFrequency: "monthly" as PaymentFrequency,
-    };
-    
+      hasOffset: false,
+      offsetBalance: 0,
+      autoPayoutWhenOffsetFull: false,
+      isDebtRecycling: false,
+    });
+    setIsAddingLoan(true);
+    setEditingLoanId(null);
+  };
+
+  /**
+   * Starts editing a loan
+   */
+  const startEditLoan = (loan: import("../types/financial.ts").Loan) => {
+    setLoanFormData({ ...loan });
+    setIsAddingLoan(false);
+    setEditingLoanId(loan.id);
+  };
+
+  /**
+   * Cancels loan add/edit
+   */
+  const cancelLoanForm = () => {
+    setLoanFormData({});
+    setIsAddingLoan(false);
+    setEditingLoanId(null);
+  };
+
+  /**
+   * Saves a loan (add or update)
+   */
+  const saveLoan = () => {
+    if (!loanFormData.label || loanFormData.principal === undefined || loanFormData.principal < 0) {
+      alert("Please enter a valid loan label and principal amount");
+      return;
+    }
+
     const loans = parameters.loans || [];
-    const updatedParams = { ...parameters, loans: [...loans, newLoan] };
+    let updatedLoans;
+
+    if (editingLoanId) {
+      // Update existing loan
+      updatedLoans = loans.map(loan =>
+        loan.id === editingLoanId ? { ...loan, ...loanFormData } as import("../types/financial.ts").Loan : loan
+      );
+    } else {
+      // Add new loan
+      const newLoan: import("../types/financial.ts").Loan = {
+        id: `loan-${Date.now()}`,
+        ...loanFormData as any,
+      };
+      updatedLoans = [...loans, newLoan];
+    }
+
+    const updatedParams = { ...parameters, loans: updatedLoans };
     setParameters(updatedParams);
 
     if (config) {
@@ -318,15 +369,19 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
         console.error("Failed to update configuration:", e);
       }
     }
+
+    cancelLoanForm();
   };
 
   /**
    * Removes a loan
    */
-  const removeLoan = (index: number) => {
-    const loans = [...(parameters.loans || [])];
-    loans.splice(index, 1);
-    const updatedParams = { ...parameters, loans };
+  const removeLoan = (loanId: string) => {
+    if (!confirm("Delete this loan?")) return;
+
+    const loans = parameters.loans || [];
+    const updatedLoans = loans.filter(loan => loan.id !== loanId);
+    const updatedParams = { ...parameters, loans: updatedLoans };
     setParameters(updatedParams);
 
     if (config) {
@@ -342,45 +397,70 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
     }
   };
 
-  /**
-   * Updates a loan
-   */
-  const updateLoan = (index: number, field: string, value: any) => {
-    const loans = [...(parameters.loans || [])];
-    loans[index] = { ...loans[index], [field]: value };
-    const updatedParams = { ...parameters, loans };
-    setParameters(updatedParams);
-
-    if (config) {
-      try {
-        const updatedConfig: SimulationConfiguration = {
-          ...config,
-          baseParameters: updatedParams,
-        };
-        onConfigurationChange(updatedConfig);
-      } catch (e) {
-        console.error("Failed to update configuration:", e);
-      }
-    }
-  };
+  // Super account management state
+  const [isAddingSuper, setIsAddingSuper] = useState(false);
+  const [editingSuperId, setEditingSuperId] = useState<string | null>(null);
+  const [superFormData, setSuperFormData] = useState<Partial<import("../types/financial.ts").SuperAccount>>({});
 
   /**
-   * Adds a new super account
+   * Starts adding a new super account
    */
-  const addSuperAccount = (e?: Event) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    
-    const newSuper: import("../types/financial.ts").SuperAccount = {
-      id: `super-${Date.now()}`,
+  const startAddSuper = () => {
+    setSuperFormData({
       label: "New Super Account",
       balance: 0,
       contributionRate: 11,
       returnRate: 7,
-    };
-    
+    });
+    setIsAddingSuper(true);
+    setEditingSuperId(null);
+  };
+
+  /**
+   * Starts editing a super account
+   */
+  const startEditSuper = (superAcc: import("../types/financial.ts").SuperAccount) => {
+    setSuperFormData({ ...superAcc });
+    setIsAddingSuper(false);
+    setEditingSuperId(superAcc.id);
+  };
+
+  /**
+   * Cancels super account add/edit
+   */
+  const cancelSuperForm = () => {
+    setSuperFormData({});
+    setIsAddingSuper(false);
+    setEditingSuperId(null);
+  };
+
+  /**
+   * Saves a super account (add or update)
+   */
+  const saveSuper = () => {
+    if (!superFormData.label || superFormData.balance === undefined || superFormData.balance < 0) {
+      alert("Please enter a valid super account label and balance");
+      return;
+    }
+
     const superAccounts = parameters.superAccounts || [];
-    const updatedParams = { ...parameters, superAccounts: [...superAccounts, newSuper] };
+    let updatedSupers;
+
+    if (editingSuperId) {
+      // Update existing super
+      updatedSupers = superAccounts.map(superAcc =>
+        superAcc.id === editingSuperId ? { ...superAcc, ...superFormData } as import("../types/financial.ts").SuperAccount : superAcc
+      );
+    } else {
+      // Add new super
+      const newSuper: import("../types/financial.ts").SuperAccount = {
+        id: `super-${Date.now()}`,
+        ...superFormData as any,
+      };
+      updatedSupers = [...superAccounts, newSuper];
+    }
+
+    const updatedParams = { ...parameters, superAccounts: updatedSupers };
     setParameters(updatedParams);
 
     if (config) {
@@ -394,37 +474,19 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
         console.error("Failed to update configuration:", e);
       }
     }
+
+    cancelSuperForm();
   };
 
   /**
    * Removes a super account
    */
-  const removeSuperAccount = (index: number) => {
-    const superAccounts = [...(parameters.superAccounts || [])];
-    superAccounts.splice(index, 1);
-    const updatedParams = { ...parameters, superAccounts };
-    setParameters(updatedParams);
+  const removeSuperAccount = (superId: string) => {
+    if (!confirm("Delete this super account?")) return;
 
-    if (config) {
-      try {
-        const updatedConfig: SimulationConfiguration = {
-          ...config,
-          baseParameters: updatedParams,
-        };
-        onConfigurationChange(updatedConfig);
-      } catch (e) {
-        console.error("Failed to update configuration:", e);
-      }
-    }
-  };
-
-  /**
-   * Updates a super account
-   */
-  const updateSuperAccount = (index: number, field: string, value: any) => {
-    const superAccounts = [...(parameters.superAccounts || [])];
-    superAccounts[index] = { ...superAccounts[index], [field]: value };
-    const updatedParams = { ...parameters, superAccounts };
+    const superAccounts = parameters.superAccounts || [];
+    const updatedSupers = superAccounts.filter(superAcc => superAcc.id !== superId);
+    const updatedParams = { ...parameters, superAccounts: updatedSupers };
     setParameters(updatedParams);
 
     if (config) {
@@ -556,17 +618,19 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
               </svg>
               Loans & Mortgages
             </h3>
-            <button
-              onClick={(e) => addLoan(e)}
-              type="button"
-              class="text-sm px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
-            >
-              + Add Loan
-            </button>
+            {!isAddingLoan && !editingLoanId && (
+              <button
+                onClick={startAddLoan}
+                type="button"
+                class="text-sm px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+              >
+                + Add Loan
+              </button>
+            )}
           </div>
           
           {/* Info about offset strategy */}
-          {parameters.loans && parameters.loans.length > 1 && parameters.loans.some(l => l.hasOffset) && (
+          {!isAddingLoan && !editingLoanId && parameters.loans && parameters.loans.length > 1 && parameters.loans.some(l => l.hasOffset) && (
             <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded">
               <div class="flex items-start">
                 <svg class="w-4 h-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -579,159 +643,215 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
             </div>
           )}
           
-          {/* Always show loan list (empty state or with loans) */}
-          {parameters.loans && parameters.loans.length > 0 ? (
-            <div class="space-y-4">
-              {parameters.loans.map((loan, index) => (
-                <div key={loan.id} class="p-4 bg-gray-50 rounded border border-gray-200">
-                  <div class="flex items-center justify-between mb-3">
-                    <input
-                      type="text"
-                      value={loan.label}
-                      onInput={(e) => updateLoan(index, 'label', (e.target as HTMLInputElement).value)}
-                      placeholder="Loan label (e.g., Home Mortgage)"
-                      class="text-sm font-medium px-2 py-1 border border-gray-300 rounded flex-1 mr-2"
-                    />
-                    <button
-                      onClick={() => removeLoan(index)}
-                      type="button"
-                      class="text-red-600 hover:text-red-700 text-sm"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Loan Form (Add/Edit) */}
+          {(isAddingLoan || editingLoanId) && (
+            <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 mb-4 fade-in">
+              <h4 class="text-md font-semibold mb-3 text-gray-800">
+                {editingLoanId ? "Edit Loan" : "Add New Loan"}
+              </h4>
+
+              {/* Loan Label */}
+              <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-700 mb-1">Loan Name *</label>
+                <input
+                  type="text"
+                  value={loanFormData.label || ""}
+                  onInput={(e) => setLoanFormData({ ...loanFormData, label: (e.target as HTMLInputElement).value })}
+                  placeholder="e.g., Home Mortgage, Investment Property"
+                  class="input-field text-sm"
+                />
+              </div>
+
+              {/* Principal and Interest Rate */}
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Principal Balance ($) *</label>
+                  <input
+                    type="number"
+                    value={loanFormData.principal ?? ""}
+                    onInput={(e) => setLoanFormData({ ...loanFormData, principal: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                    class="input-field text-sm"
+                    step="1000"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Interest Rate (%) *</label>
+                  <input
+                    type="number"
+                    value={loanFormData.interestRate ?? ""}
+                    onInput={(e) => setLoanFormData({ ...loanFormData, interestRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                    class="input-field text-sm"
+                    step="0.1"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Amount and Frequency */}
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Payment Amount ($) *</label>
+                  <input
+                    type="number"
+                    value={loanFormData.paymentAmount ?? ""}
+                    onInput={(e) => setLoanFormData({ ...loanFormData, paymentAmount: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                    class="input-field text-sm"
+                    step="100"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Payment Frequency *</label>
+                  <select
+                    value={loanFormData.paymentFrequency || "monthly"}
+                    onChange={(e) => setLoanFormData({ ...loanFormData, paymentFrequency: (e.target as HTMLSelectElement).value as PaymentFrequency })}
+                    class="input-field text-sm"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Offset Account */}
+              <div class="mb-3 p-3 bg-blue-50 rounded border border-blue-200">
+                <label class="flex items-center cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={loanFormData.hasOffset || false}
+                    onChange={(e) => setLoanFormData({ ...loanFormData, hasOffset: (e.target as HTMLInputElement).checked })}
+                    class="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm font-medium text-gray-700">
+                    Use Offset Account
+                  </span>
+                </label>
+                <p class="text-xs text-gray-600 mb-2">
+                  Leftover cash will be added to this loan's offset to reduce interest
+                </p>
+                {loanFormData.hasOffset && (
+                  <div class="fade-in space-y-2">
                     <div>
-                      <label class="text-xs text-gray-600">Principal Balance ($)</label>
+                      <label class="text-xs text-gray-600">Current Offset Balance ($)</label>
                       <input
                         type="number"
-                        value={loan.principal}
-                        onInput={(e) => updateLoan(index, 'principal', parseFloat((e.target as HTMLInputElement).value))}
-                        class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        step="1000"
-                      />
-                    </div>
-                    <div>
-                      <label class="text-xs text-gray-600">Interest Rate (%)</label>
-                      <input
-                        type="number"
-                        value={loan.interestRate}
-                        onInput={(e) => updateLoan(index, 'interestRate', parseFloat((e.target as HTMLInputElement).value))}
-                        class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        step="0.1"
-                      />
-                    </div>
-                    <div>
-                      <label class="text-xs text-gray-600">Payment Amount ($)</label>
-                      <input
-                        type="number"
-                        value={loan.paymentAmount}
-                        onInput={(e) => updateLoan(index, 'paymentAmount', parseFloat((e.target as HTMLInputElement).value))}
+                        value={loanFormData.offsetBalance ?? 0}
+                        onInput={(e) => setLoanFormData({ ...loanFormData, offsetBalance: parseFloat((e.target as HTMLInputElement).value) || 0 })}
                         class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
                         step="100"
                       />
                     </div>
-                    <div>
-                      <label class="text-xs text-gray-600">Payment Frequency</label>
-                      <select
-                        value={loan.paymentFrequency}
-                        onChange={(e) => updateLoan(index, 'paymentFrequency', (e.target as HTMLSelectElement).value)}
-                        class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      >
-                        <option value="weekly">Weekly</option>
-                        <option value="fortnightly">Fortnightly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Offset Account for this loan */}
-                  <div class="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                    <label class="flex items-center cursor-pointer mb-2">
+                    <label class="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={loan.hasOffset || false}
-                        onChange={(e) => updateLoan(index, 'hasOffset', (e.target as HTMLInputElement).checked)}
-                        class="w-3 h-3 text-blue-600 border-gray-300 rounded"
-                      />
-                      <span class="ml-2 text-xs font-medium text-gray-700">
-                        Use Offset Account
-                      </span>
-                    </label>
-                    <p class="text-xs text-gray-600 mb-2">
-                      Leftover cash will be added to this loan's offset to reduce interest
-                    </p>
-                    {loan.hasOffset && (
-                      <div class="fade-in space-y-2">
-                        <div>
-                          <label class="text-xs text-gray-600">Current Offset Balance ($)</label>
-                          <input
-                            type="number"
-                            value={loan.offsetBalance || 0}
-                            onInput={(e) => updateLoan(index, 'offsetBalance', parseFloat((e.target as HTMLInputElement).value))}
-                            class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            step="100"
-                          />
-                        </div>
-                        <label class="flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={loan.autoPayoutWhenOffsetFull || false}
-                            onChange={(e) => updateLoan(index, 'autoPayoutWhenOffsetFull', (e.target as HTMLInputElement).checked)}
-                            class="w-3 h-3 text-green-600 border-gray-300 rounded"
-                          />
-                          <span class="ml-2 text-xs text-gray-700">
-                            Auto-payout loan when offset equals outstanding principal
-                          </span>
-                        </label>
-                        <p class="text-xs text-gray-500 ml-5">
-                          When enabled, the loan will be paid out automatically once the offset balance reaches the outstanding principal amount
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Debt Recycling for this loan */}
-                  <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
-                    <label class="flex items-center cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={loan.isDebtRecycling || false}
-                        onChange={(e) => updateLoan(index, 'isDebtRecycling', (e.target as HTMLInputElement).checked)}
+                        checked={loanFormData.autoPayoutWhenOffsetFull || false}
+                        onChange={(e) => setLoanFormData({ ...loanFormData, autoPayoutWhenOffsetFull: (e.target as HTMLInputElement).checked })}
                         class="w-3 h-3 text-green-600 border-gray-300 rounded"
                       />
-                      <span class="ml-2 text-xs font-medium text-gray-700">
-                        Enable Debt Recycling (Tax Deductible Interest)
+                      <span class="ml-2 text-xs text-gray-700">
+                        Auto-payout loan when offset equals outstanding principal
                       </span>
                     </label>
-                    <p class="text-xs text-gray-600">
-                      When enabled, interest paid on this loan is tax deductible, reducing your taxable income. Use this for investment loans where interest can be claimed against your tax.
+                  </div>
+                )}
+              </div>
+
+              {/* Debt Recycling */}
+              <div class="mb-3 p-3 bg-green-50 rounded border border-green-200">
+                <label class="flex items-center cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={loanFormData.isDebtRecycling || false}
+                    onChange={(e) => setLoanFormData({ ...loanFormData, isDebtRecycling: (e.target as HTMLInputElement).checked })}
+                    class="w-4 h-4 text-green-600 border-gray-300 rounded"
+                  />
+                  <span class="ml-2 text-sm font-medium text-gray-700">
+                    Enable Debt Recycling (Tax Deductible Interest)
+                  </span>
+                </label>
+                <p class="text-xs text-gray-600">
+                  Interest paid on this loan is tax deductible. Use for investment loans.
+                </p>
+                {loanFormData.isDebtRecycling && (
+                  <div class="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded fade-in">
+                    <p class="text-xs text-yellow-800">
+                      <strong>Important:</strong> Only use for loans where borrowed funds are used for income-producing investments. Consult a tax professional.
                     </p>
-                    {loan.isDebtRecycling && (
-                      <div class="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded fade-in">
-                        <div class="flex items-start">
-                          <svg class="w-3 h-3 text-yellow-600 mr-1 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                          </svg>
-                          <p class="text-xs text-yellow-800">
-                            <strong>Important:</strong> Only use debt recycling for loans where the borrowed funds are used for income-producing investments. Consult a tax professional to ensure compliance with tax laws.
-                          </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div class="flex gap-3 mt-4">
+                <button onClick={saveLoan} class="btn-primary flex-1">
+                  {editingLoanId ? "Update" : "Add"} Loan
+                </button>
+                <button onClick={cancelLoanForm} class="btn-secondary flex-1">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Loan List (Summary View) */}
+          {!isAddingLoan && !editingLoanId && (
+            <>
+              {parameters.loans && parameters.loans.length > 0 ? (
+                <div class="space-y-3">
+                  {parameters.loans.map((loan) => (
+                    <div key={loan.id} class="p-3 bg-gray-50 rounded border border-gray-200">
+                      <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-semibold text-gray-800">{loan.label}</h4>
+                        <div class="flex gap-2">
+                          <button
+                            onClick={() => startEditLoan(loan)}
+                            class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1"
+                            title="Edit"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => removeLoan(loan.id)}
+                            type="button"
+                            class="text-red-600 hover:text-red-700 text-xs px-2 py-1"
+                            title="Delete"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                      <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                        <div>
+                          <span class="text-gray-500">Principal:</span> <span class="font-medium text-gray-800">${loan.principal.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span class="text-gray-500">Rate:</span> <span class="font-medium text-gray-800">{loan.interestRate}%</span>
+                        </div>
+                        <div>
+                          <span class="text-gray-500">Payment:</span> <span class="font-medium text-gray-800">${loan.paymentAmount}/{loan.paymentFrequency}</span>
+                        </div>
+                        <div>
+                          {loan.hasOffset && (
+                            <span class="text-blue-600 font-medium">✓ Offset: ${loan.offsetBalance?.toLocaleString() || 0}</span>
+                          )}
+                          {loan.isDebtRecycling && (
+                            <span class="text-green-600 font-medium ml-2">✓ Tax Deductible</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div class="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-              <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              <p class="text-sm text-gray-600 mb-2">No loans added yet</p>
-              <p class="text-xs text-gray-500">Click "+ Add Loan" above to add a mortgage or other loan</p>
-            </div>
+              ) : (
+                <div class="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <p class="text-sm text-gray-600 mb-2">No loans added yet</p>
+                  <p class="text-xs text-gray-500">Click "+ Add Loan" above to add a mortgage or other loan</p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -758,78 +878,134 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                 </svg>
                 Superannuation
               </h3>
-              <button
-                onClick={(e) => addSuperAccount(e)}
-                type="button"
-                class="text-sm px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-              >
-                + Add Super
-              </button>
+              {!isAddingSuper && !editingSuperId && (
+                <button
+                  onClick={startAddSuper}
+                  type="button"
+                  class="text-sm px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+                >
+                  + Add Super
+                </button>
+              )}
             </div>
             
-            {/* Show super accounts if available */}
-            {parameters.superAccounts && parameters.superAccounts.length > 0 ? (
-              <div class="space-y-3">
-                {parameters.superAccounts.map((superAcc, index) => (
-                  <div key={superAcc.id} class="p-3 bg-gray-50 rounded border border-gray-200">
-                    <div class="flex items-center justify-between mb-2">
-                      <input
-                        type="text"
-                        value={superAcc.label}
-                        onInput={(e) => updateSuperAccount(index, 'label', (e.target as HTMLInputElement).value)}
-                        placeholder="Super account label"
-                        class="text-sm font-medium px-2 py-1 border border-gray-300 rounded flex-1 mr-2"
-                      />
-                      <button
-                        onClick={() => removeSuperAccount(index)}
-                        type="button"
-                        class="text-red-600 hover:text-red-700 text-sm"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <div class="grid grid-cols-1 gap-2">
-                      <div>
-                        <label class="text-xs text-gray-600">Current Balance ($)</label>
-                        <input
-                          type="number"
-                          value={superAcc.balance}
-                          onInput={(e) => updateSuperAccount(index, 'balance', parseFloat((e.target as HTMLInputElement).value))}
-                          class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                          step="1000"
-                        />
-                      </div>
-                      <div class="grid grid-cols-2 gap-2">
-                        <div>
-                          <label class="text-xs text-gray-600">Contribution Rate (%)</label>
-                          <input
-                            type="number"
-                            value={superAcc.contributionRate}
-                            onInput={(e) => updateSuperAccount(index, 'contributionRate', parseFloat((e.target as HTMLInputElement).value))}
-                            class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            step="0.5"
-                          />
-                        </div>
-                        <div>
-                          <label class="text-xs text-gray-600">Return Rate (%)</label>
-                          <input
-                            type="number"
-                            value={superAcc.returnRate}
-                            onInput={(e) => updateSuperAccount(index, 'returnRate', parseFloat((e.target as HTMLInputElement).value))}
-                            class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                            step="0.1"
-                          />
-                        </div>
-                      </div>
-                    </div>
+            {/* Super Form (Add/Edit) */}
+            {(isAddingSuper || editingSuperId) && (
+              <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 mb-4 fade-in">
+                <h4 class="text-md font-semibold mb-3 text-gray-800">
+                  {editingSuperId ? "Edit Super Account" : "Add New Super Account"}
+                </h4>
+
+                {/* Super Label */}
+                <div class="mb-3">
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Account Name *</label>
+                  <input
+                    type="text"
+                    value={superFormData.label || ""}
+                    onInput={(e) => setSuperFormData({ ...superFormData, label: (e.target as HTMLInputElement).value })}
+                    placeholder="e.g., AustralianSuper, REST Super"
+                    class="input-field text-sm"
+                  />
+                </div>
+
+                {/* Balance */}
+                <div class="mb-3">
+                  <label class="block text-xs font-medium text-gray-700 mb-1">Current Balance ($) *</label>
+                  <input
+                    type="number"
+                    value={superFormData.balance ?? ""}
+                    onInput={(e) => setSuperFormData({ ...superFormData, balance: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                    class="input-field text-sm"
+                    step="1000"
+                  />
+                </div>
+
+                {/* Contribution and Return Rates */}
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Contribution Rate (%) *</label>
+                    <input
+                      type="number"
+                      value={superFormData.contributionRate ?? ""}
+                      onInput={(e) => setSuperFormData({ ...superFormData, contributionRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                      class="input-field text-sm"
+                      step="0.5"
+                    />
                   </div>
-                ))}
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Return Rate (%) *</label>
+                    <input
+                      type="number"
+                      value={superFormData.returnRate ?? ""}
+                      onInput={(e) => setSuperFormData({ ...superFormData, returnRate: parseFloat((e.target as HTMLInputElement).value) || 0 })}
+                      class="input-field text-sm"
+                      step="0.1"
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div class="flex gap-3 mt-4">
+                  <button onClick={saveSuper} class="btn-primary flex-1">
+                    {editingSuperId ? "Update" : "Add"} Super Account
+                  </button>
+                  <button onClick={cancelSuperForm} class="btn-secondary flex-1">
+                    Cancel
+                  </button>
+                </div>
               </div>
-            ) : (
+            )}
+
+            {/* Super List (Summary View) */}
+            {!isAddingSuper && !editingSuperId && (
               <>
-                {renderNumberInput("Super Contribution Rate (%)", "superContributionRate", "0.1")}
-                {renderNumberInput("Super Return Rate (%)", "superReturnRate", "0.1")}
-                {renderNumberInput("Current Super Balance", "currentSuperBalance", "1000", "$")}
+                {parameters.superAccounts && parameters.superAccounts.length > 0 ? (
+                  <div class="space-y-3">
+                    {parameters.superAccounts.map((superAcc) => (
+                      <div key={superAcc.id} class="p-3 bg-gray-50 rounded border border-gray-200">
+                        <div class="flex items-center justify-between mb-2">
+                          <h4 class="text-sm font-semibold text-gray-800">{superAcc.label}</h4>
+                          <div class="flex gap-2">
+                            <button
+                              onClick={() => startEditSuper(superAcc)}
+                              class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1"
+                              title="Edit"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => removeSuperAccount(superAcc.id)}
+                              type="button"
+                              class="text-red-600 hover:text-red-700 text-xs px-2 py-1"
+                              title="Delete"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-xs text-gray-600">
+                          <div>
+                            <span class="text-gray-500">Balance:</span> <span class="font-medium text-gray-800">${superAcc.balance.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span class="text-gray-500">Contribution:</span> <span class="font-medium text-gray-800">{superAcc.contributionRate}%</span>
+                          </div>
+                          <div>
+                            <span class="text-gray-500">Return:</span> <span class="font-medium text-gray-800">{superAcc.returnRate}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div class="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <p class="text-sm text-gray-600 mb-2">No super accounts added yet</p>
+                    <p class="text-xs text-gray-500">Click "+ Add Super" above to add a superannuation account</p>
+                  </div>
+                )}
               </>
             )}
           </div>
