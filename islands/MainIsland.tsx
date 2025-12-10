@@ -34,6 +34,57 @@ export default function MainIsland() {
       setConfig(loadedConfig);
       // Run initial simulation with loaded config
       runSimulation(loadedConfig);
+    } else {
+      // No saved config, create default one
+      const defaultConfig: SimulationConfiguration = {
+        baseParameters: {
+          annualSalary: 80000,
+          salaryFrequency: "monthly",
+          incomeTaxRate: 30,
+          monthlyLivingExpenses: 0,
+          monthlyRentOrMortgage: 0,
+          expenseItems: [],
+          loans: [],
+          loanPrincipal: 0,
+          loanInterestRate: 5.5,
+          loanPaymentAmount: 0,
+          loanPaymentFrequency: "monthly",
+          useOffsetAccount: false,
+          currentOffsetBalance: 0,
+          monthlyInvestmentContribution: 500,
+          investmentReturnRate: 7,
+          currentInvestmentBalance: 10000,
+          superContributionRate: 11,
+          superReturnRate: 7,
+          currentSuperBalance: 50000,
+          desiredAnnualRetirementIncome: 60000,
+          retirementAge: 65,
+          currentAge: 30,
+          simulationYears: 40,
+          startDate: new Date(),
+          householdMode: "single",
+          people: [
+            {
+              id: "person-1",
+              name: "Me",
+              currentAge: 30,
+              retirementAge: 65,
+              incomeSources: [],
+              superAccounts: [],
+            },
+          ],
+        },
+        transitions: [],
+      };
+      setConfig(defaultConfig);
+      // Save the default config
+      try {
+        storageService.saveConfiguration(defaultConfig);
+      } catch (error) {
+        console.error("Failed to save initial configuration:", error);
+      }
+      // Run initial simulation
+      runSimulation(defaultConfig);
     }
   }, []);
 

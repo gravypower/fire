@@ -63,14 +63,14 @@ const CONFIG_STORAGE_KEY = "finance-simulation-config";
 interface SerializableUserParameters {
   // Legacy fields (for backward compatibility)
   annualSalary: number;
-  salaryFrequency: "weekly" | "fortnightly" | "monthly";
+  salaryFrequency: "weekly" | "fortnightly" | "monthly" | "yearly";
   incomeTaxRate: number;
   monthlyLivingExpenses: number;
   monthlyRentOrMortgage: number;
   loanPrincipal: number;
   loanInterestRate: number;
   loanPaymentAmount: number;
-  loanPaymentFrequency: "weekly" | "fortnightly" | "monthly";
+  loanPaymentFrequency: "weekly" | "fortnightly" | "monthly" | "yearly";
   useOffsetAccount: boolean;
   currentOffsetBalance: number;
   monthlyInvestmentContribution: number;

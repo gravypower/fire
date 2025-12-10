@@ -94,16 +94,10 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
       }
       setParameters(params);
     } else {
-      // Create initial config with defaults
+      // Just set default parameters locally, don't save yet
+      // MainIsland will handle creating initial config if needed
       const defaultParams = getDefaultParameters();
       setParameters(defaultParams);
-      
-      // Create and save initial configuration
-      const initialConfig: SimulationConfiguration = {
-        baseParameters: defaultParams,
-        transitions: [],
-      };
-      onConfigurationChange(initialConfig);
     }
   }, [config]); // React to config changes
 
