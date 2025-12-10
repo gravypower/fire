@@ -21,6 +21,7 @@ export default function ExpenseManagerIsland({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<ExpenseItem>>({});
   const [showTemplates, setShowTemplates] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
 
   /**
    * Gets empty form data
@@ -40,7 +41,7 @@ export default function ExpenseManagerIsland({
    * Calculates expense summaries by category
    */
   function getExpenseSummaries(): ExpenseSummary[] {
-    const summaries: Record<ExpenseCategory, ExpenseSummary> = {} as any;
+    const summaries: Record<ExpenseCategory, ExpenseSummary> = {} as Record<ExpenseCategory, ExpenseSummary>;
 
     for (const item of expenses) {
       if (!summaries[item.category]) {
@@ -73,6 +74,7 @@ export default function ExpenseManagerIsland({
     setIsAddingExpense(true);
     setEditingId(null);
     setShowTemplates(false);
+    setTemplateSearch("");
   }
 
   /**
@@ -83,6 +85,7 @@ export default function ExpenseManagerIsland({
     setIsAddingExpense(false);
     setEditingId(expense.id);
     setShowTemplates(false);
+    setTemplateSearch("");
   }
 
   /**
@@ -93,6 +96,7 @@ export default function ExpenseManagerIsland({
     setIsAddingExpense(false);
     setEditingId(null);
     setShowTemplates(false);
+    setTemplateSearch("");
   }
 
   /**
@@ -157,13 +161,29 @@ export default function ExpenseManagerIsland({
       ...template,
     });
     setShowTemplates(false);
+    setTemplateSearch("");
+  }
+
+  /**
+   * Filters templates based on search input
+   */
+  function getFilteredTemplates() {
+    if (!templateSearch.trim()) {
+      return EXPENSE_TEMPLATES;
+    }
+    
+    const searchLower = templateSearch.toLowerCase();
+    return EXPENSE_TEMPLATES.filter(template => 
+      template.name?.toLowerCase().includes(searchLower) ||
+      CATEGORY_INFO[template.category!]?.label.toLowerCase().includes(searchLower)
+    );
   }
 
   /**
    * Formats amount for display
    */
   function formatAmount(amount: number, frequency: PaymentFrequency): string {
-    return `$${amount.toFixed(2)}/${frequency === "fortnightly" ? "fortnight" : frequency.replace("ly", "")}`;
+    return `${amount.toFixed(2)}/${frequency === "fortnightly" ? "fortnight" : frequency.replace("ly", "")}`;
   }
 
   /**
@@ -176,6 +196,10 @@ export default function ExpenseManagerIsland({
       case "fortnightly":
         return (amount * 26) / 12;
       case "monthly":
+        return amount;
+      case "yearly":
+        return amount / 12;
+      default:
         return amount;
     }
   }
@@ -194,7 +218,7 @@ export default function ExpenseManagerIsland({
           </p>
         </div>
         {!isFormOpen && (
-          <button onClick={handleStartAdd} class="btn-primary flex items-center">
+          <button type="button" onClick={handleStartAdd} class="btn-primary flex items-center">
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -271,6 +295,7 @@ export default function ExpenseManagerIsland({
                     </div>
                     <div class="flex gap-2">
                       <button
+                        type="button"
                         onClick={() => handleStartEdit(item)}
                         class="text-blue-600 hover:text-blue-800 p-1"
                         title="Edit"
@@ -280,6 +305,7 @@ export default function ExpenseManagerIsland({
                         </svg>
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDelete(item.id)}
                         class="text-red-600 hover:text-red-800 p-1"
                         title="Delete"
@@ -308,7 +334,13 @@ export default function ExpenseManagerIsland({
           {!editingId && (
             <div class="mb-4">
               <button
-                onClick={() => setShowTemplates(!showTemplates)}
+                type="button"
+                onClick={() => {
+                  setShowTemplates(!showTemplates);
+                  if (showTemplates) {
+                    setTemplateSearch("");
+                  }
+                }}
                 class="btn-secondary w-full flex items-center justify-center text-sm"
               >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -321,18 +353,69 @@ export default function ExpenseManagerIsland({
 
           {showTemplates && (
             <div class="mb-4 border border-blue-200 rounded-lg p-3 bg-white fade-in">
-              <p class="text-xs font-medium text-gray-700 mb-2">Common Expenses:</p>
-              <div class="grid grid-cols-2 gap-2">
-                {EXPENSE_TEMPLATES.map((template, i) => (
+              <div class="flex items-center justify-between mb-3">
+                <p class="text-xs font-medium text-gray-700">Common Expenses:</p>
+                <p class="text-xs text-gray-500">{getFilteredTemplates().length} templates</p>
+              </div>
+              
+              {/* Search Input */}
+              <div class="mb-3">
+                <div class="relative">
+                  <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={templateSearch}
+                    onInput={(e) => setTemplateSearch((e.target as HTMLInputElement).value)}
+                    placeholder="Search templates... (e.g., 'school', 'car', 'insurance')"
+                    class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {templateSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setTemplateSearch("")}
+                      class="absolute right-2 top-2 p-1 text-gray-400 hover:text-gray-600"
+                      title="Clear search"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Template Grid */}
+              <div class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                {getFilteredTemplates().map((template, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => handleApplyTemplate(template)}
-                    class="text-left p-2 text-sm border border-gray-200 rounded hover:border-blue-400 hover:bg-blue-50"
+                    class="text-left p-2 text-sm border border-gray-200 rounded hover:border-blue-400 hover:bg-blue-50 transition-colors"
                   >
-                    {template.name}
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">{CATEGORY_INFO[template.category!]?.icon}</span>
+                      <div class="flex-1 min-w-0">
+                        <p class="font-medium text-gray-900 truncate">{template.name}</p>
+                        <p class="text-xs text-gray-500 capitalize">{template.frequency}</p>
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
+
+              {/* No Results Message */}
+              {templateSearch && getFilteredTemplates().length === 0 && (
+                <div class="text-center py-4 text-gray-500">
+                  <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.29-1.009-5.824-2.562M15 6.306a7.962 7.962 0 00-6 0m6 0V5a2 2 0 00-2-2H9a2 2 0 00-2 2v1.306" />
+                  </svg>
+                  <p class="text-sm">No templates found for "{templateSearch}"</p>
+                  <p class="text-xs mt-1">Try a different search term or create a custom expense</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -375,6 +458,7 @@ export default function ExpenseManagerIsland({
               <option value="weekly">Weekly</option>
               <option value="fortnightly">Fortnightly</option>
               <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
             </select>
           </div>
 
@@ -457,10 +541,10 @@ export default function ExpenseManagerIsland({
 
           {/* Action Buttons */}
           <div class="flex gap-3 mt-6">
-            <button onClick={handleSave} class="btn-primary flex-1">
+            <button type="button" onClick={handleSave} class="btn-primary flex-1">
               {editingId ? "Update" : "Add"} Expense
             </button>
-            <button onClick={handleCancel} class="btn-secondary flex-1">
+            <button type="button" onClick={handleCancel} class="btn-secondary flex-1">
               Cancel
             </button>
           </div>

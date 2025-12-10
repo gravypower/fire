@@ -79,6 +79,7 @@ function DateCell({ state, eventInfo }: { state: FinancialState; eventInfo: Retu
 
 export function SummaryTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
   const finalState = states[states.length - 1];
+  const finalCashAvailable = (finalState?.cash || 0) + (finalState?.offsetBalance || 0);
   
   return (
     <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
@@ -98,9 +99,9 @@ export function SummaryTable({ states, transitionPoints, retirementDate, allStat
               </div>
             </th>
             <th class="text-right sticky-header bg-gray-50">
-              <div>Cash</div>
+              <div>Cash Available</div>
               <div class="text-xs font-normal text-gray-500 mt-1">
-                {formatCurrency(finalState?.cash || 0)}
+                {formatCurrency(finalCashAvailable)}
               </div>
             </th>
             <th class="text-right sticky-header bg-gray-50">
@@ -121,6 +122,7 @@ export function SummaryTable({ states, transitionPoints, retirementDate, allStat
           {states.map((state, index) => {
             const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
             const totalAssets = state.investments + state.superannuation;
+            const cashAvailable = state.cash + state.offsetBalance;
             
             return (
               <tr key={index} class={eventInfo.rowClass}>
@@ -128,8 +130,11 @@ export function SummaryTable({ states, transitionPoints, retirementDate, allStat
                 <td class={`text-right font-semibold ${state.netWorth < 0 ? "text-red-600" : "text-green-600"}`}>
                   {formatCurrency(state.netWorth)}
                 </td>
-                <td class={`text-right ${state.cash < 0 ? "text-red-600 font-semibold" : "text-gray-900"}`}>
-                  {formatCurrency(state.cash)}
+                <td 
+                  class={`text-right ${cashAvailable < 0 ? "text-red-600 font-semibold" : "text-gray-900"}`}
+                  title={`Cash: ${formatCurrency(state.cash)}\nOffset: ${formatCurrency(state.offsetBalance)}`}
+                >
+                  {formatCurrency(cashAvailable)}
                 </td>
                 <td class="text-gray-900 text-right">
                   {formatCurrency(totalAssets)}
@@ -218,6 +223,7 @@ export function LoansTable({ states, transitionPoints, retirementDate, allStates
 
 export function InvestmentsTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
   const finalState = states[states.length - 1];
+  const finalCashAvailable = (finalState?.cash || 0) + (finalState?.offsetBalance || 0);
   
   return (
     <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
@@ -249,9 +255,9 @@ export function InvestmentsTable({ states, transitionPoints, retirementDate, all
               </div>
             </th>
             <th class="text-right sticky-header bg-gray-50">
-              <div>Cash</div>
+              <div>Cash Available</div>
               <div class="text-xs font-normal text-gray-500 mt-1">
-                {formatCurrency(finalState?.cash || 0)}
+                {formatCurrency(finalCashAvailable)}
               </div>
             </th>
           </tr>
@@ -260,6 +266,7 @@ export function InvestmentsTable({ states, transitionPoints, retirementDate, all
           {states.map((state, index) => {
             const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
             const totalAssets = state.investments + state.superannuation;
+            const cashAvailable = state.cash + state.offsetBalance;
             
             return (
               <tr key={index} class={eventInfo.rowClass}>
@@ -273,8 +280,11 @@ export function InvestmentsTable({ states, transitionPoints, retirementDate, all
                 <td class="text-gray-900 text-right font-semibold">
                   {formatCurrency(totalAssets)}
                 </td>
-                <td class={`text-right ${state.cash < 0 ? "text-red-600 font-semibold" : "text-gray-900"}`}>
-                  {formatCurrency(state.cash)}
+                <td 
+                  class={`text-right ${cashAvailable < 0 ? "text-red-600 font-semibold" : "text-gray-900"}`}
+                  title={`Cash: ${formatCurrency(state.cash)}\nOffset: ${formatCurrency(state.offsetBalance)}`}
+                >
+                  {formatCurrency(cashAvailable)}
                 </td>
               </tr>
             );
@@ -352,6 +362,7 @@ export function CashFlowTable({ states, transitionPoints, retirementDate, allSta
   const finalState = states[states.length - 1];
   const filteredExpenses = states.reduce((sum, state) => sum + (state.periodExpenses || 0), 0);
   const filteredCashFlow = states.reduce((sum, state) => sum + (state.periodCashFlow || 0), 0);
+  const finalCashAvailable = (finalState?.cash || 0) + (finalState?.offsetBalance || 0);
   
   return (
     <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
@@ -377,9 +388,9 @@ export function CashFlowTable({ states, transitionPoints, retirementDate, allSta
               </div>
             </th>
             <th class="text-right sticky-header bg-gray-50">
-              <div>Cash Balance</div>
+              <div>Cash Available</div>
               <div class="text-xs font-normal text-gray-500 mt-1">
-                {formatCurrency(finalState?.cash || 0)}
+                {formatCurrency(finalCashAvailable)}
               </div>
             </th>
             <th class="text-right sticky-header bg-gray-50">
@@ -393,6 +404,7 @@ export function CashFlowTable({ states, transitionPoints, retirementDate, allSta
         <tbody>
           {states.map((state, index) => {
             const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
+            const cashAvailable = state.cash + state.offsetBalance;
             
             return (
               <tr key={index} class={eventInfo.rowClass}>
@@ -403,8 +415,11 @@ export function CashFlowTable({ states, transitionPoints, retirementDate, allSta
                 <td class="text-orange-700 text-right">
                   {formatCurrency(state.periodExpenses || 0)}
                 </td>
-                <td class={`text-right ${state.cash < 0 ? "text-red-600 font-semibold" : "text-gray-900"}`}>
-                  {formatCurrency(state.cash)}
+                <td 
+                  class={`text-right ${cashAvailable < 0 ? "text-red-600 font-semibold" : "text-gray-900"}`}
+                  title={`Cash: ${formatCurrency(state.cash)}\nOffset: ${formatCurrency(state.offsetBalance)}`}
+                >
+                  {formatCurrency(cashAvailable)}
                 </td>
                 <td class={`text-right font-semibold ${state.netWorth < 0 ? "text-red-600" : "text-green-600"}`}>
                   {formatCurrency(state.netWorth)}

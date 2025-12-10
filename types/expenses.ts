@@ -52,6 +52,7 @@ export type ExpenseCategory =
   | "entertainment"
   | "healthcare"
   | "personal"
+  | "education"
   | "other";
 
 /**
@@ -67,22 +68,67 @@ export interface ExpenseSummary {
  * Default expense templates
  */
 export const EXPENSE_TEMPLATES: Partial<ExpenseItem>[] = [
+  // Housing
   { name: "Rent/Mortgage", category: "housing", frequency: "monthly" },
+  { name: "Property Rates", category: "housing", frequency: "yearly" },
+  { name: "Strata/Body Corporate", category: "housing", frequency: "monthly" },
+  { name: "Home Maintenance", category: "housing", frequency: "monthly" },
+  
+  // Utilities
   { name: "Electricity", category: "utilities", frequency: "monthly" },
   { name: "Water", category: "utilities", frequency: "monthly" },
   { name: "Internet", category: "utilities", frequency: "monthly" },
   { name: "Gas", category: "utilities", frequency: "monthly" },
+  { name: "Phone Bill", category: "utilities", frequency: "monthly" },
+  
+  // Food & Dining
   { name: "Groceries", category: "food", frequency: "weekly" },
   { name: "Dining Out", category: "food", frequency: "weekly" },
+  { name: "Coffee/Takeaway", category: "food", frequency: "weekly" },
+  
+  // Transportation
   { name: "Car Payment", category: "transportation", frequency: "monthly" },
   { name: "Fuel", category: "transportation", frequency: "weekly" },
   { name: "Public Transport", category: "transportation", frequency: "weekly" },
-  { name: "Car Insurance", category: "insurance", frequency: "monthly" },
+  { name: "Car Registration", category: "transportation", frequency: "yearly" },
+  { name: "Car Servicing", category: "transportation", frequency: "yearly" },
+  { name: "Parking", category: "transportation", frequency: "monthly" },
+  
+  // Insurance
+  { name: "Car Insurance", category: "insurance", frequency: "yearly" },
   { name: "Health Insurance", category: "insurance", frequency: "monthly" },
-  { name: "Home Insurance", category: "insurance", frequency: "monthly" },
+  { name: "Home Insurance", category: "insurance", frequency: "yearly" },
+  { name: "Life Insurance", category: "insurance", frequency: "yearly" },
+  { name: "Income Protection", category: "insurance", frequency: "yearly" },
+  
+  // Entertainment
   { name: "Streaming Services", category: "entertainment", frequency: "monthly" },
   { name: "Gym Membership", category: "entertainment", frequency: "monthly" },
-  { name: "Phone Bill", category: "utilities", frequency: "monthly" },
+  { name: "Movies/Events", category: "entertainment", frequency: "monthly" },
+  { name: "Hobbies", category: "entertainment", frequency: "monthly" },
+  { name: "Books/Magazines", category: "entertainment", frequency: "monthly" },
+  
+  // Healthcare
+  { name: "Doctor Visits", category: "healthcare", frequency: "monthly" },
+  { name: "Dental", category: "healthcare", frequency: "yearly" },
+  { name: "Optometrist", category: "healthcare", frequency: "yearly" },
+  { name: "Medications", category: "healthcare", frequency: "monthly" },
+  { name: "Physiotherapy", category: "healthcare", frequency: "monthly" },
+  
+  // Personal Care
+  { name: "Haircuts", category: "personal", frequency: "monthly" },
+  { name: "Clothing", category: "personal", frequency: "monthly" },
+  { name: "Personal Care Items", category: "personal", frequency: "monthly" },
+  
+  // Education
+  { name: "School Fees", category: "education", frequency: "yearly" },
+  { name: "University Fees", category: "education", frequency: "yearly" },
+  { name: "Textbooks", category: "education", frequency: "yearly" },
+  { name: "Online Courses", category: "education", frequency: "monthly" },
+  { name: "Professional Development", category: "education", frequency: "yearly" },
+  { name: "Tutoring", category: "education", frequency: "weekly" },
+  { name: "School Supplies", category: "education", frequency: "yearly" },
+  { name: "Childcare", category: "education", frequency: "weekly" },
 ];
 
 /**
@@ -97,5 +143,6 @@ export const CATEGORY_INFO: Record<ExpenseCategory, { label: string; icon: strin
   entertainment: { label: "Entertainment", icon: "🎬", color: "pink" },
   healthcare: { label: "Healthcare", icon: "⚕️", color: "red" },
   personal: { label: "Personal Care", icon: "💇", color: "orange" },
+  education: { label: "Education", icon: "🎓", color: "teal" },
   other: { label: "Other", icon: "📦", color: "gray" },
 };

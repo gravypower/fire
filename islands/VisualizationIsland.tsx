@@ -555,9 +555,9 @@ export default function VisualizationIsland({
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
-                  <div>Cash</div>
+                  <div>Cash Available</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.cash || 0)}
+                    {formatCurrency((statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.cash || 0) + (statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.offsetBalance || 0))}
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
@@ -686,10 +686,11 @@ export default function VisualizationIsland({
                     </td>
                     <td
                       class={`text-right ${
-                        state.cash < 0 ? "text-red-600 font-semibold" : "text-gray-900"
+                        (state.cash + state.offsetBalance) < 0 ? "text-red-600 font-semibold" : "text-gray-900"
                       }`}
+                      title={`Cash: ${formatCurrency(state.cash)}\nOffset: ${formatCurrency(state.offsetBalance)}`}
                     >
-                      {formatCurrency(state.cash)}
+                      {formatCurrency(state.cash + state.offsetBalance)}
                     </td>
                     <td class="text-gray-900 text-right">
                       {formatCurrency(state.investments)}
