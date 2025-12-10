@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Retirement Features Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-scenario { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .expected { background: #e8f5e9; padding: 10px; margin: 5px 0; border-radius: 3px; }
+        .feature { background: #e3f2fd; padding: 10px; margin: 5px 0; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>Enhanced Retirement Features Test</h1>
+    <p>Open the main application at <a href="http://localhost:8000" target="_blank">http://localhost:8000</a></p>
+    
+    <h2>🆕 New Features Implemented:</h2>
+    <div class="feature">
+        <h3>✅ Multi-Person Household Support</h3>
+        <ul>
+            <li>Different retirement ages for each person</li>
+            <li>Individual income sources and super accounts</li>
+            <li>One person can retire while the other keeps working</li>
+        </ul>
+    </div>
+    
+    <div class="feature">
+        <h3>✅ Enhanced Retirement Income Processing</h3>
+        <ul>
+            <li>Automatic withdrawal from investments when retired</li>
+            <li>Smart super access at preservation age (60)</li>
+            <li>Flexible drawdown strategies</li>
+            <li>Net worth properly declines during retirement</li>
+        </ul>
+    </div>
+    
+    <div class="feature">
+        <h3>✅ Timeline Events & Milestones</h3>
+        <ul>
+            <li>Retirement milestones appear on timeline</li>
+            <li>Events highlighted in tables and charts</li>
+            <li>Transition markers on graphs</li>
+        </ul>
+    </div>
+
+    <h2>🧪 Test Scenarios:</h2>
+    
+    <div class="test-scenario">
+        <h3>Scenario 1: Single Person Retirement</h3>
+        <p><strong>Setup:</strong></p>
+        <ul>
+            <li>Current age: 63</li>
+            <li>Retirement age: 65</li>
+            <li>Current investments: $400,000</li>
+            <li>Current super: $300,000</li>
+            <li>Desired retirement income: $50,000/year</li>
+            <li>Simulation years: 15</li>
+        </ul>
+        <div class="expected">
+            <strong>Expected Results:</strong>
+            <ul>
+                <li>✅ Salary income stops at age 65</li>
+                <li>✅ Investment contributions stop at age 65</li>
+                <li>✅ Super contributions stop at age 65</li>
+                <li>✅ Retirement milestone appears on timeline</li>
+                <li>✅ Net worth declines after age 65 (drawdown visible)</li>
+                <li>✅ Investments decrease to fund retirement income</li>
+                <li>✅ Super accessed after age 60 if needed</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-scenario">
+        <h3>Scenario 2: Couple with Different Retirement Ages</h3>
+        <p><strong>Setup (if household mode is available):</strong></p>
+        <ul>
+            <li>Person 1: Age 62, retires at 65</li>
+            <li>Person 2: Age 58, retires at 67</li>
+            <li>Combined investments: $600,000</li>
+            <li>Combined super: $400,000</li>
+            <li>Desired retirement income: $70,000/year</li>
+            <li>Simulation years: 20</li>
+        </ul>
+        <div class="expected">
+            <strong>Expected Results:</strong>
+            <ul>
+                <li>✅ Person 1's income stops at age 65</li>
+                <li>✅ Person 2 keeps working until age 67</li>
+                <li>✅ Partial retirement income needed from age 65-67</li>
+                <li>✅ Full retirement income needed after age 67</li>
+                <li>✅ Multiple retirement milestones on timeline</li>
+                <li>✅ Gradual then steeper net worth decline</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-scenario">
+        <h3>Scenario 3: Early Access to Super</h3>
+        <p><strong>Setup:</strong></p>
+        <ul>
+            <li>Current age: 58</li>
+            <li>Retirement age: 60</li>
+            <li>Current investments: $100,000</li>
+            <li>Current super: $500,000</li>
+            <li>Desired retirement income: $40,000/year</li>
+            <li>Simulation years: 20</li>
+        </ul>
+        <div class="expected">
+            <strong>Expected Results:</strong>
+            <ul>
+                <li>✅ Investments used first (ages 60-62)</li>
+                <li>✅ Super accessed from age 60 (preservation age)</li>
+                <li>✅ Smooth transition between investment and super drawdown</li>
+                <li>✅ Timeline shows when super access begins</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>🔍 What to Look For:</h2>
+    <ol>
+        <li><strong>Timeline Tab:</strong> Check for retirement milestones and events</li>
+        <li><strong>Charts:</strong> Look for net worth decline after retirement</li>
+        <li><strong>Tables:</strong> Verify highlighted rows for retirement events</li>
+        <li><strong>Investment Balance:</strong> Should decrease during retirement</li>
+        <li><strong>Super Balance:</strong> Should decrease when accessed (age 60+)</li>
+        <li><strong>Cash Flow:</strong> Should show retirement income withdrawals</li>
+    </ol>
+
+    <h2>🐛 Issues Fixed:</h2>
+    <ul>
+        <li>✅ Timeline events now appear (userParameters prop added)</li>
+        <li>✅ Net worth now declines during retirement (withdrawal logic added)</li>
+        <li>✅ Retirement income properly processed</li>
+        <li>✅ Age-based logic for income and contributions</li>
+        <li>✅ Super preservation age rules implemented</li>
+    </ul>
+
+    <h2>📊 Advanced Features:</h2>
+    <ul>
+        <li><strong>Flexible Drawdown:</strong> Investments first, then super at 60</li>
+        <li><strong>Multi-Person Support:</strong> Different retirement ages</li>
+        <li><strong>Smart Contributions:</strong> Stop when retired</li>
+        <li><strong>Enhanced Milestones:</strong> Person-specific retirement events</li>
+        <li><strong>Preservation Age Rules:</strong> Super access at 60, full access at 67</li>
+    </ul>
+</body>
+</html>

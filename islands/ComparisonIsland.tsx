@@ -44,7 +44,7 @@ export default function ComparisonIsland({ config }: ComparisonIslandProps) {
       // Run comparison in a setTimeout to allow UI to update
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const comparisonResult = SimulationEngine.runComparisonSimulation(config);
+      const comparisonResult = await SimulationEngine.runComparisonSimulation(config);
 
       setComparison(comparisonResult);
     } catch (err) {

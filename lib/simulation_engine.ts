@@ -5,14 +5,15 @@
  */
 
 import type {
+  ComparisonSimulationResult,
+  EnhancedSimulationResult,
   FinancialState,
+  IncomeSource,
+  SimulationConfiguration,
   SimulationResult,
   TimeInterval,
-  UserParameters,
-  SimulationConfiguration,
-  EnhancedSimulationResult,
-  ComparisonSimulationResult,
   TransitionPoint,
+  UserParameters,
 } from "../types/financial.ts";
 import {
   ExpenseProcessor,
@@ -21,11 +22,12 @@ import {
   LoanProcessor,
   RetirementCalculator,
 } from "./processors.ts";
-import { generateWarnings, formatCurrency } from "./result_utils.ts";
+import { formatCurrency, generateWarnings } from "./result_utils.ts";
 import {
-  resolveParametersForDate,
   buildParameterPeriods,
+  resolveParametersForDate,
 } from "./transition_manager.ts";
+import { detectMilestonesFromSimulation } from "./milestone_detector.ts";
 
 /**
  * Converts a time interval to number of periods per year
@@ -125,27 +127,46 @@ export const SimulationEngine = {
     // Initialize starting state
     // If loans array exists (even if empty), use it; otherwise fall back to legacy
     const initialLoanBalance = params.loans !== undefined
-      ? (params.loans.length > 0 ? params.loans.reduce((sum, loan) => sum + loan.principal, 0) : 0)
+      ? (params.loans.length > 0
+        ? params.loans.reduce((sum, loan) => sum + loan.principal, 0)
+        : 0)
       : params.loanPrincipal;
-    
-    const initialLoanBalances = params.loans !== undefined && params.loans.length > 0
-      ? params.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.principal }), {} as { [loanId: string]: number })
-      : undefined;
 
-    const initialSuperBalance = params.superAccounts && params.superAccounts.length > 0
-      ? params.superAccounts.reduce((sum, superAcc) => sum + superAcc.balance, 0)
-      : params.currentSuperBalance;
-    
-    const initialSuperBalances = params.superAccounts && params.superAccounts.length > 0
-      ? params.superAccounts.reduce((acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }), {} as { [superId: string]: number })
-      : undefined;
+    const initialLoanBalances =
+      params.loans !== undefined && params.loans.length > 0
+        ? params.loans.reduce(
+          (acc, loan) => ({ ...acc, [loan.id]: loan.principal }),
+          {} as { [loanId: string]: number },
+        )
+        : undefined;
+
+    const initialSuperBalance =
+      params.superAccounts && params.superAccounts.length > 0
+        ? params.superAccounts.reduce(
+          (sum, superAcc) => sum + superAcc.balance,
+          0,
+        )
+        : params.currentSuperBalance;
+
+    const initialSuperBalances =
+      params.superAccounts && params.superAccounts.length > 0
+        ? params.superAccounts.reduce(
+          (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
+          {} as { [superId: string]: number },
+        )
+        : undefined;
 
     const initialOffsetBalance = params.loans !== undefined
-      ? (params.loans.length > 0 ? params.loans.reduce((sum, loan) => sum + (loan.offsetBalance || 0), 0) : 0)
+      ? (params.loans.length > 0
+        ? params.loans.reduce((sum, loan) => sum + (loan.offsetBalance || 0), 0)
+        : 0)
       : (params.currentOffsetBalance || 0);
-    
+
     const initialOffsetBalances = params.loans && params.loans.length > 0
-      ? params.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.offsetBalance || 0 }), {} as { [loanId: string]: number })
+      ? params.loans.reduce(
+        (acc, loan) => ({ ...acc, [loan.id]: loan.offsetBalance || 0 }),
+        {} as { [loanId: string]: number },
+      )
       : undefined;
 
     let currentState: FinancialState = {
@@ -168,7 +189,8 @@ export const SimulationEngine = {
 
     // Calculate initial net worth
     currentState.netWorth = currentState.cash + currentState.investments +
-      currentState.superannuation + currentState.offsetBalance - currentState.loanBalance;
+      currentState.superannuation + currentState.offsetBalance -
+      currentState.loanBalance;
 
     states.push(currentState);
 
@@ -195,35 +217,54 @@ export const SimulationEngine = {
 
     // Generate warnings and alerts for unsustainable scenarios
     const financialWarnings = generateWarnings(states);
-    const warningMessages = financialWarnings.map(w => w.message);
+    const warningMessages = financialWarnings.map((w) => w.message);
 
     // Add warning if retirement is not achievable at desired age
     if (retirement.date === null) {
       const yearsSimulated = params.simulationYears;
       const finalAge = params.currentAge + yearsSimulated;
       warningMessages.push(
-        `⚠️ RETIREMENT NOT ACHIEVABLE: You want to retire at age ${params.retirementAge}, but your assets will not support ${formatCurrency(params.desiredAnnualRetirementIncome)}/year income at that age. ` +
-        `Even by age ${Math.floor(finalAge)}, you won't have enough saved. ` +
-        `To retire at ${params.retirementAge}, you need to: save more aggressively, reduce expenses, lower your retirement income target, or work longer.`
+        `⚠️ RETIREMENT NOT ACHIEVABLE: You want to retire at age ${params.retirementAge}, but your assets will not support ${
+          formatCurrency(params.desiredAnnualRetirementIncome)
+        }/year income at that age. ` +
+          `Even by age ${Math.floor(finalAge)}, you won't have enough saved. ` +
+          `To retire at ${params.retirementAge}, you need to: save more aggressively, reduce expenses, lower your retirement income target, or work longer.`,
       );
     } else if (retirement.age && retirement.age > params.retirementAge + 1) {
       // Retirement is achievable but much later than desired
       warningMessages.push(
-        `⚠️ DELAYED RETIREMENT: You want to retire at age ${params.retirementAge}, but you won't have enough assets until age ${Math.floor(retirement.age)}. ` +
-        `That's ${Math.floor(retirement.age - params.retirementAge)} years later than planned. ` +
-        `To retire earlier, consider: increasing savings, reducing expenses, or lowering your retirement income target from ${formatCurrency(params.desiredAnnualRetirementIncome)}/year.`
+        `⚠️ DELAYED RETIREMENT: You want to retire at age ${params.retirementAge}, but you won't have enough assets until age ${
+          Math.floor(retirement.age)
+        }. ` +
+          `That's ${
+            Math.floor(retirement.age - params.retirementAge)
+          } years later than planned. ` +
+          `To retire earlier, consider: increasing savings, reducing expenses, or lowering your retirement income target from ${
+            formatCurrency(params.desiredAnnualRetirementIncome)
+          }/year.`,
       );
     }
 
     // Check sustainability (basic check)
     const isSustainable = this.checkSustainability(states, warnings);
 
+    // Detect milestones from simulation results
+    const milestoneResult = detectMilestonesFromSimulation(states, params);
+
+    // Add milestone detection warnings to simulation warnings
+    const allWarnings = [
+      ...warnings,
+      ...warningMessages,
+      ...milestoneResult.warnings,
+    ];
+
     return {
       states,
       retirementDate: retirement.date,
       retirementAge: retirement.age,
       isSustainable,
-      warnings: [...warnings, ...warningMessages],
+      warnings: allWarnings,
+      milestones: milestoneResult.milestones,
     };
   },
 
@@ -235,6 +276,7 @@ export const SimulationEngine = {
    * Sequence:
    * 1. Income Phase: Add salary income and deduct tax
    * 2. Expense Phase: Deduct living expenses and rent/mortgage
+   * 2b. Retirement Phase: Withdraw retirement income from investments if retired
    * 3. Loan Phase: Process loan payment (interest + principal) with offset account
    * 4. Investment Phase: Add contributions and apply growth
    * 5. Super Phase: Add contributions and apply growth
@@ -255,18 +297,110 @@ export const SimulationEngine = {
     let taxPaid = 0;
     let interestSaved = 0;
     let deductibleInterest = 0;
-
-    // Phase 1: Income - Add salary income and calculate initial tax (will be adjusted for deductions later)
-    const grossIncome = IncomeProcessor.calculateIncome(params, interval, currentState.date);
-    // Tax will be recalculated after we know deductible interest
     let netIncome = 0;
-    cash += netIncome; // Will add after tax calculation
+
+    // Phase 1: Income - Add salary income (tax will be calculated later after we know deductible interest)
+    // Calculate current age and retirement status
+    const yearsElapsed =
+      (currentState.date.getTime() - params.startDate.getTime()) /
+      (1000 * 60 * 60 * 24 * 365.25);
+
+    // Handle household mode with multiple people
+    let grossIncome = 0;
+    let anyPersonStillWorking = false;
+
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
+      // Multiple people - check each person's retirement status
+      for (const person of params.people) {
+        const personCurrentAge = person.currentAge + yearsElapsed;
+        if (personCurrentAge < person.retirementAge) {
+          anyPersonStillWorking = true;
+          // Calculate income for this person's income sources
+          for (const incomeSource of person.incomeSources) {
+            if (this.isIncomeSourceActive(incomeSource, currentState.date)) {
+              const personIncome = this.calculateIncomeSourceAmount(
+                incomeSource,
+                interval,
+              );
+              grossIncome += personIncome;
+            }
+          }
+        }
+      }
+
+      // Add any household-level income sources (legacy support)
+      if (params.annualSalary > 0) {
+        const legacyCurrentAge = params.currentAge + yearsElapsed;
+        if (legacyCurrentAge < params.retirementAge) {
+          anyPersonStillWorking = true;
+          const legacyIncome = IncomeProcessor.calculateIncome(
+            params,
+            interval,
+            currentState.date,
+          );
+          grossIncome += legacyIncome;
+        }
+      }
+    } else {
+      // Single person or legacy mode
+      const currentAge = params.currentAge + yearsElapsed;
+      if (currentAge < params.retirementAge) {
+        anyPersonStillWorking = true;
+        grossIncome = IncomeProcessor.calculateIncome(
+          params,
+          interval,
+          currentState.date,
+        );
+      }
+    }
+
+    cash += grossIncome;
 
     // Phase 2: Expenses - Deduct living expenses only
     // Note: Mortgage payments are handled in the loan phase
-    const expenses = ExpenseProcessor.calculateExpenses(params, interval, currentState.date);
+    const expenses = ExpenseProcessor.calculateExpenses(
+      params,
+      interval,
+      currentState.date,
+    );
     cash -= expenses;
-    
+
+    // Phase 2b: Retirement Income - Withdraw from investments if retired
+    // Determine if we need retirement income (when no one is working)
+    const needsRetirementIncome = !anyPersonStillWorking;
+
+    if (needsRetirementIncome) {
+      const annualRetirementIncome = params.desiredAnnualRetirementIncome;
+      const periodsPerYear = intervalToPeriodsPerYear(interval);
+      const periodRetirementIncome = annualRetirementIncome / periodsPerYear;
+
+      // First try to use cash if available
+      if (cash >= periodRetirementIncome) {
+        // We have enough cash, no need to withdraw from investments
+        // The retirement income is already covered by other income sources
+      } else {
+        // Need to withdraw from investments to fund retirement
+        const shortfall = periodRetirementIncome - Math.max(0, cash);
+
+        // Enhanced withdrawal strategy
+        const withdrawalResult = this.processRetirementWithdrawals(
+          shortfall,
+          investments,
+          superannuation,
+          params,
+          yearsElapsed,
+          currentState,
+        );
+
+        investments = withdrawalResult.newInvestments;
+        superannuation = withdrawalResult.newSuperannuation;
+        cash += withdrawalResult.withdrawnAmount;
+      }
+    }
+
     // Requirements 7.1: Handle negative cash flow by reducing available cash
     // Cash can go negative, representing debt or overdraft
 
@@ -276,7 +410,7 @@ export const SimulationEngine = {
     let loanBalances: { [loanId: string]: number } = {};
     let offsetBalances: { [loanId: string]: number } = {};
     let totalLoanPayment = 0;
-    
+
     if (params.loans !== undefined && params.loans.length > 0) {
       // Multiple loans - process each loan with its own offset
       for (const loan of params.loans) {
@@ -286,14 +420,16 @@ export const SimulationEngine = {
           interval,
         );
         totalLoanPayment += loanPayment;
-        
+
         // Get current balance for this loan
-        const currentLoanBalance = currentState.loanBalances?.[loan.id] ?? loan.principal;
-        
+        const currentLoanBalance = currentState.loanBalances?.[loan.id] ??
+          loan.principal;
+
         // Get current offset balance for this loan
-        const currentOffsetBalance = currentState.offsetBalances?.[loan.id] ?? (loan.offsetBalance || 0);
+        const currentOffsetBalance = currentState.offsetBalances?.[loan.id] ??
+          (loan.offsetBalance || 0);
         offsetBalances[loan.id] = currentOffsetBalance;
-        
+
         if (currentLoanBalance > 0 && cash >= loanPayment) {
           const loanResult = LoanProcessor.calculateLoanPayment(
             currentLoanBalance,
@@ -328,11 +464,17 @@ export const SimulationEngine = {
           loanBalances[loan.id] = 0;
         }
       }
-      
+
       // Calculate total loan balance for legacy field
-      loanBalance = Object.values(loanBalances).reduce((sum, bal) => sum + bal, 0);
+      loanBalance = Object.values(loanBalances).reduce(
+        (sum, bal) => sum + bal,
+        0,
+      );
       // Calculate total offset balance for legacy field
-      offsetBalance = Object.values(offsetBalances).reduce((sum, bal) => sum + bal, 0);
+      offsetBalance = Object.values(offsetBalances).reduce(
+        (sum, bal) => sum + bal,
+        0,
+      );
     } else if (params.loans === undefined) {
       // Legacy single loan (only if loans array doesn't exist)
       const loanPayment = convertPaymentToInterval(
@@ -387,92 +529,166 @@ export const SimulationEngine = {
     // Convert deductible interest to annual amount for tax calculation
     const periodsPerYear = intervalToPeriodsPerYear(interval);
     const annualDeductibleInterest = deductibleInterest * periodsPerYear;
-    
+
     // Calculate taxable income (gross income minus deductible interest)
-    const annualGrossIncome = IncomeProcessor.calculateTotalAnnualIncome(params, currentState.date);
-    const taxableIncome = Math.max(0, annualGrossIncome - annualDeductibleInterest);
-    
+    const annualGrossIncome = IncomeProcessor.calculateTotalAnnualIncome(
+      params,
+      currentState.date,
+    );
+    const taxableIncome = Math.max(
+      0,
+      annualGrossIncome - annualDeductibleInterest,
+    );
+
     // Calculate tax on taxable income
     const annualTax = IncomeProcessor.calculateAnnualTax(params, taxableIncome);
     taxPaid = annualTax / periodsPerYear;
-    
-    // Calculate net income and add to cash
+
+    // Subtract tax from cash (we already added gross income earlier)
+    cash -= taxPaid;
     netIncome = grossIncome - taxPaid;
-    cash += netIncome;
 
     // Phase 4: Investment - Add contributions and apply growth
     // Handle individual investment holdings if provided
     let investmentBalances: { [holdingId: string]: number } = {};
     let actualInvestmentContribution = 0;
-    
-    if (params.investmentHoldings && params.investmentHoldings.length > 0) {
-      // Use individual holdings
-      const investmentResult = InvestmentProcessor.calculateInvestmentHoldings(
-        params,
-        currentState.date,
-        currentState.investmentBalances,
-        interval,
-        cash,
-      );
-      
-      investments = investmentResult.totalBalance;
-      investmentBalances = investmentResult.holdingBalances;
-      actualInvestmentContribution = investmentResult.cashUsed;
-      cash -= actualInvestmentContribution;
-    } else {
-      // Legacy single investment calculation
-      const investmentContribution = (params.monthlyInvestmentContribution * 12) /
-        intervalToPeriodsPerYear(interval);
 
-      // Requirements 7.2: Prevent investment contributions if cash is negative or insufficient
-      if (cash > 0 && cash >= investmentContribution) {
-        actualInvestmentContribution = investmentContribution;
-        cash -= investmentContribution;
+    // Only make investment contributions if someone is still working
+    if (anyPersonStillWorking) {
+      if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+        // Use individual holdings
+        const investmentResult = InvestmentProcessor
+          .calculateInvestmentHoldings(
+            params,
+            currentState.date,
+            currentState.investmentBalances,
+            interval,
+            cash,
+          );
+
+        investments = investmentResult.totalBalance;
+        investmentBalances = investmentResult.holdingBalances;
+        actualInvestmentContribution = investmentResult.cashUsed;
+        cash -= actualInvestmentContribution;
       } else {
-        // Can't afford investment contribution - skip it
-        actualInvestmentContribution = 0;
-      }
+        // Legacy single investment calculation
+        const investmentContribution =
+          (params.monthlyInvestmentContribution * 12) /
+          intervalToPeriodsPerYear(interval);
 
-      investments = InvestmentProcessor.calculateInvestmentGrowth(
-        investments,
-        actualInvestmentContribution,
-        params.investmentReturnRate / 100, // Convert percentage to decimal
-        interval,
-      );
+        // Requirements 7.2: Prevent investment contributions if cash is negative or insufficient
+        if (cash > 0 && cash >= investmentContribution) {
+          actualInvestmentContribution = investmentContribution;
+          cash -= investmentContribution;
+        } else {
+          // Can't afford investment contribution - skip it
+          actualInvestmentContribution = 0;
+        }
+
+        investments = InvestmentProcessor.calculateInvestmentGrowth(
+          investments,
+          actualInvestmentContribution,
+          params.investmentReturnRate / 100, // Convert percentage to decimal
+          interval,
+        );
+      }
+    } else {
+      // Retired - no new contributions, just apply growth to existing investments
+      if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+        const investmentResult = InvestmentProcessor
+          .calculateInvestmentHoldings(
+            params,
+            currentState.date,
+            currentState.investmentBalances,
+            interval,
+            0, // No cash available for contributions
+          );
+
+        investments = investmentResult.totalBalance;
+        investmentBalances = investmentResult.holdingBalances;
+      } else {
+        investments = InvestmentProcessor.calculateInvestmentGrowth(
+          investments,
+          0, // No contributions
+          params.investmentReturnRate / 100,
+          interval,
+        );
+      }
     }
 
     // Phase 5: Superannuation - Add contributions and apply growth
     // Handle multiple super accounts if provided, otherwise use legacy single super
     let superBalances: { [superId: string]: number } = {};
-    
+
     if (params.superAccounts && params.superAccounts.length > 0) {
-      // Multiple super accounts
+      // Multiple super accounts - handle person-specific contributions
       superannuation = 0;
       for (const superAcc of params.superAccounts) {
-        const currentBalance = currentState.superBalances?.[superAcc.id] ?? superAcc.balance;
-        const superContribution = (grossIncome * superAcc.contributionRate) / 100;
+        const currentBalance = currentState.superBalances?.[superAcc.id] ??
+          superAcc.balance;
+
+        // Calculate contribution based on person's working status
+        let superContribution = 0;
+        if (anyPersonStillWorking && superAcc.personId) {
+          // Find the person this super account belongs to
+          const person = params.people?.find((p) => p.id === superAcc.personId);
+          if (person) {
+            const personCurrentAge = person.currentAge + yearsElapsed;
+            if (personCurrentAge < person.retirementAge) {
+              // Calculate this person's income for super contribution
+              let personIncome = 0;
+              for (const incomeSource of person.incomeSources) {
+                if (
+                  this.isIncomeSourceActive(incomeSource, currentState.date)
+                ) {
+                  personIncome += this.calculateIncomeSourceAmount(
+                    incomeSource,
+                    interval,
+                  );
+                }
+              }
+              superContribution = (personIncome * superAcc.contributionRate) /
+                100;
+            }
+          }
+        } else if (anyPersonStillWorking && !superAcc.personId) {
+          // Legacy super account - use total household income
+          superContribution = (grossIncome * superAcc.contributionRate) / 100;
+        }
+
         const superGrowthRate = superAcc.returnRate / 100;
-        const intervalSuperRate = convertAnnualRateToInterval(superGrowthRate, interval);
-        
+        const intervalSuperRate = convertAnnualRateToInterval(
+          superGrowthRate,
+          interval,
+        );
+
         // Apply growth to existing balance
         const superAfterGrowth = currentBalance * (1 + intervalSuperRate);
         // Add contribution (which also grows for this period)
-        const contributionAfterGrowth = superContribution * (1 + intervalSuperRate);
+        const contributionAfterGrowth = superContribution *
+          (1 + intervalSuperRate);
         const newBalance = superAfterGrowth + contributionAfterGrowth;
-        
+
         superBalances[superAcc.id] = newBalance;
         superannuation += newBalance;
       }
     } else {
       // Legacy single super account
-      const superContribution = (grossIncome * params.superContributionRate) / 100;
+      // Only contribute if someone is still working
+      const superContribution = anyPersonStillWorking
+        ? (grossIncome * params.superContributionRate) / 100
+        : 0;
       const superGrowthRate = params.superReturnRate / 100;
-      const intervalSuperRate = convertAnnualRateToInterval(superGrowthRate, interval);
+      const intervalSuperRate = convertAnnualRateToInterval(
+        superGrowthRate,
+        interval,
+      );
 
       // Apply growth to existing balance
       const superAfterGrowth = superannuation * (1 + intervalSuperRate);
       // Add contribution (which also grows for this period)
-      const contributionAfterGrowth = superContribution * (1 + intervalSuperRate);
+      const contributionAfterGrowth = superContribution *
+        (1 + intervalSuperRate);
       superannuation = superAfterGrowth + contributionAfterGrowth;
     }
 
@@ -482,31 +698,48 @@ export const SimulationEngine = {
     if (cash > 0 && loanBalance > 0) {
       if (params.loans !== undefined && params.loans.length > 0) {
         // Find the biggest loan with offset enabled
-        let biggestLoanWithOffset: { id: string; balance: number; loan: typeof params.loans[0] } | null = null;
-        
+        let biggestLoanWithOffset: {
+          id: string;
+          balance: number;
+          loan: typeof params.loans[0];
+        } | null = null;
+
         for (const loan of params.loans) {
           if (loan.hasOffset) {
             const currentBalance = loanBalances[loan.id] || 0;
-            if (currentBalance > 0 && (!biggestLoanWithOffset || currentBalance > biggestLoanWithOffset.balance)) {
-              biggestLoanWithOffset = { id: loan.id, balance: currentBalance, loan };
+            if (
+              currentBalance > 0 &&
+              (!biggestLoanWithOffset ||
+                currentBalance > biggestLoanWithOffset.balance)
+            ) {
+              biggestLoanWithOffset = {
+                id: loan.id,
+                balance: currentBalance,
+                loan,
+              };
             }
           }
         }
-        
+
         // Add leftover cash to the biggest loan's offset
         if (biggestLoanWithOffset) {
-          const currentOffsetBalance = offsetBalances[biggestLoanWithOffset.id] || 0;
+          const currentOffsetBalance =
+            offsetBalances[biggestLoanWithOffset.id] || 0;
           const loanBalance = biggestLoanWithOffset.balance;
-          
+
           // Calculate how much we can add to offset (capped at loan balance)
-          const maxOffsetIncrease = Math.max(0, loanBalance - currentOffsetBalance);
+          const maxOffsetIncrease = Math.max(
+            0,
+            loanBalance - currentOffsetBalance,
+          );
           const offsetIncrease = Math.min(cash, maxOffsetIncrease);
-          
+
           // Add to offset
-          offsetBalances[biggestLoanWithOffset.id] = currentOffsetBalance + offsetIncrease;
+          offsetBalances[biggestLoanWithOffset.id] = currentOffsetBalance +
+            offsetIncrease;
           offsetBalance += offsetIncrease;
           cash -= offsetIncrease;
-          
+
           // Any remaining cash stays as cash (excess offset scenario)
           // This cash is now held as savings and will show on the timeline
         }
@@ -514,41 +747,50 @@ export const SimulationEngine = {
         // Legacy single loan offset (only if loans array doesn't exist)
         const maxOffsetIncrease = Math.max(0, loanBalance - offsetBalance);
         const offsetIncrease = Math.min(cash, maxOffsetIncrease);
-        
+
         offsetBalance += offsetIncrease;
         cash -= offsetIncrease;
         // Excess cash stays as cash
       }
     }
-    
+
     // Phase 6b: Auto-payout loans when offset equals outstanding principal
     if (params.loans !== undefined && params.loans.length > 0) {
       for (const loan of params.loans) {
         if (loan.hasOffset && loan.autoPayoutWhenOffsetFull) {
           const currentLoanBalance = loanBalances[loan.id] || 0;
           const currentOffsetBalance = offsetBalances[loan.id] || 0;
-          
+
           // If offset equals or exceeds loan balance, pay out the loan
-          if (currentLoanBalance > 0 && currentOffsetBalance >= currentLoanBalance) {
+          if (
+            currentLoanBalance > 0 && currentOffsetBalance >= currentLoanBalance
+          ) {
             // Pay out the loan (set balance to 0)
             loanBalances[loan.id] = 0;
-            
+
             // Clear the offset for this loan and convert to cash
             offsetBalances[loan.id] = 0;
-            
+
             // Add the offset amount to cash (it was already saved, now it's liquid)
             cash += currentOffsetBalance;
-            
+
             // Update totals
-            loanBalance = Object.values(loanBalances).reduce((sum, bal) => sum + bal, 0);
-            offsetBalance = Object.values(offsetBalances).reduce((sum, bal) => sum + bal, 0);
+            loanBalance = Object.values(loanBalances).reduce(
+              (sum, bal) => sum + bal,
+              0,
+            );
+            offsetBalance = Object.values(offsetBalances).reduce(
+              (sum, bal) => sum + bal,
+              0,
+            );
           }
         }
       }
     }
 
     // Phase 7: Calculate net worth and cash flow
-    const netWorth = cash + investments + superannuation + offsetBalance - loanBalance;
+    const netWorth = cash + investments + superannuation + offsetBalance -
+      loanBalance;
     const cashFlow = netIncome - expenses - totalLoanPayment -
       actualInvestmentContribution;
 
@@ -565,10 +807,19 @@ export const SimulationEngine = {
       expenses,
       interestSaved,
       deductibleInterest,
-      loanBalances: params.loans && params.loans.length > 0 ? loanBalances : undefined,
-      superBalances: params.superAccounts && params.superAccounts.length > 0 ? superBalances : undefined,
-      offsetBalances: params.loans && params.loans.length > 0 ? offsetBalances : undefined,
-      investmentBalances: params.investmentHoldings && params.investmentHoldings.length > 0 ? investmentBalances : undefined,
+      loanBalances: params.loans && params.loans.length > 0
+        ? loanBalances
+        : undefined,
+      superBalances: params.superAccounts && params.superAccounts.length > 0
+        ? superBalances
+        : undefined,
+      offsetBalances: params.loans && params.loans.length > 0
+        ? offsetBalances
+        : undefined,
+      investmentBalances:
+        params.investmentHoldings && params.investmentHoldings.length > 0
+          ? investmentBalances
+          : undefined,
     };
   },
 
@@ -643,28 +894,51 @@ export const SimulationEngine = {
     // Initialize starting state
     // If loans array exists (even if empty), use it; otherwise fall back to legacy
     const initialLoanBalance = currentParams.loans !== undefined
-      ? (currentParams.loans.length > 0 ? currentParams.loans.reduce((sum, loan) => sum + loan.principal, 0) : 0)
+      ? (currentParams.loans.length > 0
+        ? currentParams.loans.reduce((sum, loan) => sum + loan.principal, 0)
+        : 0)
       : currentParams.loanPrincipal;
-    
-    const initialLoanBalances = currentParams.loans !== undefined && currentParams.loans.length > 0
-      ? currentParams.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.principal }), {} as { [loanId: string]: number })
-      : undefined;
 
-    const initialSuperBalance = currentParams.superAccounts && currentParams.superAccounts.length > 0
-      ? currentParams.superAccounts.reduce((sum, superAcc) => sum + superAcc.balance, 0)
-      : currentParams.currentSuperBalance;
-    
-    const initialSuperBalances = currentParams.superAccounts && currentParams.superAccounts.length > 0
-      ? currentParams.superAccounts.reduce((acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }), {} as { [superId: string]: number })
-      : undefined;
+    const initialLoanBalances =
+      currentParams.loans !== undefined && currentParams.loans.length > 0
+        ? currentParams.loans.reduce(
+          (acc, loan) => ({ ...acc, [loan.id]: loan.principal }),
+          {} as { [loanId: string]: number },
+        )
+        : undefined;
+
+    const initialSuperBalance =
+      currentParams.superAccounts && currentParams.superAccounts.length > 0
+        ? currentParams.superAccounts.reduce(
+          (sum, superAcc) => sum + superAcc.balance,
+          0,
+        )
+        : currentParams.currentSuperBalance;
+
+    const initialSuperBalances =
+      currentParams.superAccounts && currentParams.superAccounts.length > 0
+        ? currentParams.superAccounts.reduce(
+          (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
+          {} as { [superId: string]: number },
+        )
+        : undefined;
 
     const initialOffsetBalance = currentParams.loans !== undefined
-      ? (currentParams.loans.length > 0 ? currentParams.loans.reduce((sum, loan) => sum + (loan.offsetBalance || 0), 0) : 0)
+      ? (currentParams.loans.length > 0
+        ? currentParams.loans.reduce(
+          (sum, loan) => sum + (loan.offsetBalance || 0),
+          0,
+        )
+        : 0)
       : (currentParams.currentOffsetBalance || 0);
-    
-    const initialOffsetBalances = currentParams.loans !== undefined && currentParams.loans.length > 0
-      ? currentParams.loans.reduce((acc, loan) => ({ ...acc, [loan.id]: loan.offsetBalance || 0 }), {} as { [loanId: string]: number })
-      : undefined;
+
+    const initialOffsetBalances =
+      currentParams.loans !== undefined && currentParams.loans.length > 0
+        ? currentParams.loans.reduce(
+          (acc, loan) => ({ ...acc, [loan.id]: loan.offsetBalance || 0 }),
+          {} as { [loanId: string]: number },
+        )
+        : undefined;
 
     let currentState: FinancialState = {
       date: new Date(config.baseParameters.startDate),
@@ -763,28 +1037,53 @@ export const SimulationEngine = {
       const yearsSimulated = config.baseParameters.simulationYears;
       const finalAge = config.baseParameters.currentAge + yearsSimulated;
       warningMessages.push(
-        `⚠️ RETIREMENT NOT ACHIEVABLE: You want to retire at age ${config.baseParameters.retirementAge}, but your assets will not support ${formatCurrency(config.baseParameters.desiredAnnualRetirementIncome)}/year income at that age. ` +
-        `Even by age ${Math.floor(finalAge)}, you won't have enough saved. ` +
-        `To retire at ${config.baseParameters.retirementAge}, you need to: save more aggressively, reduce expenses, lower your retirement income target, or work longer.`
+        `⚠️ RETIREMENT NOT ACHIEVABLE: You want to retire at age ${config.baseParameters.retirementAge}, but your assets will not support ${
+          formatCurrency(config.baseParameters.desiredAnnualRetirementIncome)
+        }/year income at that age. ` +
+          `Even by age ${Math.floor(finalAge)}, you won't have enough saved. ` +
+          `To retire at ${config.baseParameters.retirementAge}, you need to: save more aggressively, reduce expenses, lower your retirement income target, or work longer.`,
       );
-    } else if (retirement.age && retirement.age > config.baseParameters.retirementAge + 1) {
+    } else if (
+      retirement.age && retirement.age > config.baseParameters.retirementAge + 1
+    ) {
       // Retirement is achievable but much later than desired
       warningMessages.push(
-        `⚠️ DELAYED RETIREMENT: You want to retire at age ${config.baseParameters.retirementAge}, but you won't have enough assets until age ${Math.floor(retirement.age)}. ` +
-        `That's ${Math.floor(retirement.age - config.baseParameters.retirementAge)} years later than planned. ` +
-        `To retire earlier, consider: increasing savings, reducing expenses, or lowering your retirement income target from ${formatCurrency(config.baseParameters.desiredAnnualRetirementIncome)}/year.`
+        `⚠️ DELAYED RETIREMENT: You want to retire at age ${config.baseParameters.retirementAge}, but you won't have enough assets until age ${
+          Math.floor(retirement.age)
+        }. ` +
+          `That's ${
+            Math.floor(retirement.age - config.baseParameters.retirementAge)
+          } years later than planned. ` +
+          `To retire earlier, consider: increasing savings, reducing expenses, or lowering your retirement income target from ${
+            formatCurrency(config.baseParameters.desiredAnnualRetirementIncome)
+          }/year.`,
       );
     }
 
     // Check sustainability
     const isSustainable = this.checkSustainability(states, warnings);
 
+    // Detect milestones from simulation results, including parameter transitions
+    const milestoneResult = detectMilestonesFromSimulation(
+      states,
+      currentParams,
+      transitionPoints,
+    );
+
+    // Add milestone detection warnings to simulation warnings
+    const allWarnings = [
+      ...warnings,
+      ...warningMessages,
+      ...milestoneResult.warnings,
+    ];
+
     return {
       states,
       retirementDate: retirement.date,
       retirementAge: retirement.age,
       isSustainable,
-      warnings: [...warnings, ...warningMessages],
+      warnings: allWarnings,
+      milestones: milestoneResult.milestones,
       transitionPoints,
       periods,
     };
@@ -792,11 +1091,11 @@ export const SimulationEngine = {
 
   /**
    * Runs comparison simulation (with vs without transitions)
-   * Validates: Requirements 10.1, 10.2, 10.3
+   * Validates: Requirements 10.1, 10.2, 10.3, 5.1, 5.2, 5.3, 5.4, 5.5
    */
-  runComparisonSimulation(
+  async runComparisonSimulation(
     config: SimulationConfiguration,
-  ): ComparisonSimulationResult {
+  ): Promise<ComparisonSimulationResult> {
     // Run simulation with transitions
     const withTransitions = this.runSimulationWithTransitions(config);
 
@@ -829,7 +1128,7 @@ export const SimulationEngine = {
     const sustainabilityChanged = withTransitions.isSustainable !==
       withoutTransitions.isSustainable;
 
-    return {
+    const baseComparison = {
       withTransitions,
       withoutTransitions,
       comparison: {
@@ -838,5 +1137,146 @@ export const SimulationEngine = {
         sustainabilityChanged,
       },
     };
+
+    // Enhance with milestone and advice comparison
+    const { ScenarioComparisonEngine } = await import(
+      "./scenario_comparison_engine.ts"
+    );
+    return ScenarioComparisonEngine.enhanceComparisonWithMilestonesAndAdvice(
+      baseComparison,
+      config,
+    );
+  },
+
+  /**
+   * Helper method to check if an income source is active at a given date
+   */
+  isIncomeSourceActive(incomeSource: IncomeSource, currentDate: Date): boolean {
+    // Check start date
+    if (incomeSource.startDate && currentDate < incomeSource.startDate) {
+      return false;
+    }
+
+    // Check end date
+    if (incomeSource.endDate && currentDate > incomeSource.endDate) {
+      return false;
+    }
+
+    // Check one-off income
+    if (incomeSource.isOneOff) {
+      if (!incomeSource.oneOffDate) {
+        return false;
+      }
+      // One-off income is only active on the specific date (within the same month)
+      const sameMonth =
+        currentDate.getFullYear() === incomeSource.oneOffDate.getFullYear() &&
+        currentDate.getMonth() === incomeSource.oneOffDate.getMonth();
+      return sameMonth;
+    }
+
+    return true;
+  },
+
+  /**
+   * Helper method to calculate income amount for a specific interval
+   */
+  calculateIncomeSourceAmount(
+    incomeSource: IncomeSource,
+    interval: TimeInterval,
+  ): number {
+    if (incomeSource.isOneOff) {
+      // One-off income is paid in full during the month it occurs
+      return incomeSource.amount;
+    }
+
+    return convertPaymentToInterval(
+      incomeSource.amount,
+      incomeSource.frequency,
+      interval,
+    );
+  },
+
+  /**
+   * Enhanced retirement withdrawal processing with flexible strategies
+   */
+  processRetirementWithdrawals(
+    shortfall: number,
+    currentInvestments: number,
+    currentSuperannuation: number,
+    params: UserParameters,
+    yearsElapsed: number,
+    currentState: FinancialState,
+  ): {
+    newInvestments: number;
+    newSuperannuation: number;
+    withdrawnAmount: number;
+  } {
+    let investments = currentInvestments;
+    let superannuation = currentSuperannuation;
+    let withdrawnAmount = 0;
+    let remainingShortfall = shortfall;
+
+    // Determine ages for withdrawal eligibility
+    const ages = this.calculateCurrentAges(params, yearsElapsed);
+    const oldestAge = Math.max(...ages);
+    const anyoneOverPreservationAge = ages.some((age) => age >= 60);
+    const anyoneOverPensionAge = ages.some((age) => age >= 67);
+
+    // Strategy 1: Use available cash first (already handled in caller)
+
+    // Strategy 2: Withdraw from investments (always accessible)
+    if (remainingShortfall > 0 && investments > 0) {
+      const investmentWithdrawal = Math.min(remainingShortfall, investments);
+      investments -= investmentWithdrawal;
+      withdrawnAmount += investmentWithdrawal;
+      remainingShortfall -= investmentWithdrawal;
+    }
+
+    // Strategy 3: Withdraw from superannuation if eligible
+    if (
+      remainingShortfall > 0 && superannuation > 0 && anyoneOverPreservationAge
+    ) {
+      // Can access super at preservation age (60)
+      const superWithdrawal = Math.min(remainingShortfall, superannuation);
+      superannuation -= superWithdrawal;
+      withdrawnAmount += superWithdrawal;
+      remainingShortfall -= superWithdrawal;
+    }
+
+    // Strategy 4: Emergency withdrawal from super if over pension age (more flexible access)
+    if (remainingShortfall > 0 && superannuation > 0 && anyoneOverPensionAge) {
+      // At pension age, can access remaining super more freely
+      const emergencyWithdrawal = Math.min(remainingShortfall, superannuation);
+      superannuation -= emergencyWithdrawal;
+      withdrawnAmount += emergencyWithdrawal;
+      remainingShortfall -= emergencyWithdrawal;
+    }
+
+    return {
+      newInvestments: investments,
+      newSuperannuation: superannuation,
+      withdrawnAmount,
+    };
+  },
+
+  /**
+   * Calculate current ages for all people in the household
+   */
+  calculateCurrentAges(params: UserParameters, yearsElapsed: number): number[] {
+    const ages: number[] = [];
+
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
+      for (const person of params.people) {
+        ages.push(person.currentAge + yearsElapsed);
+      }
+    } else {
+      // Single person or legacy mode
+      ages.push(params.currentAge + yearsElapsed);
+    }
+
+    return ages;
   },
 };

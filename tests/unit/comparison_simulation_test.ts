@@ -7,7 +7,7 @@ import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert
 import { SimulationEngine } from "../../lib/simulation_engine.ts";
 import type { SimulationConfiguration, UserParameters } from "../../types/financial.ts";
 
-Deno.test("runComparisonSimulation - returns comparison result with both scenarios", () => {
+Deno.test("runComparisonSimulation - returns comparison result with both scenarios", async () => {
   // Create base parameters
   const baseParams: UserParameters = {
     annualSalary: 80000,
@@ -51,7 +51,7 @@ Deno.test("runComparisonSimulation - returns comparison result with both scenari
   };
 
   // Run comparison simulation
-  const result = SimulationEngine.runComparisonSimulation(config);
+  const result = await SimulationEngine.runComparisonSimulation(config);
 
   // Verify structure
   assertExists(result.withTransitions);
@@ -70,7 +70,7 @@ Deno.test("runComparisonSimulation - returns comparison result with both scenari
   assertExists(result.comparison.sustainabilityChanged);
 });
 
-Deno.test("runComparisonSimulation - handles configuration with no transitions", () => {
+Deno.test("runComparisonSimulation - handles configuration with no transitions", async () => {
   const baseParams: UserParameters = {
     annualSalary: 80000,
     salaryFrequency: "monthly",
@@ -101,7 +101,7 @@ Deno.test("runComparisonSimulation - handles configuration with no transitions",
     transitions: [],
   };
 
-  const result = SimulationEngine.runComparisonSimulation(config);
+  const result = await SimulationEngine.runComparisonSimulation(config);
 
   // With no transitions, both scenarios should be identical
   assertEquals(result.withTransitions.transitionPoints.length, 0);
@@ -109,7 +109,7 @@ Deno.test("runComparisonSimulation - handles configuration with no transitions",
   assertEquals(result.comparison.sustainabilityChanged, false);
 });
 
-Deno.test("runComparisonSimulation - calculates net worth difference correctly", () => {
+Deno.test("runComparisonSimulation - calculates net worth difference correctly", async () => {
   const baseParams: UserParameters = {
     annualSalary: 80000,
     salaryFrequency: "monthly",
@@ -149,7 +149,7 @@ Deno.test("runComparisonSimulation - calculates net worth difference correctly",
     ],
   };
 
-  const result = SimulationEngine.runComparisonSimulation(config);
+  const result = await SimulationEngine.runComparisonSimulation(config);
 
   // Get final net worth from both scenarios
   const finalNetWorthWith = result.withTransitions.states[

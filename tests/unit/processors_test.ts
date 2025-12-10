@@ -338,6 +338,7 @@ Deno.test("RetirementCalculator.findRetirementDate - achievable retirement", () 
       netWorth: 1000000 + (i * 18000),
       cashFlow: 1000,
       taxPaid: 500,
+      expenses: 3000,
       interestSaved: 0,
     });
   }
@@ -373,6 +374,7 @@ Deno.test("RetirementCalculator.findRetirementDate - not achievable", () => {
       netWorth: 31000,
       cashFlow: 100,
       taxPaid: 500,
+      expenses: 3000,
       interestSaved: 0,
     });
   }

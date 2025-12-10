@@ -4,18 +4,24 @@
  */
 
 import { useState } from "preact/hooks";
-import type { SimulationResult, TimeInterval, TransitionPoint, EnhancedSimulationResult } from "../types/financial.ts";
+import type { SimulationResult, TimeInterval, TransitionPoint, EnhancedSimulationResult, UserParameters } from "../types/financial.ts";
+import type { Milestone, RetirementAdvice } from "../types/milestones.ts";
 import { formatCurrency, groupByTimeInterval, findLoanPayoffDate } from "../lib/result_utils.ts";
+import { detectMilestonesFromSimulation } from "../lib/milestone_detector.ts";
+import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
 import NetWorthChart from "../components/NetWorthChart.tsx";
 import CashFlowChart from "../components/CashFlowChart.tsx";
 import ChartErrorBoundary from "../components/ChartErrorBoundary.tsx";
 import TimelineSummary from "../components/TimelineSummary.tsx";
+import MilestoneTimeline from "../components/MilestoneTimeline.tsx";
+import RetirementAdvicePanel from "../components/RetirementAdvicePanel.tsx";
 import { SummaryTable, LoansTable, InvestmentsTable, TaxTable, CashFlowTable } from "../components/FinancialTimelineTables.tsx";
 
 interface VisualizationIslandProps {
   result: SimulationResult | EnhancedSimulationResult;
   transitionPoints?: TransitionPoint[];
   desiredRetirementAge?: number;
+  userParameters?: UserParameters;
 }
 
 /**
@@ -36,12 +42,17 @@ export default function VisualizationIsland({
   result,
   transitionPoints = [],
   desiredRetirementAge,
+  userParameters,
 }: VisualizationIslandProps) {
   // State for time granularity selection
   const [selectedGranularity, setSelectedGranularity] = useState<TimeInterval>("year");
   
   // State for which detailed table to show
   const [selectedDetailTable, setSelectedDetailTable] = useState<"summary" | "loans" | "tax" | "investments" | "cashflow">("summary");
+
+  // State for milestone and advice visibility
+  const [showMilestones, setShowMilestones] = useState<boolean>(true);
+  const [showAdvice, setShowAdvice] = useState<boolean>(true);
 
   // Check if result is an EnhancedSimulationResult
   const isEnhancedResult = (res: SimulationResult | EnhancedSimulationResult): res is EnhancedSimulationResult => {
@@ -141,6 +152,32 @@ export default function VisualizationIsland({
 
   // Find loan payoff date
   const loanPayoffDate = findLoanPayoffDate(result.states);
+
+  // Generate milestones and advice if user parameters are available
+  let milestones: Milestone[] = [];
+  let retirementAdvice: RetirementAdvice | null = null;
+
+  if (userParameters) {
+    try {
+      // Detect milestones from simulation results
+      const milestoneResult = detectMilestonesFromSimulation(
+        result.states,
+        userParameters,
+        effectiveTransitionPoints
+      );
+      milestones = milestoneResult.milestones;
+
+      // Generate retirement advice
+      const adviceResult = generateRetirementAdvice(
+        result,
+        userParameters,
+        milestones
+      );
+      retirementAdvice = adviceResult.advice;
+    } catch (error) {
+      console.warn('Failed to generate milestones or advice:', error);
+    }
+  }
 
   return (
     <div class="card p-6 fade-in">
@@ -279,7 +316,7 @@ export default function VisualizationIsland({
                 <p>
                   Based on your current financial trajectory, you can retire on{" "}
                   <span class="font-semibold">{result.retirementDate.toLocaleDateString()}</span> at age{" "}
-                  <span class="font-semibold">{Math.floor(result.retirementAge)}</span>. Your financial plan is sustainable.
+                  <span class="font-semibold">{Math.floor(result.retirementAge || 0)}</span>. Your financial plan is sustainable.
                 </p>
               </div>
             </div>
@@ -347,6 +384,69 @@ export default function VisualizationIsland({
           />
         </ChartErrorBoundary>
       </div>
+
+      {/* Milestone and Advice Toggle Controls - Requirements 1.1, 2.1, 3.1 */}
+      {userParameters && (milestones.length > 0 || retirementAdvice) && (
+        <div class="mb-6">
+          <div class="flex flex-wrap gap-4 items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">Financial Insights</h3>
+            <div class="flex gap-2">
+              {milestones.length > 0 && (
+                <button
+                  onClick={() => setShowMilestones(!showMilestones)}
+                  class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    showMilestones
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  {showMilestones ? 'Hide' : 'Show'} Milestones ({milestones.length})
+                </button>
+              )}
+              {retirementAdvice && (
+                <button
+                  onClick={() => setShowAdvice(!showAdvice)}
+                  class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    showAdvice
+                      ? "bg-green-600 text-white shadow-md"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                >
+                  {showAdvice ? 'Hide' : 'Show'} Advice ({retirementAdvice.recommendations.length})
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Milestone Timeline Section - Requirements 1.1, 3.1 */}
+          {showMilestones && milestones.length > 0 && (
+            <div class="mb-6">
+              <MilestoneTimeline
+                milestones={milestones}
+                simulationStates={result.states}
+                onMilestoneClick={(milestone) => {
+                  console.log('Milestone clicked:', milestone);
+                  // Could implement detailed milestone view here
+                }}
+              />
+            </div>
+          )}
+
+          {/* Retirement Advice Panel Section - Requirements 2.1 */}
+          {showAdvice && retirementAdvice && (
+            <div class="mb-6">
+              <RetirementAdvicePanel
+                advice={retirementAdvice}
+                currentScenario={result}
+                onImplementStrategy={(strategy) => {
+                  console.log('Strategy to implement:', strategy);
+                  // Could implement strategy implementation here
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Time Granularity Selector - Requirements 3.5 */}
       <div class="mb-6">
@@ -506,40 +606,45 @@ export default function VisualizationIsland({
           <SummaryTable 
             states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
-            retirementDate={result.retirementDate}
+            retirementDate={result.retirementDate || undefined}
             allStates={result.states}
+            milestones={milestones}
           />
         )}
         {selectedDetailTable === "loans" && (
           <LoansTable 
             states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
-            retirementDate={result.retirementDate}
+            retirementDate={result.retirementDate || undefined}
             allStates={result.states}
+            milestones={milestones}
           />
         )}
         {selectedDetailTable === "investments" && (
           <InvestmentsTable 
             states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
-            retirementDate={result.retirementDate}
+            retirementDate={result.retirementDate || undefined}
             allStates={result.states}
+            milestones={milestones}
           />
         )}
         {selectedDetailTable === "tax" && (
           <TaxTable 
             states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
-            retirementDate={result.retirementDate}
+            retirementDate={result.retirementDate || undefined}
             allStates={result.states}
+            milestones={milestones}
           />
         )}
         {selectedDetailTable === "cashflow" && (
           <CashFlowTable 
             states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
-            retirementDate={result.retirementDate}
+            retirementDate={result.retirementDate || undefined}
             allStates={result.states}
+            milestones={milestones}
           />
         )}
 

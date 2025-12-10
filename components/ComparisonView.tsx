@@ -6,6 +6,8 @@
 
 import type { ComparisonSimulationResult } from "../types/financial.ts";
 import { formatCurrency } from "../lib/result_utils.ts";
+import MilestoneComparisonView from "./MilestoneComparisonView.tsx";
+import AdviceComparisonView from "./AdviceComparisonView.tsx";
 
 interface ComparisonViewProps {
   comparison: ComparisonSimulationResult;
@@ -367,6 +369,26 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Milestone Comparison Section */}
+      {comparison.milestoneComparison && (
+        <div class="border-t pt-6 mt-6">
+          <h3 class="text-lg font-semibold mb-4 text-gray-800">
+            Milestone Comparison
+          </h3>
+          <MilestoneComparisonView comparison={comparison.milestoneComparison} />
+        </div>
+      )}
+
+      {/* Advice Comparison Section */}
+      {comparison.adviceComparison && (
+        <div class="border-t pt-6 mt-6">
+          <h3 class="text-lg font-semibold mb-4 text-gray-800">
+            Retirement Advice Comparison
+          </h3>
+          <AdviceComparisonView comparison={comparison.adviceComparison} />
         </div>
       )}
     </div>

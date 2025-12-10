@@ -317,6 +317,7 @@ export default function MainIsland() {
                   result={simulationResult}
                   transitionPoints={simulationResult.transitionPoints}
                   desiredRetirementAge={config?.baseParameters.retirementAge}
+                  userParameters={config?.baseParameters}
                 />
               </ErrorBoundary>
             )}

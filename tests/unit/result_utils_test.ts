@@ -27,6 +27,7 @@ Deno.test("groupByTimeInterval - returns single state for single input", () => {
     netWorth: -4000,
     cashFlow: 500,
     taxPaid: 0,
+    expenses: 3000,
     interestSaved: 0,
   }];
 
@@ -53,7 +54,7 @@ Deno.test("groupByTimeInterval - filters to weekly intervals", () => {
       netWorth: -4000,
       cashFlow: 500,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     });
   }
 
@@ -87,7 +88,7 @@ Deno.test("groupByTimeInterval - filters to monthly intervals", () => {
       netWorth: -4000,
       cashFlow: 500,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     });
   }
 
@@ -138,6 +139,7 @@ Deno.test("isFinancialStateComplete - returns true for complete state", () => {
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
+      expenses: 3000,
       interestSaved: 0,
   };
 
@@ -155,7 +157,7 @@ Deno.test("isFinancialStateComplete - returns false for invalid date", () => {
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), false);
@@ -172,7 +174,7 @@ Deno.test("isFinancialStateComplete - returns false for NaN values", () => {
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), false);
@@ -189,7 +191,7 @@ Deno.test("isFinancialStateComplete - returns false for Infinity values", () => 
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), false);
@@ -216,7 +218,7 @@ Deno.test("checkSustainability - detects increasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -228,7 +230,7 @@ Deno.test("checkSustainability - detects increasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -249,7 +251,7 @@ Deno.test("checkSustainability - detects consecutive negative cash flow", () => 
       netWorth: -4000,
       cashFlow: -100,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -261,7 +263,7 @@ Deno.test("checkSustainability - detects consecutive negative cash flow", () => 
       netWorth: -4100,
       cashFlow: -100,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -273,7 +275,7 @@ Deno.test("checkSustainability - detects consecutive negative cash flow", () => 
       netWorth: -4200,
       cashFlow: -100,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -295,7 +297,7 @@ Deno.test("checkSustainability - detects net worth growth", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -307,7 +309,7 @@ Deno.test("checkSustainability - detects net worth growth", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -328,7 +330,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -340,7 +342,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -352,7 +354,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       cashFlow: 200,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0, // Positive cash flow breaks the streak
+      expenses: 3000, interestSaved: 0, // Positive cash flow breaks the streak
     },
     {
       date: new Date("2024-04-01"),
@@ -364,7 +366,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -398,7 +400,7 @@ Deno.test("detectIncreasingDebt - returns false for single state", () => {
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
   }];
 
   assertEquals(detectIncreasingDebt(states), false);
@@ -416,7 +418,7 @@ Deno.test("detectIncreasingDebt - detects increasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -428,7 +430,7 @@ Deno.test("detectIncreasingDebt - detects increasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -447,7 +449,7 @@ Deno.test("detectIncreasingDebt - returns false for decreasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -459,7 +461,7 @@ Deno.test("detectIncreasingDebt - returns false for decreasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -484,7 +486,7 @@ Deno.test("detectNegativeCashFlow - detects 3+ consecutive negative periods", ()
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -496,7 +498,7 @@ Deno.test("detectNegativeCashFlow - detects 3+ consecutive negative periods", ()
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -508,7 +510,7 @@ Deno.test("detectNegativeCashFlow - detects 3+ consecutive negative periods", ()
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -529,7 +531,7 @@ Deno.test("detectNegativeCashFlow - returns false for less than 3 consecutive", 
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -541,7 +543,7 @@ Deno.test("detectNegativeCashFlow - returns false for less than 3 consecutive", 
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -553,7 +555,7 @@ Deno.test("detectNegativeCashFlow - returns false for less than 3 consecutive", 
       cashFlow: 200,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -574,7 +576,7 @@ Deno.test("detectNegativeCashFlow - respects custom threshold", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -586,7 +588,7 @@ Deno.test("detectNegativeCashFlow - respects custom threshold", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -610,7 +612,7 @@ Deno.test("detectNetWorthGrowth - returns false for single state", () => {
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
   }];
 
   assertEquals(detectNetWorthGrowth(states), false);
@@ -628,7 +630,7 @@ Deno.test("detectNetWorthGrowth - detects positive growth", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -640,7 +642,7 @@ Deno.test("detectNetWorthGrowth - detects positive growth", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -659,7 +661,7 @@ Deno.test("detectNetWorthGrowth - returns false for declining net worth", () => 
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -671,7 +673,7 @@ Deno.test("detectNetWorthGrowth - returns false for declining net worth", () => 
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -694,7 +696,7 @@ Deno.test("generateWarnings - returns empty array for single state", () => {
     cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
   }];
 
   const warnings = generateWarnings(states);
@@ -713,7 +715,7 @@ Deno.test("generateWarnings - generates warning for increasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -725,7 +727,7 @@ Deno.test("generateWarnings - generates warning for increasing debt", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -749,7 +751,7 @@ Deno.test("generateWarnings - generates alert for negative cash flow", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -761,7 +763,7 @@ Deno.test("generateWarnings - generates alert for negative cash flow", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -773,7 +775,7 @@ Deno.test("generateWarnings - generates alert for negative cash flow", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -797,7 +799,7 @@ Deno.test("generateWarnings - generates warning for net worth decline", () => {
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -809,7 +811,7 @@ Deno.test("generateWarnings - generates warning for net worth decline", () => {
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -834,7 +836,7 @@ Deno.test("generateWarnings - generates alert for severely depleted cash", () =>
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -846,7 +848,7 @@ Deno.test("generateWarnings - generates alert for severely depleted cash", () =>
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -871,7 +873,7 @@ Deno.test("generateWarnings - generates multiple warnings for multiple issues", 
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -883,7 +885,7 @@ Deno.test("generateWarnings - generates multiple warnings for multiple issues", 
       cashFlow: -100,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -895,7 +897,7 @@ Deno.test("generateWarnings - generates multiple warnings for multiple issues", 
       netWorth: -14000,
       cashFlow: -100, // 3 consecutive negative
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
   ];
 
@@ -926,7 +928,7 @@ Deno.test("generateWarnings - no warnings for healthy financial trajectory", () 
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0,
+      expenses: 3000, interestSaved: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -938,7 +940,7 @@ Deno.test("generateWarnings - no warnings for healthy financial trajectory", () 
       cashFlow: 500,
       offsetBalance: 0,
       taxPaid: 0,
-      interestSaved: 0, // Positive cash flow
+      expenses: 3000, interestSaved: 0, // Positive cash flow
     },
   ];
 

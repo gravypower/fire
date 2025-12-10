@@ -250,6 +250,8 @@ export interface SimulationResult {
   isSustainable: boolean;
   /** Array of warning messages about the simulation */
   warnings: string[];
+  /** Detected financial milestones during simulation */
+  milestones?: import("./milestones.ts").Milestone[];
 }
 
 /**
@@ -364,6 +366,107 @@ export interface ComparisonSimulationResult {
     /** Whether sustainability changed between scenarios */
     sustainabilityChanged: boolean;
   };
+
+  /** Milestone comparison analysis */
+  milestoneComparison?: MilestoneComparison;
+
+  /** Advice comparison analysis */
+  adviceComparison?: AdviceComparison;
+}
+
+/**
+ * Comparison of milestones between scenarios
+ */
+export interface MilestoneComparison {
+  /** Milestones that appear in both scenarios */
+  commonMilestones: MilestoneTimingComparison[];
+  /** Milestones only in the with-transitions scenario */
+  uniqueToWithTransitions: import("./milestones.ts").Milestone[];
+  /** Milestones only in the without-transitions scenario */
+  uniqueToWithoutTransitions: import("./milestones.ts").Milestone[];
+  /** Summary of timing differences */
+  timingDifferences: MilestoneTimingDifference[];
+}
+
+/**
+ * Comparison of milestone timing between scenarios
+ */
+export interface MilestoneTimingComparison {
+  /** Milestone type being compared */
+  milestoneType: import("./milestones.ts").MilestoneType;
+  /** Milestone from with-transitions scenario */
+  withTransitions: import("./milestones.ts").Milestone;
+  /** Milestone from without-transitions scenario */
+  withoutTransitions: import("./milestones.ts").Milestone;
+  /** Difference in timing (days) - positive means earlier with transitions */
+  timingDifferenceInDays: number;
+  /** Difference in financial impact */
+  impactDifference?: number;
+}
+
+/**
+ * Summary of milestone timing differences
+ */
+export interface MilestoneTimingDifference {
+  /** Type of milestone */
+  milestoneType: import("./milestones.ts").MilestoneType;
+  /** Average timing difference in days */
+  averageTimingDifference: number;
+  /** Number of milestones of this type compared */
+  count: number;
+  /** Whether transitions generally accelerate or delay this milestone type */
+  effect: 'accelerates' | 'delays' | 'mixed' | 'no_change';
+}
+
+/**
+ * Comparison of retirement advice between scenarios
+ */
+export interface AdviceComparison {
+  /** Advice for with-transitions scenario */
+  withTransitionsAdvice: import("./milestones.ts").RetirementAdvice;
+  /** Advice for without-transitions scenario */
+  withoutTransitionsAdvice: import("./milestones.ts").RetirementAdvice;
+  /** Analysis of how advice differs between scenarios */
+  adviceDifferences: AdviceDifference[];
+  /** Explanation of why advice varies */
+  variationExplanation: string[];
+}
+
+/**
+ * Difference in advice between scenarios
+ */
+export interface AdviceDifference {
+  /** Category of advice that differs */
+  category: import("./milestones.ts").AdviceCategory;
+  /** Advice items unique to with-transitions scenario */
+  uniqueToWithTransitions: import("./milestones.ts").AdviceItem[];
+  /** Advice items unique to without-transitions scenario */
+  uniqueToWithoutTransitions: import("./milestones.ts").AdviceItem[];
+  /** Advice items that changed priority or impact */
+  changedAdvice: AdviceChangeComparison[];
+}
+
+/**
+ * Comparison of how advice changed between scenarios
+ */
+export interface AdviceChangeComparison {
+  /** Advice item from with-transitions scenario */
+  withTransitions: import("./milestones.ts").AdviceItem;
+  /** Advice item from without-transitions scenario */
+  withoutTransitions: import("./milestones.ts").AdviceItem;
+  /** What changed between scenarios */
+  changes: {
+    /** Priority changed */
+    priorityChanged?: boolean;
+    /** Effectiveness score changed */
+    effectivenessChanged?: boolean;
+    /** Feasibility score changed */
+    feasibilityChanged?: boolean;
+    /** Projected impact changed */
+    impactChanged?: boolean;
+  };
+  /** Explanation of why the advice changed */
+  changeExplanation: string;
 }
 
 /**

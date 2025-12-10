@@ -3,6 +3,7 @@
  */
 
 import type { FinancialState, TransitionPoint } from "../types/financial.ts";
+import type { Milestone } from "../types/milestones.ts";
 import { formatCurrency } from "../lib/result_utils.ts";
 
 interface TableProps {
@@ -16,6 +17,7 @@ interface TableProps {
   transitionPoints: TransitionPoint[];
   retirementDate?: Date;
   allStates: FinancialState[];
+  milestones?: Milestone[];
 }
 
 function getEventInfo(
@@ -24,7 +26,8 @@ function getEventInfo(
   states: FinancialState[],
   transitionPoints: TransitionPoint[],
   retirementDate: Date | undefined,
-  allStates: FinancialState[]
+  allStates: FinancialState[],
+  milestones: Milestone[] = []
 ) {
   const originalIndex = allStates.findIndex(s => s.date.getTime() === state.date.getTime());
   
@@ -37,17 +40,59 @@ function getEventInfo(
   
   const isPreviousLoanBalance = index > 0 && states[index - 1].loanBalance > 0;
   const isLoanPayoff = isPreviousLoanBalance && state.loanBalance === 0;
+
+  // Check for milestones at this date
+  const milestonesAtThisDate = milestones.filter(milestone => 
+    milestone.date.toDateString() === state.date.toDateString()
+  );
   
-  const hasEvent = isRetirementDate || transitionAtThisState || isLoanPayoff;
+  const hasEvent = isRetirementDate || transitionAtThisState || isLoanPayoff || milestonesAtThisDate.length > 0;
   let rowClass = "";
   if (isRetirementDate) rowClass = "bg-green-50 border-l-4 border-green-500";
   else if (isLoanPayoff) rowClass = "bg-blue-50 border-l-4 border-blue-500";
   else if (transitionAtThisState) rowClass = "bg-purple-50 border-l-4 border-purple-500";
+  else if (milestonesAtThisDate.length > 0) {
+    // Use different colors based on milestone category
+    const primaryMilestone = milestonesAtThisDate[0];
+    switch (primaryMilestone.category) {
+      case 'debt':
+        rowClass = "bg-green-50 border-l-4 border-green-400";
+        break;
+      case 'retirement':
+        rowClass = "bg-purple-50 border-l-4 border-purple-400";
+        break;
+      case 'transition':
+        rowClass = "bg-yellow-50 border-l-4 border-yellow-400";
+        break;
+      default:
+        rowClass = "bg-gray-50 border-l-4 border-gray-400";
+    }
+  }
   
-  return { isRetirementDate, isLoanPayoff, transitionAtThisState, hasEvent, rowClass };
+  return { isRetirementDate, isLoanPayoff, transitionAtThisState, milestonesAtThisDate, hasEvent, rowClass };
 }
 
 function DateCell({ state, eventInfo }: { state: FinancialState; eventInfo: ReturnType<typeof getEventInfo> }) {
+  const getMilestoneIcon = (type: string) => {
+    switch (type) {
+      case 'loan_payoff': return '💳';
+      case 'offset_completion': return '🏦';
+      case 'retirement_eligibility': return '🏖️';
+      case 'parameter_transition': return '📊';
+      default: return '📅';
+    }
+  };
+
+  const getMilestoneColors = (category: string) => {
+    switch (category) {
+      case 'debt': return { bg: 'bg-green-100', text: 'text-green-700' };
+      case 'investment': return { bg: 'bg-blue-100', text: 'text-blue-700' };
+      case 'retirement': return { bg: 'bg-purple-100', text: 'text-purple-700' };
+      case 'transition': return { bg: 'bg-yellow-100', text: 'text-yellow-700' };
+      default: return { bg: 'bg-gray-100', text: 'text-gray-700' };
+    }
+  };
+
   return (
     <td class="text-gray-900 font-medium">
       <div class={eventInfo.hasEvent ? "font-bold" : ""}>{state.date.toLocaleDateString()}</div>
@@ -73,11 +118,20 @@ function DateCell({ state, eventInfo }: { state: FinancialState; eventInfo: Retu
           {eventInfo.transitionAtThisState.transition.label || "Transition"}
         </div>
       )}
+      {eventInfo.milestonesAtThisDate && eventInfo.milestonesAtThisDate.map((milestone) => {
+        const colors = getMilestoneColors(milestone.category);
+        return (
+          <div key={milestone.id} class={`text-xs font-bold mt-1 flex items-center px-2 py-1 rounded ${colors.bg} ${colors.text}`}>
+            <span class="mr-1">{getMilestoneIcon(milestone.type)}</span>
+            {milestone.title}
+          </div>
+        );
+      })}
     </td>
   );
 }
 
-export function SummaryTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
+export function SummaryTable({ states, transitionPoints, retirementDate, allStates, milestones = [] }: TableProps) {
   const finalState = states[states.length - 1];
   const finalCashAvailable = (finalState?.cash || 0) + (finalState?.offsetBalance || 0);
   
@@ -120,7 +174,7 @@ export function SummaryTable({ states, transitionPoints, retirementDate, allStat
         </thead>
         <tbody>
           {states.map((state, index) => {
-            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
+            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates, milestones);
             const totalAssets = state.investments + state.superannuation;
             const cashAvailable = state.cash + state.offsetBalance;
             
@@ -151,7 +205,7 @@ export function SummaryTable({ states, transitionPoints, retirementDate, allStat
   );
 }
 
-export function LoansTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
+export function LoansTable({ states, transitionPoints, retirementDate, allStates, milestones = [] }: TableProps) {
   const finalState = states[states.length - 1];
   const filteredInterestSaved = states.reduce((sum, state) => sum + (state.periodInterestSaved || 0), 0);
   
@@ -194,7 +248,7 @@ export function LoansTable({ states, transitionPoints, retirementDate, allStates
         </thead>
         <tbody>
           {states.map((state, index) => {
-            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
+            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates, milestones);
             const effectiveDebt = state.loanBalance - state.offsetBalance;
             
             return (
@@ -221,7 +275,7 @@ export function LoansTable({ states, transitionPoints, retirementDate, allStates
   );
 }
 
-export function InvestmentsTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
+export function InvestmentsTable({ states, transitionPoints, retirementDate, allStates, milestones = [] }: TableProps) {
   const finalState = states[states.length - 1];
   const finalCashAvailable = (finalState?.cash || 0) + (finalState?.offsetBalance || 0);
   
@@ -264,7 +318,7 @@ export function InvestmentsTable({ states, transitionPoints, retirementDate, all
         </thead>
         <tbody>
           {states.map((state, index) => {
-            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
+            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates, milestones);
             const totalAssets = state.investments + state.superannuation;
             const cashAvailable = state.cash + state.offsetBalance;
             
@@ -295,7 +349,7 @@ export function InvestmentsTable({ states, transitionPoints, retirementDate, all
   );
 }
 
-export function TaxTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
+export function TaxTable({ states, transitionPoints, retirementDate, allStates, milestones = [] }: TableProps) {
   const finalState = states[states.length - 1];
   const filteredTaxPaid = states.reduce((sum, state) => sum + (state.periodTaxPaid || 0), 0);
   const filteredDeductibleInterest = states.reduce((sum, state) => sum + (state.periodDeductibleInterest || 0), 0);
@@ -333,7 +387,7 @@ export function TaxTable({ states, transitionPoints, retirementDate, allStates }
         </thead>
         <tbody>
           {states.map((state, index) => {
-            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
+            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates, milestones);
             // Rough estimate: tax benefit is deductible interest * marginal tax rate (assume ~30%)
             const estimatedTaxBenefit = (state.periodDeductibleInterest || 0) * 0.3;
             
@@ -358,7 +412,7 @@ export function TaxTable({ states, transitionPoints, retirementDate, allStates }
   );
 }
 
-export function CashFlowTable({ states, transitionPoints, retirementDate, allStates }: TableProps) {
+export function CashFlowTable({ states, transitionPoints, retirementDate, allStates, milestones = [] }: TableProps) {
   const finalState = states[states.length - 1];
   const filteredExpenses = states.reduce((sum, state) => sum + (state.periodExpenses || 0), 0);
   const filteredCashFlow = states.reduce((sum, state) => sum + (state.periodCashFlow || 0), 0);
@@ -403,13 +457,13 @@ export function CashFlowTable({ states, transitionPoints, retirementDate, allSta
         </thead>
         <tbody>
           {states.map((state, index) => {
-            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates);
+            const eventInfo = getEventInfo(state, index, states, transitionPoints, retirementDate, allStates, milestones);
             const cashAvailable = state.cash + state.offsetBalance;
             
             return (
               <tr key={index} class={eventInfo.rowClass}>
                 <DateCell state={state} eventInfo={eventInfo} />
-                <td class={`text-right font-medium ${state.periodCashFlow < 0 ? "text-red-600" : "text-green-600"}`}>
+                <td class={`text-right font-medium ${(state.periodCashFlow || 0) < 0 ? "text-red-600" : "text-green-600"}`}>
                   {formatCurrency(state.periodCashFlow || 0)}
                 </td>
                 <td class="text-orange-700 text-right">

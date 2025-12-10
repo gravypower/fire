@@ -3,7 +3,7 @@
  * Tests all calculation logic including parameter transitions
  */
 
-import { assertEquals, assertExists } from "$std/assert/mod.ts";
+import { assertEquals, assertExists, assert } from "$std/assert/mod.ts";
 import { SimulationEngine, convertAnnualRateToInterval } from "../../lib/simulation_engine.ts";
 import type { UserParameters, SimulationConfiguration } from "../../types/financial.ts";
 
@@ -123,6 +123,7 @@ Deno.test("SimulationEngine.calculateTimeStep - income calculation", () => {
     netWorth: 0,
     cashFlow: 0,
     taxPaid: 0,
+    expenses: 0,
     interestSaved: 0,
   };
   
@@ -153,6 +154,7 @@ Deno.test("SimulationEngine.calculateTimeStep - expense deduction", () => {
     netWorth: 0,
     cashFlow: 0,
     taxPaid: 0,
+    expenses: 0,
     interestSaved: 0,
   };
   
@@ -182,6 +184,7 @@ Deno.test("SimulationEngine.calculateTimeStep - loan payment with interest", () 
     netWorth: 0,
     cashFlow: 0,
     taxPaid: 0,
+    expenses: 0,
     interestSaved: 0,
   };
   
@@ -213,6 +216,7 @@ Deno.test("SimulationEngine.calculateTimeStep - offset account reduces interest"
     netWorth: 0,
     cashFlow: 0,
     taxPaid: 0,
+    expenses: 0,
     interestSaved: 0,
   };
   
@@ -240,6 +244,7 @@ Deno.test("SimulationEngine.calculateTimeStep - investment contributions and gro
     netWorth: 0,
     cashFlow: 0,
     taxPaid: 0,
+    expenses: 0,
     interestSaved: 0,
   };
   
@@ -266,16 +271,18 @@ Deno.test("SimulationEngine.calculateTimeStep - negative cash flow handling", ()
     netWorth: 0,
     cashFlow: 0,
     taxPaid: 0,
+    expenses: 0,
     interestSaved: 0,
   };
   
   const newState = SimulationEngine.calculateTimeStep(initialState, params, "month");
   
-  // Cash flow should be negative
-  assertEquals(newState.cashFlow < 0, true);
+  // Cash flow should be negative (expenses exceed net income after loan payments)
+  assert(newState.cashFlow < 0, `Expected negative cash flow, got ${newState.cashFlow}`);
   
-  // Cash can go negative
-  assertEquals(newState.cash <= initialState.cash, true);
+  // With these parameters (low income, high expenses), cash should go negative
+  // This represents an unsustainable financial situation
+  assert(newState.cash < 0, "Cash should go negative when expenses exceed income");
 });
 
 Deno.test("SimulationEngine.runSimulationWithTransitions - applies transitions", () => {
@@ -367,7 +374,7 @@ Deno.test("SimulationEngine.runSimulationWithTransitions - multiple transitions"
   assertEquals(result.transitionPoints[1].transition.id, "transition-2");
 });
 
-Deno.test("SimulationEngine.runComparisonSimulation - compares scenarios", () => {
+Deno.test("SimulationEngine.runComparisonSimulation - compares scenarios", async () => {
   const baseParams = getTestParameters();
   baseParams.simulationYears = 3;
   
@@ -385,7 +392,7 @@ Deno.test("SimulationEngine.runComparisonSimulation - compares scenarios", () =>
     ],
   };
   
-  const result = SimulationEngine.runComparisonSimulation(config);
+  const result = await SimulationEngine.runComparisonSimulation(config);
   
   assertExists(result.withTransitions);
   assertExists(result.withoutTransitions);

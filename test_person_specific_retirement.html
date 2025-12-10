@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Person-Specific Retirement Milestones Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-scenario { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .expected { background: #e8f5e9; padding: 10px; margin: 5px 0; border-radius: 3px; }
+        .feature { background: #e3f2fd; padding: 10px; margin: 5px 0; border-radius: 3px; }
+        .milestone { background: #fff3e0; padding: 8px; margin: 3px 0; border-radius: 3px; border-left: 4px solid #ff9800; }
+    </style>
+</head>
+<body>
+    <h1>🎯 Person-Specific Retirement Milestones Test</h1>
+    <p>Open the main application at <a href="http://localhost:8000" target="_blank">http://localhost:8000</a></p>
+    
+    <h2>🆕 New Features to Test:</h2>
+    
+    <div class="feature">
+        <h3>✅ Individual Retirement Milestones</h3>
+        <ul>
+            <li><strong>Person 1 Retires</strong>: Shows when first person reaches retirement age</li>
+            <li><strong>Person 2 Retires</strong>: Shows when second person reaches retirement age</li>
+            <li><strong>Household Fully Retired</strong>: Shows when everyone is retired</li>
+            <li><strong>Income Impact</strong>: Shows how much income stops when each person retires</li>
+        </ul>
+    </div>
+    
+    <div class="feature">
+        <h3>✅ Enhanced Parameter Transitions</h3>
+        <ul>
+            <li><strong>Person-Specific Income Changes</strong>: Better descriptions for income source changes</li>
+            <li><strong>Household Changes</strong>: Clear descriptions when people are added/modified</li>
+            <li><strong>Retirement Planning Changes</strong>: Specific descriptions for retirement parameter changes</li>
+            <li><strong>Smart Categorization</strong>: Transitions automatically categorized by type</li>
+        </ul>
+    </div>
+
+    <h2>🧪 Test Scenarios:</h2>
+    
+    <div class="test-scenario">
+        <h3>Scenario 1: Couple with Different Retirement Ages</h3>
+        <p><strong>Setup (if household mode is available):</strong></p>
+        <ul>
+            <li>Switch to "Couple" household mode</li>
+            <li>Person 1 (e.g., "Alex"): Age 60, retires at 65, income $80,000/year</li>
+            <li>Person 2 (e.g., "Sam"): Age 58, retires at 67, income $70,000/year</li>
+            <li>Combined investments: $500,000</li>
+            <li>Combined super: $400,000</li>
+            <li>Desired retirement income: $80,000/year</li>
+            <li>Simulation years: 15</li>
+        </ul>
+        
+        <div class="expected">
+            <strong>Expected Milestones on Timeline:</strong>
+            <div class="milestone">📅 Year 5: "Alex Retires" - Stops earning $80,000/year, Sam continues working</div>
+            <div class="milestone">📅 Year 7: "Sam Retires" - Stops earning $70,000/year</div>
+            <div class="milestone">📅 Year 7: "Household Fully Retired" - Full retirement income needed</div>
+        </div>
+    </div>
+
+    <div class="test-scenario">
+        <h3>Scenario 2: Parameter Transition with Income Changes</h3>
+        <p><strong>Setup:</strong></p>
+        <ul>
+            <li>Start with single person or couple</li>
+            <li>Create a parameter transition in 3 years</li>
+            <li>Change: Increase salary from $60,000 to $90,000</li>
+            <li>Label: "Promotion and Raise"</li>
+        </ul>
+        
+        <div class="expected">
+            <strong>Expected Milestone:</strong>
+            <div class="milestone">📊 Year 3: "Income Changes" - Annual salary changed to $90,000. Promotion and Raise</div>
+        </div>
+    </div>
+
+    <div class="test-scenario">
+        <h3>Scenario 3: Retirement Planning Changes</h3>
+        <p><strong>Setup:</strong></p>
+        <ul>
+            <li>Start with retirement age 65</li>
+            <li>Create transition to change retirement age to 60</li>
+            <li>Also change desired retirement income from $50,000 to $60,000</li>
+            <li>Label: "Early Retirement Plan"</li>
+        </ul>
+        
+        <div class="expected">
+            <strong>Expected Milestone:</strong>
+            <div class="milestone">🏖️ "Retirement Planning Changes" - Retirement age changed to 60. Early Retirement Plan</div>
+        </div>
+    </div>
+
+    <h2>🔍 What to Look For:</h2>
+    
+    <h3>Timeline Tab:</h3>
+    <ul>
+        <li>✅ Individual retirement milestones for each person</li>
+        <li>✅ Household retirement milestone when everyone is retired</li>
+        <li>✅ Person names in milestone titles</li>
+        <li>✅ Income amounts shown when people retire</li>
+        <li>✅ Enhanced parameter transition descriptions</li>
+    </ul>
+
+    <h3>Tables:</h3>
+    <ul>
+        <li>✅ Multiple retirement events highlighted on different dates</li>
+        <li>✅ Different colored indicators for different milestone types</li>
+        <li>✅ Person-specific retirement icons and labels</li>
+    </ul>
+
+    <h3>Charts:</h3>
+    <ul>
+        <li>✅ Multiple retirement markers on net worth chart</li>
+        <li>✅ Gradual income decline as people retire individually</li>
+        <li>✅ Steeper drawdown after everyone is retired</li>
+    </ul>
+
+    <h2>📋 Milestone Types to Expect:</h2>
+    
+    <div class="milestone">👤 <strong>Individual Retirement</strong>: "[Person Name] Retires"</div>
+    <div class="milestone">🏠 <strong>Household Retirement</strong>: "Household Fully Retired"</div>
+    <div class="milestone">💰 <strong>Income Changes</strong>: "Income Changes" or "Annual salary changed to..."</div>
+    <div class="milestone">🏖️ <strong>Retirement Planning</strong>: "Retirement Planning Changes"</div>
+    <div class="milestone">👥 <strong>Household Changes</strong>: "Household Changes" or "Household members updated"</div>
+    <div class="milestone">🏦 <strong>Loan Changes</strong>: "Loan Changes"</div>
+    <div class="milestone">📈 <strong>Investment Changes</strong>: "Investment Strategy Changes"</div>
+
+    <h2>🎯 Success Criteria:</h2>
+    <ul>
+        <li>✅ Each person's retirement shows as separate milestone</li>
+        <li>✅ Milestone descriptions include person names and income amounts</li>
+        <li>✅ Household retirement milestone appears after last person retires</li>
+        <li>✅ Parameter transitions have meaningful, categorized descriptions</li>
+        <li>✅ Timeline shows proper sequence of retirement events</li>
+        <li>✅ Net worth chart shows gradual then steeper decline pattern</li>
+    </ul>
+
+    <h2>🔧 Technical Implementation:</h2>
+    <ul>
+        <li><strong>Enhanced Milestone Detection</strong>: Individual person retirement detection</li>
+        <li><strong>Household Retirement Logic</strong>: Detects when all members are retired</li>
+        <li><strong>Person-Specific Descriptions</strong>: Income amounts and impact descriptions</li>
+        <li><strong>Smart Parameter Categorization</strong>: Automatic categorization of transition types</li>
+        <li><strong>Backward Compatibility</strong>: Single person mode still works as before</li>
+    </ul>
+
+    <p><strong>Status:</strong> ✅ Ready for Testing</p>
+    <p><strong>Compatibility:</strong> ✅ Works with both single and couple household modes</p>
+</body>
+</html>
