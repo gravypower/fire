@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Transition UI Person Selection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .parameter-group {
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .person-specific {
+            border-left: 4px solid #3b82f6;
+            background-color: #eff6ff;
+        }
+        .household {
+            border-left: 4px solid #10b981;
+            background-color: #f0fdf4;
+        }
+        .parameter-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+        }
+        .person-selection {
+            background-color: #fef3c7;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        .validation-error {
+            background-color: #fee2e2;
+            color: #dc2626;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background-color: #d1fae5;
+            color: #065f46;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        select, input {
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test: Transition UI Person Selection</h1>
+    
+    <div class="test-section">
+        <h2>Household Configuration</h2>
+        <div>
+            <label>
+                <input type="radio" name="householdMode" value="single" onchange="updateHouseholdMode()"> Single
+            </label>
+            <label>
+                <input type="radio" name="householdMode" value="couple" checked onchange="updateHouseholdMode()"> Couple
+            </label>
+        </div>
+        
+        <div id="peopleSection" style="margin-top: 15px;">
+            <h3>People in Household</h3>
+            <div>
+                <strong>Alice</strong> (age 30, retires at 65) - Salary: $80,000, Super: 11%
+            </div>
+            <div>
+                <strong>Bob</strong> (age 32, retires at 67) - Salary: $90,000, Super: 11%
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Parameter Selection</h2>
+        <p>Select parameters to change and observe person selection requirements:</p>
+        
+        <!-- Person-Specific Parameters -->
+        <div class="parameter-group person-specific">
+            <h3>👤 Person-Specific Parameters</h3>
+            <p><small>These parameters require person selection in couple mode</small></p>
+            
+            <div class="parameter-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="annualSalary" onchange="toggleParameter('annualSalary', true)">
+                    <label for="annualSalary"><strong>Annual Salary</strong></label>
+                    <span style="color: #3b82f6;">👤</span>
+                </div>
+                <div id="annualSalary-controls" style="display: none;">
+                    <div class="person-selection">
+                        <label>Select Person: 
+                            <select id="annualSalary-person" onchange="updatePersonSelection('annualSalary')">
+                                <option value="">Select a person...</option>
+                                <option value="person-1">Alice</option>
+                                <option value="person-2">Bob</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label>New Value: 
+                        <input type="number" id="annualSalary-value" placeholder="Enter salary" min="0" step="1000">
+                    </label>
+                    <div id="annualSalary-context"></div>
+                </div>
+            </div>
+
+            <div class="parameter-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="superContributionRate" onchange="toggleParameter('superContributionRate', true)">
+                    <label for="superContributionRate"><strong>Super Contribution Rate</strong></label>
+                    <span style="color: #3b82f6;">👤</span>
+                </div>
+                <div id="superContributionRate-controls" style="display: none;">
+                    <div class="person-selection">
+                        <label>Select Person: 
+                            <select id="superContributionRate-person" onchange="updatePersonSelection('superContributionRate')">
+                                <option value="">Select a person...</option>
+                                <option value="person-1">Alice</option>
+                                <option value="person-2">Bob</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label>New Value (%): 
+                        <input type="number" id="superContributionRate-value" placeholder="Enter rate" min="0" max="100" step="0.5">
+                    </label>
+                    <div id="superContributionRate-context"></div>
+                </div>
+            </div>
+
+            <div class="parameter-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="retirementAge" onchange="toggleParameter('retirementAge', true)">
+                    <label for="retirementAge"><strong>Retirement Age</strong></label>
+                    <span style="color: #3b82f6;">👤</span>
+                </div>
+                <div id="retirementAge-controls" style="display: none;">
+                    <div class="person-selection">
+                        <label>Select Person: 
+                            <select id="retirementAge-person" onchange="updatePersonSelection('retirementAge')">
+                                <option value="">Select a person...</option>
+                                <option value="person-1">Alice</option>
+                                <option value="person-2">Bob</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label>New Age: 
+                        <input type="number" id="retirementAge-value" placeholder="Enter age" min="50" max="80">
+                    </label>
+                    <div id="retirementAge-context"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Household Parameters -->
+        <div class="parameter-group household">
+            <h3>🏠 Household Parameters</h3>
+            <p><small>These parameters apply to the entire household</small></p>
+            
+            <div class="parameter-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="monthlyLivingExpenses" onchange="toggleParameter('monthlyLivingExpenses', false)">
+                    <label for="monthlyLivingExpenses"><strong>Monthly Living Expenses</strong></label>
+                </div>
+                <div id="monthlyLivingExpenses-controls" style="display: none;">
+                    <label>New Value: 
+                        <input type="number" id="monthlyLivingExpenses-value" placeholder="Enter amount" min="0" step="100">
+                    </label>
+                    <div style="color: #10b981; font-size: 12px; margin-top: 5px;">
+                        ✓ Applies to entire household - no person selection needed
+                    </div>
+                </div>
+            </div>
+
+            <div class="parameter-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="monthlyRentOrMortgage" onchange="toggleParameter('monthlyRentOrMortgage', false)">
+                    <label for="monthlyRentOrMortgage"><strong>Monthly Rent/Mortgage</strong></label>
+                </div>
+                <div id="monthlyRentOrMortgage-controls" style="display: none;">
+                    <label>New Value: 
+                        <input type="number" id="monthlyRentOrMortgage-value" placeholder="Enter amount" min="0" step="100">
+                    </label>
+                    <div style="color: #10b981; font-size: 12px; margin-top: 5px;">
+                        ✓ Applies to entire household - no person selection needed
+                    </div>
+                </div>
+            </div>
+
+            <div class="parameter-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="loanPaymentAmount" onchange="toggleParameter('loanPaymentAmount', false)">
+                    <label for="loanPaymentAmount"><strong>Loan Payment Amount</strong></label>
+                </div>
+                <div id="loanPaymentAmount-controls" style="display: none;">
+                    <label>New Value: 
+                        <input type="number" id="loanPaymentAmount-value" placeholder="Enter amount" min="0" step="50">
+                    </label>
+                    <div style="color: #10b981; font-size: 12px; margin-top: 5px;">
+                        ✓ Applies to entire household - no person selection needed
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Validation & Preview</h2>
+        <button onclick="validateForm()">Validate Parameter Changes</button>
+        <button onclick="previewChanges()">Preview Changes</button>
+        
+        <div id="validationResults"></div>
+        <div id="previewResults"></div>
+    </div>
+
+    <script>
+        let selectedParameters = new Set();
+        let personSelections = {};
+        let parameterValues = {};
+        let householdMode = 'couple';
+
+        const people = {
+            'person-1': { name: 'Alice', currentSalary: 80000, currentSuper: 11, currentRetirement: 65 },
+            'person-2': { name: 'Bob', currentSalary: 90000, currentSuper: 11, currentRetirement: 67 }
+        };
+
+        function updateHouseholdMode() {
+            const mode = document.querySelector('input[name="householdMode"]:checked').value;
+            householdMode = mode;
+            
+            const peopleSection = document.getElementById('peopleSection');
+            if (mode === 'single') {
+                peopleSection.style.display = 'none';
+                // Hide all person selection dropdowns
+                document.querySelectorAll('.person-selection').forEach(el => {
+                    el.style.display = 'none';
+                });
+            } else {
+                peopleSection.style.display = 'block';
+                // Show person selection dropdowns for selected person-specific parameters
+                selectedParameters.forEach(param => {
+                    const controls = document.getElementById(param + '-controls');
+                    if (controls && controls.style.display !== 'none') {
+                        const personSelection = controls.querySelector('.person-selection');
+                        if (personSelection && isPersonSpecific(param)) {
+                            personSelection.style.display = 'block';
+                        }
+                    }
+                });
+            }
+        }
+
+        function isPersonSpecific(param) {
+            return ['annualSalary', 'superContributionRate', 'retirementAge'].includes(param);
+        }
+
+        function toggleParameter(param, requiresPerson) {
+            const checkbox = document.getElementById(param);
+            const controls = document.getElementById(param + '-controls');
+            
+            if (checkbox.checked) {
+                selectedParameters.add(param);
+                controls.style.display = 'block';
+                
+                // Show person selection if needed and in couple mode
+                if (requiresPerson && householdMode === 'couple') {
+                    const personSelection = controls.querySelector('.person-selection');
+                    if (personSelection) {
+                        personSelection.style.display = 'block';
+                    }
+                }
+            } else {
+                selectedParameters.delete(param);
+                controls.style.display = 'none';
+                delete personSelections[param];
+                delete parameterValues[param];
+            }
+        }
+
+        function updatePersonSelection(param) {
+            const select = document.getElementById(param + '-person');
+            const personId = select.value;
+            const context = document.getElementById(param + '-context');
+            
+            if (personId) {
+                personSelections[param] = personId;
+                const person = people[personId];
+                context.innerHTML = `
+                    <div style="background-color: #eff6ff; border: 1px solid #3b82f6; border-radius: 4px; padding: 8px; margin-top: 5px;">
+                        <strong>Applies to:</strong> ${person.name}<br>
+                        <small>Current ${param === 'annualSalary' ? 'salary: $' + person.currentSalary.toLocaleString() : 
+                                      param === 'superContributionRate' ? 'super rate: ' + person.currentSuper + '%' :
+                                      'retirement age: ' + person.currentRetirement}</small>
+                    </div>
+                `;
+            } else {
+                delete personSelections[param];
+                context.innerHTML = '';
+            }
+        }
+
+        function validateForm() {
+            const results = document.getElementById('validationResults');
+            const errors = [];
+            
+            // Check person selections for person-specific parameters
+            selectedParameters.forEach(param => {
+                if (isPersonSpecific(param) && householdMode === 'couple') {
+                    if (!personSelections[param]) {
+                        errors.push(`Person selection required for ${param}`);
+                    }
+                }
+                
+                // Check if value is provided
+                const valueInput = document.getElementById(param + '-value');
+                if (valueInput && !valueInput.value) {
+                    errors.push(`Value required for ${param}`);
+                }
+            });
+            
+            if (errors.length === 0) {
+                results.innerHTML = '<div class="success">✅ All validations passed!</div>';
+            } else {
+                results.innerHTML = '<div class="validation-error">❌ Validation errors:<ul>' + 
+                    errors.map(error => `<li>${error}</li>`).join('') + '</ul></div>';
+            }
+        }
+
+        function previewChanges() {
+            const results = document.getElementById('previewResults');
+            let preview = '<h3>Parameter Change Preview:</h3>';
+            
+            if (selectedParameters.size === 0) {
+                preview += '<p>No parameters selected.</p>';
+            } else {
+                preview += '<ul>';
+                selectedParameters.forEach(param => {
+                    const valueInput = document.getElementById(param + '-value');
+                    const value = valueInput ? valueInput.value : '';
+                    const personId = personSelections[param];
+                    const person = personId ? people[personId] : null;
+                    
+                    preview += `<li><strong>${param}:</strong> `;
+                    if (person) {
+                        preview += `${person.name} - `;
+                    }
+                    preview += `${value || 'No value set'}`;
+                    if (isPersonSpecific(param) && householdMode === 'couple' && !person) {
+                        preview += ' <span style="color: red;">(⚠️ Person not selected)</span>';
+                    }
+                    preview += '</li>';
+                });
+                preview += '</ul>';
+            }
+            
+            results.innerHTML = preview;
+        }
+
+        // Initialize
+        updateHouseholdMode();
+    </script>
+
+    <div class="test-section">
+        <h2>🎯 Test Results</h2>
+        <div style="background-color: #f0fdf4; padding: 15px; border-radius: 6px;">
+            <h3>✅ Key Features Demonstrated:</h3>
+            <ul>
+                <li><strong>Person Selection Required:</strong> Annual Salary, Super Contribution Rate, and Retirement Age show person dropdowns in couple mode</li>
+                <li><strong>Household Parameters:</strong> Living Expenses, Rent/Mortgage, and Loan Payments don't require person selection</li>
+                <li><strong>Mode Switching:</strong> Person selection dropdowns hide/show based on single vs couple mode</li>
+                <li><strong>Validation:</strong> System validates that person-specific parameters have person selections</li>
+                <li><strong>Context Display:</strong> Shows which person the change applies to and their current values</li>
+            </ul>
+        </div>
+        
+        <div style="background-color: #eff6ff; padding: 15px; border-radius: 6px; margin-top: 15px;">
+            <h3>🔧 UI Improvements Made:</h3>
+            <ul>
+                <li>Added person selection dropdowns for person-specific parameters</li>
+                <li>Visual indicators (👤) for parameters requiring person selection</li>
+                <li>Automatic validation of person selection requirements</li>
+                <li>Context display showing which person changes apply to</li>
+                <li>Different styling for person-specific vs household parameters</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -26,6 +26,14 @@ import {
   globalPerformanceMonitor, 
   MemoizationCache 
 } from "./performance_utils.ts";
+import {
+  createPersonSpecificAdvice,
+  createSuperContributionAdvice,
+  createRetirementAgeAdvice,
+  createIncomeSourceAdvice,
+  validatePersonSpecificAdvice,
+  getAdviceTargetName,
+} from "./person_specific_advice_utils.ts";
 
 /**
  * Default configuration for advice generation
@@ -119,10 +127,38 @@ export class RetirementAdviceEngine {
         allAdvice.push(...incomeAdvice);
       }
 
+      // Validate person-specific advice
+      globalPerformanceMonitor.startOperation('advice_validation');
+      const validatedAdvice: AdviceItem[] = [];
+      const validationErrors: AdviceGenerationError[] = [];
+      
+      for (const adviceItem of allAdvice) {
+        if (adviceItem.personId || adviceItem.personSpecificChanges) {
+          const validation = validatePersonSpecificAdvice(adviceItem, params);
+          if (validation.isValid) {
+            validatedAdvice.push(adviceItem);
+          } else {
+            validationErrors.push({
+              code: 'PERSON_SPECIFIC_VALIDATION_FAILED',
+              message: `Person-specific advice validation failed: ${validation.errors.join(', ')}`,
+              context: { adviceId: adviceItem.id, personId: adviceItem.personId },
+              severity: 'warning',
+            });
+            // Still include the advice but log the validation issues
+            validatedAdvice.push(adviceItem);
+          }
+        } else {
+          validatedAdvice.push(adviceItem);
+        }
+      }
+      
+      errors.push(...validationErrors);
+      globalPerformanceMonitor.endOperation('advice_validation', validatedAdvice.length);
+
       // Filter by effectiveness threshold
       const filteredAdvice = this.config.minEffectivenessThreshold
-        ? allAdvice.filter(advice => advice.effectivenessScore >= this.config.minEffectivenessThreshold!)
-        : allAdvice;
+        ? validatedAdvice.filter(advice => advice.effectivenessScore >= this.config.minEffectivenessThreshold!)
+        : validatedAdvice;
 
       // Rank recommendations
       const rankedRecommendations = this.rankRecommendations(filteredAdvice);
@@ -343,15 +379,17 @@ export class RetirementAdviceEngine {
       return advice;
     }
 
-    const finalState = states[states.length - 1];
-
-    // Check if there are active loans
-    const hasActiveLoans = finalState.loanBalance > 0 || 
-      (finalState.loanBalances && Object.values(finalState.loanBalances).some(balance => balance > 0));
+    // Check if there are active loans at the beginning of the simulation
+    // (Don't use final state as loans might be paid off by then)
+    const initialState = states[0];
+    const hasActiveLoans = initialState.loanBalance > 0 || 
+      (initialState.loanBalances && Object.values(initialState.loanBalances).some(balance => balance > 0));
 
     if (!hasActiveLoans) {
       return advice;
     }
+
+    const finalState = states[states.length - 1];
 
     // Analyze loan payoff acceleration
     if (params.loans && params.loans.length > 0) {
@@ -473,40 +511,103 @@ export class RetirementAdviceEngine {
     const hasOffsetCapability = params.useOffsetAccount || 
       (params.loans && params.loans.some(loan => loan.hasOffset));
 
-    if (!hasOffsetCapability) {
+    if (!hasOffsetCapability || states.length === 0) {
       return advice;
     }
 
-    const finalState = states[states.length - 1];
+    // Check if there are any active loans throughout the simulation timeline
+    // Look at a representative early state where cash has had time to accumulate
+    const currentStateIndex = Math.min(12, states.length - 1); // Look at ~1 year in
+    const currentState = states[currentStateIndex];
+    
+    // Check if there are active loans at the current time
+    const hasActiveLoans = this.hasActiveLoansAtState(currentState, params);
+    
+    if (!hasActiveLoans) {
+      return advice; // No active loans to benefit from offset
+    }
+
+    // Find when loans will be paid off to calculate realistic savings period
+    const loanPayoffTimeframe = this.estimateLoanPayoffTimeframe(states, params, currentStateIndex);
     
     // If there's cash sitting around that could be in offset
-    if (finalState.cash > 1000) {
+    if (currentState.cash > 1000) {
       const interestRate = params.loans && params.loans.length > 0 
         ? Math.max(...params.loans.map(loan => loan.interestRate))
         : params.loanInterestRate;
 
-      const annualSavings = finalState.cash * (interestRate / 100);
+      // Calculate savings only for the period when loans are active
+      const yearsOfSavings = Math.min(loanPayoffTimeframe, 10); // Cap at 10 years for calculation
+      const annualSavings = currentState.cash * (interestRate / 100);
+      const totalSavings = annualSavings * yearsOfSavings;
 
-      advice.push({
-        id: 'offset-optimization-cash',
-        category: 'debt',
-        priority: 'high',
-        title: 'Optimize Offset Account Usage',
-        description: `Move ${formatCurrency(finalState.cash)} from cash to offset account to save ${formatCurrency(annualSavings)} annually in interest.`,
-        specificActions: [
-          'Transfer excess cash to offset account',
-          'Set up automatic sweep from transaction account to offset',
-          'Review cash flow needs to maintain appropriate buffer',
-        ],
-        projectedImpact: {
-          costSavings: annualSavings,
-        },
-        feasibilityScore: 95, // Very easy to implement
-        effectivenessScore: Math.min(90, (annualSavings / 1000) * 20), // Scale based on savings
-      });
+      // Only suggest if there's meaningful time left on the loans
+      if (yearsOfSavings > 0.5) {
+        const timeframeText = yearsOfSavings < 10 
+          ? ` over the next ${yearsOfSavings.toFixed(1)} years until loan payoff`
+          : ` annually`;
+
+        advice.push({
+          id: 'offset-optimization-cash',
+          category: 'debt',
+          priority: 'high',
+          title: 'Optimize Offset Account Usage',
+          description: `Move ${formatCurrency(currentState.cash)} from cash to offset account to save ${formatCurrency(annualSavings)} annually in interest${timeframeText}.`,
+          specificActions: [
+            'Transfer excess cash to offset account',
+            'Set up automatic sweep from transaction account to offset',
+            'Review cash flow needs to maintain appropriate buffer',
+            yearsOfSavings < 10 ? `Note: Loan will be paid off in approximately ${yearsOfSavings.toFixed(1)} years` : '',
+          ].filter(action => action !== ''), // Remove empty strings
+          projectedImpact: {
+            costSavings: totalSavings,
+          },
+          feasibilityScore: 95, // Very easy to implement
+          effectivenessScore: Math.min(90, (totalSavings / 1000) * 15), // Scale based on total savings
+        });
+      }
     }
 
     return advice;
+  }
+
+  /**
+   * Helper method to check if there are active loans at a given state
+   */
+  private hasActiveLoansAtState(state: FinancialState, params: UserParameters): boolean {
+    // Check legacy single loan
+    if (state.loanBalance > 0) {
+      return true;
+    }
+
+    // Check multiple loans
+    if (params.loans && params.loans.length > 0 && state.loanBalances) {
+      return Object.values(state.loanBalances).some(balance => balance > 0);
+    }
+
+    return false;
+  }
+
+  /**
+   * Helper method to estimate when loans will be paid off from current evaluation point
+   */
+  private estimateLoanPayoffTimeframe(states: FinancialState[], params: UserParameters, currentStateIndex: number = 0): number {
+    // Look for the point where all loans are paid off, starting from current evaluation point
+    for (let i = currentStateIndex; i < states.length; i++) {
+      const state = states[i];
+      const hasActiveLoans = this.hasActiveLoansAtState(state, params);
+      
+      if (!hasActiveLoans) {
+        // Found payoff point, calculate years from current evaluation point
+        const currentDate = states[currentStateIndex].date;
+        const payoffDate = state.date;
+        const yearsToPayoff = (payoffDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        return Math.max(0, yearsToPayoff);
+      }
+    }
+
+    // If loans are never paid off in simulation, return a large number
+    return 20; // Assume 20 years if not paid off in simulation
   }
 
   /**
@@ -524,10 +625,142 @@ export class RetirementAdviceEngine {
     const contributionAdvice = this.generateInvestmentContributionAdvice(params, states);
     advice.push(...contributionAdvice);
 
+    // Analyze person-specific super contribution increases
+    const personSpecificSuperAdvice = this.generatePersonSpecificSuperAdvice(params, states);
+    advice.push(...personSpecificSuperAdvice);
+
     // Analyze allocation optimization
     const allocationAdvice = this.generateAllocationOptimizationAdvice(params, states);
     advice.push(...allocationAdvice);
 
+    return advice;
+  }
+
+  /**
+   * Generates person-specific superannuation contribution advice
+   * Ensures changes are applied to the correct person
+   */
+  private generatePersonSpecificSuperAdvice(params: UserParameters, states: FinancialState[]): AdviceItem[] {
+    const advice: AdviceItem[] = [];
+
+    // Only generate person-specific advice for household mode
+    if (params.householdMode !== 'couple' || !params.people || params.people.length === 0) {
+      return advice;
+    }
+
+    for (const person of params.people) {
+      // Check each person's super accounts
+      for (const superAccount of person.superAccounts) {
+        const currentRate = superAccount.contributionRate;
+        
+        // Suggest increases in 1% increments up to 15%
+        const suggestedRates = [currentRate + 1, currentRate + 2, Math.min(15, currentRate + 3)];
+        
+        for (const suggestedRate of suggestedRates) {
+          if (suggestedRate <= currentRate || suggestedRate > 15) continue;
+          
+          // Calculate projected benefit over 10 years
+          const rateIncrease = suggestedRate - currentRate;
+          
+          // Find person's income to calculate contribution increase
+          const totalIncome = person.incomeSources.reduce((sum, income) => {
+            if (income.isBeforeTax) {
+              // Convert to annual amount
+              const multiplier = income.frequency === 'weekly' ? 52 :
+                               income.frequency === 'fortnightly' ? 26 :
+                               income.frequency === 'monthly' ? 12 : 1;
+              return sum + (income.amount * multiplier);
+            }
+            return sum;
+          }, 0);
+          
+          if (totalIncome === 0) continue;
+          
+          const additionalAnnualContribution = (totalIncome * rateIncrease) / 100;
+          const projectedBenefit = this.calculateFutureValue(
+            additionalAnnualContribution, 
+            superAccount.returnRate / 100, 
+            10
+          );
+          
+          // Only suggest if benefit is meaningful and feasible
+          if (projectedBenefit > 5000 && additionalAnnualContribution < totalIncome * 0.05) {
+            const personSpecificAdvice = createSuperContributionAdvice(
+              person,
+              currentRate,
+              suggestedRate,
+              projectedBenefit,
+              superAccount.id
+            );
+            
+            // Validate the advice before adding
+            const validation = validatePersonSpecificAdvice(personSpecificAdvice, params);
+            if (validation.isValid) {
+              advice.push(personSpecificAdvice);
+            }
+          }
+        }
+      }
+      
+      // Suggest retirement age adjustments if beneficial
+      const retirementAgeAdvice = this.generateRetirementAgeAdvice(person, params, states);
+      advice.push(...retirementAgeAdvice);
+    }
+
+    return advice;
+  }
+
+  /**
+   * Generates retirement age adjustment advice for a specific person
+   */
+  private generateRetirementAgeAdvice(person: Person, params: UserParameters, states: FinancialState[]): AdviceItem[] {
+    const advice: AdviceItem[] = [];
+    const currentRetirementAge = person.retirementAge;
+    
+    // Consider delaying retirement by 1-3 years
+    for (let delay = 1; delay <= 3; delay++) {
+      const suggestedAge = currentRetirementAge + delay;
+      
+      if (suggestedAge > 70) continue; // Don't suggest retiring after 70
+      
+      // Calculate benefit of working additional years
+      const additionalWorkingYears = delay;
+      const personIncome = person.incomeSources.reduce((sum, income) => {
+        if (income.isBeforeTax) {
+          const multiplier = income.frequency === 'weekly' ? 52 :
+                           income.frequency === 'fortnightly' ? 26 :
+                           income.frequency === 'monthly' ? 12 : 1;
+          return sum + (income.amount * multiplier);
+        }
+        return sum;
+      }, 0);
+      
+      // Rough calculation: additional income + super growth + delayed withdrawal
+      const additionalEarnings = personIncome * additionalWorkingYears;
+      const superGrowth = person.superAccounts.reduce((sum, acc) => {
+        return sum + (acc.balance * Math.pow(1 + acc.returnRate / 100, additionalWorkingYears) - acc.balance);
+      }, 0);
+      
+      const totalBenefit = additionalEarnings + superGrowth;
+      
+      if (totalBenefit > 50000) { // Only suggest if significant benefit
+        const reason = `Working ${delay} additional year${delay > 1 ? 's' : ''} could provide ${formatCurrency(totalBenefit)} in additional retirement security.`;
+        
+        const retirementAdvice = createRetirementAgeAdvice(
+          person,
+          suggestedAge,
+          currentRetirementAge,
+          totalBenefit,
+          reason
+        );
+        
+        const validation = validatePersonSpecificAdvice(retirementAdvice, params);
+        if (validation.isValid) {
+          advice.push(retirementAdvice);
+        }
+      }
+    }
+    
     return advice;
   }
 

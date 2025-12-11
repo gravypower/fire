@@ -93,8 +93,8 @@ export default function AdviceComparisonView({ comparison }: AdviceComparisonVie
       
       <div class="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <p class="text-gray-600">Effectiveness: <span class="font-medium">{advice.effectivenessScore}%</span></p>
-          <p class="text-gray-600">Feasibility: <span class="font-medium">{advice.feasibilityScore}%</span></p>
+          <p class="text-gray-600">Effectiveness: <span class="font-medium">{Math.floor(advice.effectivenessScore)}%</span></p>
+          <p class="text-gray-600">Feasibility: <span class="font-medium">{Math.floor(advice.feasibilityScore)}%</span></p>
         </div>
         <div>
           <p class="text-gray-600 text-xs">Impact:</p>
@@ -129,11 +129,11 @@ export default function AdviceComparisonView({ comparison }: AdviceComparisonVie
             </div>
             <div class="flex justify-between">
               <span>Effectiveness:</span>
-              <span class="font-medium">{change.withTransitions.effectivenessScore}%</span>
+              <span class="font-medium">{Math.floor(change.withTransitions.effectivenessScore)}%</span>
             </div>
             <div class="flex justify-between">
               <span>Feasibility:</span>
-              <span class="font-medium">{change.withTransitions.feasibilityScore}%</span>
+              <span class="font-medium">{Math.floor(change.withTransitions.feasibilityScore)}%</span>
             </div>
           </div>
         </div>
@@ -150,11 +150,11 @@ export default function AdviceComparisonView({ comparison }: AdviceComparisonVie
             </div>
             <div class="flex justify-between">
               <span>Effectiveness:</span>
-              <span class="font-medium">{change.withoutTransitions.effectivenessScore}%</span>
+              <span class="font-medium">{Math.floor(change.withoutTransitions.effectivenessScore)}%</span>
             </div>
             <div class="flex justify-between">
               <span>Feasibility:</span>
-              <span class="font-medium">{change.withoutTransitions.feasibilityScore}%</span>
+              <span class="font-medium">{Math.floor(change.withoutTransitions.feasibilityScore)}%</span>
             </div>
           </div>
         </div>

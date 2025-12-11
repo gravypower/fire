@@ -10,7 +10,7 @@ import type {
   FinancialState,
   IncomeSource,
   SimulationConfiguration,
-  SimulationResult,
+  SimulationResult, SuperAccount,
   TimeInterval,
   TransitionPoint,
   UserParameters,
@@ -140,21 +140,29 @@ export const SimulationEngine = {
         )
         : undefined;
 
-    const initialSuperBalance =
-      params.superAccounts && params.superAccounts.length > 0
-        ? params.superAccounts.reduce(
-          (sum, superAcc) => sum + superAcc.balance,
-          0,
-        )
-        : params.currentSuperBalance;
+    // Collect all super accounts from all people (household mode) or top-level superAccounts
+    const allSuperAccounts: SuperAccount[] = [];
+    
+    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+      // Collect super accounts from all people
+      for (const person of params.people) {
+        allSuperAccounts.push(...person.superAccounts);
+      }
+    } else if (params.superAccounts && params.superAccounts.length > 0) {
+      // Use top-level super accounts (legacy or single mode)
+      allSuperAccounts.push(...params.superAccounts);
+    }
 
-    const initialSuperBalances =
-      params.superAccounts && params.superAccounts.length > 0
-        ? params.superAccounts.reduce(
+    const initialSuperBalance = allSuperAccounts.length > 0
+      ? allSuperAccounts.reduce((sum, superAcc) => sum + superAcc.balance, 0)
+      : params.currentSuperBalance;
+
+    const initialSuperBalances = allSuperAccounts.length > 0
+      ? allSuperAccounts.reduce(
           (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
           {} as { [superId: string]: number },
         )
-        : undefined;
+      : undefined;
 
     const initialOffsetBalance = params.loans !== undefined
       ? (params.loans.length > 0
@@ -620,10 +628,23 @@ export const SimulationEngine = {
     // Handle multiple super accounts if provided, otherwise use legacy single super
     let superBalances: { [superId: string]: number } = {};
 
-    if (params.superAccounts && params.superAccounts.length > 0) {
+    // Collect all super accounts from all people (household mode) or top-level superAccounts
+    const allSuperAccounts: SuperAccount[] = [];
+    
+    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+      // Collect super accounts from all people
+      for (const person of params.people) {
+        allSuperAccounts.push(...person.superAccounts);
+      }
+    } else if (params.superAccounts && params.superAccounts.length > 0) {
+      // Use top-level super accounts (legacy or single mode)
+      allSuperAccounts.push(...params.superAccounts);
+    }
+
+    if (allSuperAccounts.length > 0) {
       // Multiple super accounts - handle person-specific contributions
       superannuation = 0;
-      for (const superAcc of params.superAccounts) {
+      for (const superAcc of allSuperAccounts) {
         const currentBalance = currentState.superBalances?.[superAcc.id] ??
           superAcc.balance;
 
@@ -810,7 +831,7 @@ export const SimulationEngine = {
       loanBalances: params.loans && params.loans.length > 0
         ? loanBalances
         : undefined,
-      superBalances: params.superAccounts && params.superAccounts.length > 0
+      superBalances: allSuperAccounts.length > 0
         ? superBalances
         : undefined,
       offsetBalances: params.loans && params.loans.length > 0
@@ -907,21 +928,29 @@ export const SimulationEngine = {
         )
         : undefined;
 
-    const initialSuperBalance =
-      currentParams.superAccounts && currentParams.superAccounts.length > 0
-        ? currentParams.superAccounts.reduce(
-          (sum, superAcc) => sum + superAcc.balance,
-          0,
-        )
-        : currentParams.currentSuperBalance;
+    // Collect all super accounts from all people (household mode) or top-level superAccounts
+    const allSuperAccountsTransitions: import("../types/financial.ts").SuperAccount[] = [];
+    
+    if (currentParams.householdMode === "couple" && currentParams.people && currentParams.people.length > 0) {
+      // Collect super accounts from all people
+      for (const person of currentParams.people) {
+        allSuperAccountsTransitions.push(...person.superAccounts);
+      }
+    } else if (currentParams.superAccounts && currentParams.superAccounts.length > 0) {
+      // Use top-level super accounts (legacy or single mode)
+      allSuperAccountsTransitions.push(...currentParams.superAccounts);
+    }
 
-    const initialSuperBalances =
-      currentParams.superAccounts && currentParams.superAccounts.length > 0
-        ? currentParams.superAccounts.reduce(
+    const initialSuperBalance = allSuperAccountsTransitions.length > 0
+      ? allSuperAccountsTransitions.reduce((sum, superAcc) => sum + superAcc.balance, 0)
+      : currentParams.currentSuperBalance;
+
+    const initialSuperBalances = allSuperAccountsTransitions.length > 0
+      ? allSuperAccountsTransitions.reduce(
           (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
           {} as { [superId: string]: number },
         )
-        : undefined;
+      : undefined;
 
     const initialOffsetBalance = currentParams.loans !== undefined
       ? (currentParams.loans.length > 0

@@ -18,6 +18,18 @@ import {
   validateTransition,
 } from "../lib/transition_manager.ts";
 import { applyTemplate } from "../lib/templates.ts";
+import {
+  getChangeableParameters,
+  getParametersByCategory,
+  validateParameterChangeForm,
+  createPersonParameterChange,
+  getParameterChangeDescription,
+  type ParameterChangeOption,
+} from "../lib/parameter_change_ui_utils.ts";
+import {
+  requiresPersonSelection,
+  getParameterCategory,
+} from "../types/parameter_categories.ts";
 
 interface TransitionManagerIslandProps {
   config: SimulationConfiguration;
@@ -30,6 +42,7 @@ interface TransitionFormData {
   label: string;
   selectedParams: Set<keyof UserParameters>;
   parameterValues: Partial<UserParameters>;
+  personSelections: Record<string, string>; // parameter -> personId mapping
 }
 
 export default function TransitionManagerIsland({
@@ -59,6 +72,7 @@ export default function TransitionManagerIsland({
       label: "",
       selectedParams: new Set(),
       parameterValues: {},
+      personSelections: {},
     };
   }
 
@@ -70,12 +84,17 @@ export default function TransitionManagerIsland({
       Object.keys(transition.parameterChanges) as (keyof UserParameters)[],
     );
 
+    // For existing transitions, we can't determine person selections from the data
+    // This is a limitation of the current storage format
+    const personSelections: Record<string, string> = {};
+
     setFormData({
       id: transition.id,
       transitionDate: transition.transitionDate.toISOString().split("T")[0],
       label: transition.label || "",
       selectedParams,
       parameterValues: { ...transition.parameterChanges },
+      personSelections,
     });
   }
 
@@ -116,12 +135,48 @@ export default function TransitionManagerIsland({
    * Handles saving a transition (add or update)
    */
   function handleSave() {
-    // Build the transition object
+    // Validate person selections for person-specific parameters
+    const validationErrors: string[] = [];
+    
+    for (const param of formData.selectedParams) {
+      if (requiresPersonSelection(param, config.baseParameters.householdMode || 'single')) {
+        if (!formData.personSelections[param]) {
+          validationErrors.push(`Person selection required for ${formatParamName(param)}`);
+        }
+      }
+    }
+    
+    if (validationErrors.length > 0) {
+      setValidationError(validationErrors.join(', '));
+      return;
+    }
+
+    // Build the transition object with person-specific handling
+    let parameterChanges: Partial<UserParameters> = {};
+    
+    // For now, we'll store the changes in the legacy format
+    // TODO: Enhance storage format to support person-specific changes
+    for (const [param, value] of Object.entries(formData.parameterValues)) {
+      const paramKey = param as keyof UserParameters;
+      const personId = formData.personSelections[param];
+      
+      if (personId && requiresPersonSelection(paramKey, config.baseParameters.householdMode || 'single')) {
+        // For person-specific parameters, we need to store them in a way that indicates which person
+        // For now, we'll add a comment in the label to indicate the person
+        const person = config.baseParameters.people?.find(p => p.id === personId);
+        if (person && !formData.label.includes(person.name)) {
+          formData.label = formData.label ? `${formData.label} (${person.name})` : `Parameter change for ${person.name}`;
+        }
+      }
+      
+      parameterChanges[paramKey] = value as any;
+    }
+
     const transition: ParameterTransition = {
       id: formData.id,
       transitionDate: new Date(formData.transitionDate),
       label: formData.label || undefined,
-      parameterChanges: formData.parameterValues,
+      parameterChanges,
     };
 
     // Create a copy of config for modification
@@ -180,20 +235,29 @@ export default function TransitionManagerIsland({
   function handleParamToggle(param: keyof UserParameters) {
     const newSelectedParams = new Set(formData.selectedParams);
     const newParamValues = { ...formData.parameterValues };
+    const newPersonSelections = { ...formData.personSelections };
 
     if (newSelectedParams.has(param)) {
       newSelectedParams.delete(param);
       delete newParamValues[param];
+      delete newPersonSelections[param];
     } else {
       newSelectedParams.add(param);
       // Initialize with current base parameter value
-      newParamValues[param] = config.baseParameters[param];
+      newParamValues[param] = config.baseParameters[param] as any;
+      
+      // If this parameter requires person selection and we have people, select the first one
+      if (requiresPersonSelection(param, config.baseParameters.householdMode || 'single') && 
+          config.baseParameters.people && config.baseParameters.people.length > 0) {
+        newPersonSelections[param] = config.baseParameters.people[0].id;
+      }
     }
 
     setFormData({
       ...formData,
       selectedParams: newSelectedParams,
       parameterValues: newParamValues,
+      personSelections: newPersonSelections,
     });
     setValidationError(null);
   }
@@ -211,6 +275,20 @@ export default function TransitionManagerIsland({
     setFormData({
       ...formData,
       parameterValues: newParamValues,
+    });
+    setValidationError(null);
+  }
+
+  /**
+   * Handles person selection change for a parameter
+   */
+  function handlePersonSelectionChange(param: keyof UserParameters, personId: string) {
+    const newPersonSelections = { ...formData.personSelections };
+    newPersonSelections[param] = personId;
+
+    setFormData({
+      ...formData,
+      personSelections: newPersonSelections,
     });
     setValidationError(null);
   }
@@ -563,6 +641,7 @@ export default function TransitionManagerIsland({
               formData={formData}
               onParamToggle={handleParamToggle}
               onParamValueChange={handleParamValueChange}
+              onPersonSelectionChange={handlePersonSelectionChange}
               formatParamName={formatParamName}
             />
           </div>
@@ -590,6 +669,7 @@ function ParameterSelector({
   formData,
   onParamToggle,
   onParamValueChange,
+  onPersonSelectionChange,
   formatParamName,
 }: {
   config: SimulationConfiguration;
@@ -599,51 +679,36 @@ function ParameterSelector({
     param: keyof UserParameters,
     value: string | number | boolean,
   ) => void;
+  onPersonSelectionChange: (param: keyof UserParameters, personId: string) => void;
   formatParamName: (param: keyof UserParameters) => string;
 }) {
-  // Define parameter groups
+  // Get changeable parameters organized by category
+  const paramsByCategory = getParametersByCategory(config.baseParameters);
+  
+  // Define parameter groups using the categorization system
   const parameterGroups: {
     name: string;
     icon: string;
-    params: (keyof UserParameters)[];
+    params: ParameterChangeOption[];
+    category: 'person' | 'household' | 'flexible';
   }[] = [
     {
-      name: "Income",
-      icon: "💰",
-      params: ["annualSalary", "incomeTaxRate"],
+      name: "Person-Specific",
+      icon: "👤",
+      params: paramsByCategory.personSpecific,
+      category: 'person',
     },
     {
-      name: "Expenses",
-      icon: "💳",
-      params: ["monthlyLivingExpenses", "monthlyRentOrMortgage"],
-    },
-    {
-      name: "Investments",
-      icon: "📈",
-      params: [
-        "monthlyInvestmentContribution",
-        "investmentReturnRate",
-        "currentInvestmentBalance",
-      ],
-    },
-    {
-      name: "Superannuation",
-      icon: "🏦",
-      params: [
-        "superContributionRate",
-        "superReturnRate",
-        "currentSuperBalance",
-      ],
-    },
-    {
-      name: "Loans",
+      name: "Household",
       icon: "🏠",
-      params: [
-        "loanPrincipal",
-        "loanInterestRate",
-        "loanPaymentAmount",
-        "currentOffsetBalance",
-      ],
+      params: paramsByCategory.household,
+      category: 'household',
+    },
+    {
+      name: "Flexible",
+      icon: "🔄",
+      params: paramsByCategory.flexible,
+      category: 'flexible',
     },
   ];
 
@@ -654,50 +719,99 @@ function ParameterSelector({
           <div class="flex items-center gap-2 mb-3">
             <span class="text-lg">{group.icon}</span>
             <h5 class="text-sm font-semibold text-gray-700">{group.name}</h5>
+            {group.category === 'person' && config.baseParameters.householdMode === 'couple' && (
+              <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                Requires person selection
+              </span>
+            )}
           </div>
           <div class="space-y-3">
-            {group.params.map((param) => (
-              <div key={param} class="border-l-2 border-gray-200 pl-3">
-                <div class="flex items-center gap-2 mb-1">
-                  <input
-                    type="checkbox"
-                    id={`param-${param}`}
-                    checked={formData.selectedParams.has(param)}
-                    onChange={() => onParamToggle(param)}
-                    class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                  />
-                  <label
-                    htmlFor={`param-${param}`}
-                    class="text-sm text-gray-700 cursor-pointer font-medium"
-                  >
-                    {formatParamName(param)}
-                  </label>
-                </div>
+            {group.params.map((paramOption) => {
+              const param = paramOption.key as keyof UserParameters;
+              return (
+                <div key={param} class="border-l-2 border-gray-200 pl-3">
+                  <div class="flex items-center gap-2 mb-1">
+                    <input
+                      type="checkbox"
+                      id={`param-${param}`}
+                      checked={formData.selectedParams.has(param)}
+                      onChange={() => onParamToggle(param)}
+                      class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label
+                      htmlFor={`param-${param}`}
+                      class="text-sm text-gray-700 cursor-pointer font-medium"
+                    >
+                      {paramOption.displayName}
+                    </label>
+                    {paramOption.requiresPersonSelection && (
+                      <span class="text-xs text-blue-600">👤</span>
+                    )}
+                  </div>
+                  <p class="text-xs text-gray-500 ml-6 mb-1">{paramOption.description}</p>
                 {formData.selectedParams.has(param) && (
-                  <div class="mt-2 ml-6 fade-in">
-                    <div class="relative">
-                      <span class="absolute left-2 top-1.5 text-xs text-gray-500">$</span>
+                  <div class="mt-2 ml-6 fade-in space-y-2">
+                    {/* Person Selection (if required) */}
+                    {paramOption.requiresPersonSelection && 
+                     config.baseParameters.people && config.baseParameters.people.length > 0 && (
+                      <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">
+                          Select Person *
+                        </label>
+                        <select
+                          value={formData.personSelections[param] || ''}
+                          onChange={(e) => onPersonSelectionChange(param, (e.target as HTMLSelectElement).value)}
+                          class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                          required
+                        >
+                          <option value="">Select a person...</option>
+                          {config.baseParameters.people.map((person) => (
+                            <option key={person.id} value={person.id}>
+                              {person.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Parameter Value Input */}
+                    <div>
+                      <label class="block text-xs font-medium text-gray-600 mb-1">
+                        New Value *
+                      </label>
                       <input
                         type="number"
-                        value={formData.parameterValues[param] as number}
-                        onInput={(e) =>
-                          onParamValueChange(
-                            param,
-                            parseFloat((e.target as HTMLInputElement).value),
-                          )}
+                        value={String(formData.parameterValues[param] || '')}
+                        onChange={(e) => onParamValueChange(param, parseFloat((e.target as HTMLInputElement).value))}
                         step="0.01"
                         min="0"
-                        class="w-full pl-6 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter value"
+                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder={`Current: ${paramOption.currentValue}`}
+                        required
                       />
+                      <p class="text-xs text-gray-500 mt-1">
+                        Current: {typeof paramOption.currentValue === 'number' 
+                          ? paramOption.currentValue.toLocaleString() 
+                          : paramOption.currentValue}
+                      </p>
                     </div>
-                    <p class="text-xs text-gray-500 mt-1">
-                      Current: ${(config.baseParameters[param] as number)?.toFixed(2) || "0.00"}
-                    </p>
+
+                    {/* Person-specific context */}
+                    {paramOption.requiresPersonSelection && 
+                     formData.personSelections[param] && (
+                      <div class="bg-blue-50 border border-blue-200 rounded-md p-2">
+                        <p class="text-xs text-blue-800">
+                          <span class="font-medium">Applies to:</span> {
+                            config.baseParameters.people?.find(p => p.id === formData.personSelections[param])?.name || 'Selected person'
+                          }
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}

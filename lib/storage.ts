@@ -44,6 +44,19 @@ export interface StorageService {
    * Clears all stored configuration from local storage
    */
   clearConfiguration(): void;
+
+  /**
+   * Exports configuration as JSON string for download
+   * @returns JSON string of the current configuration
+   */
+  exportConfiguration(): string | null;
+
+  /**
+   * Imports configuration from JSON string
+   * @param jsonData - JSON string containing configuration data
+   * @returns true if import was successful, false otherwise
+   */
+  importConfiguration(jsonData: string): boolean;
 }
 
 /**
@@ -691,6 +704,71 @@ export class LocalStorageService implements StorageService {
       this.storage.removeItem(STORAGE_KEY);
     } catch (error) {
       console.error("Failed to clear configuration:", error);
+    }
+  }
+
+  /**
+   * Exports configuration as JSON string for download
+   * @returns JSON string of the current configuration, or null if no config exists
+   */
+  exportConfiguration(): string | null {
+    const config = this.loadConfiguration();
+    if (!config) {
+      return null;
+    }
+
+    try {
+      const exportData = {
+        version: "2.0",
+        exportedAt: new Date().toISOString(),
+        appName: "Finance Simulation Tool",
+        ...configToSerializable(config),
+      };
+      
+      return JSON.stringify(exportData, null, 2);
+    } catch (error) {
+      console.error("Failed to export configuration:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Imports configuration from JSON string
+   * @param jsonData - JSON string containing configuration data
+   * @returns true if import was successful, false otherwise
+   */
+  importConfiguration(jsonData: string): boolean {
+    try {
+      const parsed = JSON.parse(jsonData);
+      
+      // Validate it's our export format
+      if (!parsed.version || !parsed.baseParameters) {
+        console.error("Invalid configuration format");
+        return false;
+      }
+
+      // Extract the configuration part (remove export metadata)
+      const configData: SerializableSimulationConfiguration = {
+        version: parsed.version,
+        baseParameters: parsed.baseParameters,
+        transitions: parsed.transitions || [],
+        savedAt: parsed.savedAt || new Date().toISOString(),
+      };
+
+      // Validate structure
+      if (!isValidConfigurationStructure(configData)) {
+        console.error("Invalid configuration structure");
+        return false;
+      }
+
+      // Convert and save
+      const config = configFromSerializable(configData);
+      this.saveConfiguration(config);
+      
+      return true;
+    } catch (error) {
+      console.error("Failed to import configuration:", error);
+      return false;
     }
   }
 

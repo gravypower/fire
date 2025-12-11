@@ -201,6 +201,42 @@ export interface AdviceItem {
   feasibilityScore: number;
   /** How effective this advice is expected to be (0-100) */
   effectivenessScore: number;
+  /** Person this advice applies to (for household mode) */
+  personId?: string;
+  /** Suggested parameter changes to implement this advice */
+  parameterChanges?: Partial<import("../types/financial.ts").UserParameters>;
+  /** Person-specific parameter changes (for modifying individual people in household) */
+  personSpecificChanges?: {
+    /** ID of the person to modify */
+    personId: string;
+    /** Changes to apply to this person's data */
+    changes: {
+      /** Updates to income sources */
+      incomeSources?: Array<{
+        /** Action to take: 'add', 'update', or 'remove' */
+        action: 'add' | 'update' | 'remove';
+        /** Income source ID (for update/remove) */
+        id?: string;
+        /** Income source data (for add/update) */
+        data?: Partial<import("../types/financial.ts").IncomeSource>;
+      }>;
+      /** Updates to super accounts */
+      superAccounts?: Array<{
+        /** Action to take: 'add', 'update', or 'remove' */
+        action: 'add' | 'update' | 'remove';
+        /** Super account ID (for update/remove) */
+        id?: string;
+        /** Super account data (for add/update) */
+        data?: Partial<import("../types/financial.ts").SuperAccount>;
+      }>;
+      /** Updates to person properties */
+      personUpdates?: {
+        currentAge?: number;
+        retirementAge?: number;
+        name?: string;
+      };
+    };
+  };
 }
 
 /**

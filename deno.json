@@ -49,7 +49,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "lib": ["deno.window", "esnext"]
   },
   "nodeModulesDir": "auto"
 }

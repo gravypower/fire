@@ -37,6 +37,14 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
     if (mode === "couple") {
       // Initialize couple mode with two people
       const existingPerson = config.baseParameters.people?.[0];
+      
+      // Calculate starting super balance per person
+      // If there are existing super accounts, use them; otherwise split the legacy balance
+      const legacySuperBalance = config.baseParameters.currentSuperBalance || 50000;
+      const existingSuperAccounts = config.baseParameters.superAccounts || [];
+      const totalExistingSuper = existingSuperAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+      const superBalancePerPerson = totalExistingSuper > 0 ? totalExistingSuper / 2 : legacySuperBalance / 2;
+      
       const people: Person[] = [
         existingPerson || {
           id: "person-1",
@@ -44,7 +52,16 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
           currentAge: config.baseParameters.currentAge || 30,
           retirementAge: config.baseParameters.retirementAge || 65,
           incomeSources: config.baseParameters.incomeSources || [],
-          superAccounts: config.baseParameters.superAccounts || [],
+          superAccounts: existingSuperAccounts.length > 0 
+            ? existingSuperAccounts.map(acc => ({ ...acc, personId: "person-1" }))
+            : [{
+                id: `super-person-1-${Date.now()}`,
+                label: "Person 1 Super",
+                balance: superBalancePerPerson,
+                contributionRate: config.baseParameters.superContributionRate || 11,
+                returnRate: config.baseParameters.superReturnRate || 7,
+                personId: "person-1",
+              }],
         },
         {
           id: "person-2",
@@ -52,7 +69,14 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
           currentAge: config.baseParameters.currentAge || 30,
           retirementAge: config.baseParameters.retirementAge || 65,
           incomeSources: [],
-          superAccounts: [],
+          superAccounts: [{
+            id: `super-person-2-${Date.now()}`,
+            label: "Person 2 Super",
+            balance: superBalancePerPerson,
+            contributionRate: config.baseParameters.superContributionRate || 11,
+            returnRate: config.baseParameters.superReturnRate || 7,
+            personId: "person-2",
+          }],
         },
       ];
 

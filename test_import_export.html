@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import/Export Test</title>
+</head>
+<body>
+    <h1>Configuration Import/Export Test</h1>
+    
+    <div style="margin: 20px 0;">
+        <button id="exportBtn">Export Configuration</button>
+        <input type="file" id="importFile" accept=".json" style="margin-left: 10px;">
+        <button id="importBtn">Import Configuration</button>
+    </div>
+    
+    <div id="status" style="margin: 20px 0; padding: 10px; border: 1px solid #ccc;"></div>
+    
+    <script type="module">
+        // Mock localStorage for testing
+        const mockStorage = {
+            data: {},
+            setItem(key, value) {
+                this.data[key] = value;
+            },
+            getItem(key) {
+                return this.data[key] || null;
+            },
+            removeItem(key) {
+                delete this.data[key];
+            }
+        };
+
+        // Simple test configuration
+        const testConfig = {
+            version: "2.0",
+            baseParameters: {
+                annualSalary: 80000,
+                salaryFrequency: "monthly",
+                incomeTaxRate: 30,
+                monthlyLivingExpenses: 3000,
+                monthlyRentOrMortgage: 2000,
+                expenseItems: [],
+                loans: [],
+                loanPrincipal: 0,
+                loanInterestRate: 5.5,
+                loanPaymentAmount: 0,
+                loanPaymentFrequency: "monthly",
+                useOffsetAccount: false,
+                currentOffsetBalance: 0,
+                monthlyInvestmentContribution: 500,
+                investmentReturnRate: 7,
+                currentInvestmentBalance: 10000,
+                superContributionRate: 11,
+                superReturnRate: 7,
+                currentSuperBalance: 50000,
+                desiredAnnualRetirementIncome: 60000,
+                retirementAge: 65,
+                currentAge: 30,
+                simulationYears: 40,
+                startDate: new Date().toISOString(),
+                householdMode: "single",
+                people: [{
+                    id: "person-1",
+                    name: "Test Person",
+                    currentAge: 30,
+                    retirementAge: 65,
+                    incomeSources: [],
+                    superAccounts: []
+                }]
+            },
+            transitions: [],
+            savedAt: new Date().toISOString()
+        };
+
+        // Store test config
+        mockStorage.setItem('finance-simulation-config', JSON.stringify(testConfig));
+
+        const status = document.getElementById('status');
+        
+        function updateStatus(message, isError = false) {
+            status.textContent = message;
+            status.style.backgroundColor = isError ? '#ffebee' : '#e8f5e8';
+            status.style.color = isError ? '#c62828' : '#2e7d32';
+        }
+
+        // Export functionality
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            try {
+                const configJson = mockStorage.getItem('finance-simulation-config');
+                if (!configJson) {
+                    updateStatus('No configuration found to export', true);
+                    return;
+                }
+
+                const config = JSON.parse(configJson);
+                const exportData = {
+                    version: "2.0",
+                    exportedAt: new Date().toISOString(),
+                    appName: "Finance Simulation Tool",
+                    ...config
+                };
+
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `finance-config-test-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                updateStatus('Configuration exported successfully!');
+            } catch (error) {
+                updateStatus(`Export failed: ${error.message}`, true);
+            }
+        });
+
+        // Import functionality
+        document.getElementById('importFile').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const jsonData = e.target.result;
+                    const parsed = JSON.parse(jsonData);
+
+                    // Validate format
+                    if (!parsed.version || !parsed.baseParameters) {
+                        updateStatus('Invalid configuration format', true);
+                        return;
+                    }
+
+                    // Extract config data
+                    const configData = {
+                        version: parsed.version,
+                        baseParameters: parsed.baseParameters,
+                        transitions: parsed.transitions || [],
+                        savedAt: parsed.savedAt || new Date().toISOString()
+                    };
+
+                    // Save to mock storage
+                    mockStorage.setItem('finance-simulation-config', JSON.stringify(configData));
+                    
+                    updateStatus('Configuration imported successfully!');
+                } catch (error) {
+                    updateStatus(`Import failed: ${error.message}`, true);
+                }
+            };
+            
+            reader.readAsText(file);
+        });
+
+        updateStatus('Ready to test import/export functionality');
+    </script>
+</body>
+</html>

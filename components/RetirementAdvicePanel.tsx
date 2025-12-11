@@ -336,12 +336,12 @@ function AdviceCard({
           <div>
             <div class="flex items-center justify-between mb-1">
               <span class="text-gray-600">Effectiveness</span>
-              <span class="font-medium">{advice.effectivenessScore}%</span>
+              <span class="font-medium">{Math.floor(advice.effectivenessScore)}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-1.5">
               <div 
                 class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" 
-                style={`width: ${advice.effectivenessScore}%`}
+                style={`width: ${Math.floor(advice.effectivenessScore)}%`}
               />
             </div>
           </div>

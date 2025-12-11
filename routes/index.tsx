@@ -16,9 +16,9 @@ import MainIsland from "../islands/MainIsland.tsx";
  */
 export default function Home() {
   return (
-    <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div class="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       {/* Header */}
-      <header class="bg-white shadow-sm sticky top-0 z-50">
+      <header class="bg-white shadow-sm flex-shrink-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -26,7 +26,7 @@ export default function Home() {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
               <div>
-                <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
+                <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
                   Finance Simulation Tool
                 </h1>
                 <p class="mt-1 text-xs sm:text-sm text-gray-600">
@@ -36,7 +36,7 @@ export default function Home() {
             </div>
             <a 
               href="/help" 
-              class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+              class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
               title="Learn how to use this tool"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,16 +49,9 @@ export default function Home() {
       </header>
 
       {/* Main Content - Delegated to Island */}
-      <MainIsland />
-
-      {/* Footer */}
-      <footer class="bg-white border-t border-gray-200 mt-8 sm:mt-12 no-print">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p class="text-center text-xs sm:text-sm text-gray-500">
-            Finance Simulation Tool - Plan your financial future with confidence
-          </p>
-        </div>
-      </footer>
+      <div class="flex-1 overflow-hidden">
+        <MainIsland />
+      </div>
     </div>
   );
 }
