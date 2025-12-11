@@ -4,6 +4,7 @@
 
 import type { ExpenseItem } from "./expenses.ts";
 import type { InvestmentHolding } from "./investments.ts";
+import {AdviceCategory, AdviceItem, Milestone, MilestoneType, RetirementAdvice} from "./milestones.ts";
 
 /**
  * Time interval granularity for simulation calculations
@@ -251,7 +252,7 @@ export interface SimulationResult {
   /** Array of warning messages about the simulation */
   warnings: string[];
   /** Detected financial milestones during simulation */
-  milestones?: import("./milestones.ts").Milestone[];
+  milestones?: Milestone[];
 }
 
 /**
@@ -381,9 +382,9 @@ export interface MilestoneComparison {
   /** Milestones that appear in both scenarios */
   commonMilestones: MilestoneTimingComparison[];
   /** Milestones only in the with-transitions scenario */
-  uniqueToWithTransitions: import("./milestones.ts").Milestone[];
+  uniqueToWithTransitions: Milestone[];
   /** Milestones only in the without-transitions scenario */
-  uniqueToWithoutTransitions: import("./milestones.ts").Milestone[];
+  uniqueToWithoutTransitions: Milestone[];
   /** Summary of timing differences */
   timingDifferences: MilestoneTimingDifference[];
 }
@@ -393,11 +394,11 @@ export interface MilestoneComparison {
  */
 export interface MilestoneTimingComparison {
   /** Milestone type being compared */
-  milestoneType: import("./milestones.ts").MilestoneType;
+  milestoneType: MilestoneType;
   /** Milestone from with-transitions scenario */
-  withTransitions: import("./milestones.ts").Milestone;
+  withTransitions: Milestone;
   /** Milestone from without-transitions scenario */
-  withoutTransitions: import("./milestones.ts").Milestone;
+  withoutTransitions: Milestone;
   /** Difference in timing (days) - positive means earlier with transitions */
   timingDifferenceInDays: number;
   /** Difference in financial impact */
@@ -409,7 +410,7 @@ export interface MilestoneTimingComparison {
  */
 export interface MilestoneTimingDifference {
   /** Type of milestone */
-  milestoneType: import("./milestones.ts").MilestoneType;
+  milestoneType: MilestoneType;
   /** Average timing difference in days */
   averageTimingDifference: number;
   /** Number of milestones of this type compared */
@@ -423,9 +424,9 @@ export interface MilestoneTimingDifference {
  */
 export interface AdviceComparison {
   /** Advice for with-transitions scenario */
-  withTransitionsAdvice: import("./milestones.ts").RetirementAdvice;
+  withTransitionsAdvice: RetirementAdvice;
   /** Advice for without-transitions scenario */
-  withoutTransitionsAdvice: import("./milestones.ts").RetirementAdvice;
+  withoutTransitionsAdvice: RetirementAdvice;
   /** Analysis of how advice differs between scenarios */
   adviceDifferences: AdviceDifference[];
   /** Explanation of why advice varies */
@@ -437,11 +438,11 @@ export interface AdviceComparison {
  */
 export interface AdviceDifference {
   /** Category of advice that differs */
-  category: import("./milestones.ts").AdviceCategory;
+  category: AdviceCategory;
   /** Advice items unique to with-transitions scenario */
-  uniqueToWithTransitions: import("./milestones.ts").AdviceItem[];
+  uniqueToWithTransitions: AdviceItem[];
   /** Advice items unique to without-transitions scenario */
-  uniqueToWithoutTransitions: import("./milestones.ts").AdviceItem[];
+  uniqueToWithoutTransitions: AdviceItem[];
   /** Advice items that changed priority or impact */
   changedAdvice: AdviceChangeComparison[];
 }
@@ -451,9 +452,9 @@ export interface AdviceDifference {
  */
 export interface AdviceChangeComparison {
   /** Advice item from with-transitions scenario */
-  withTransitions: import("./milestones.ts").AdviceItem;
+  withTransitions: AdviceItem;
   /** Advice item from without-transitions scenario */
-  withoutTransitions: import("./milestones.ts").AdviceItem;
+  withoutTransitions: AdviceItem;
   /** What changed between scenarios */
   changes: {
     /** Priority changed */

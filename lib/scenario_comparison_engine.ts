@@ -16,6 +16,7 @@ import type {
 } from "../types/financial.ts";
 import { detectMilestonesFromSimulation } from "./milestone_detector.ts";
 import { generateRetirementAdvice } from "./retirement_advice_engine.ts";
+import {AdviceCategory, AdviceItem, Milestone, MilestoneType, RetirementAdvice} from "../types/milestones";
 
 /**
  * Scenario Comparison Engine
@@ -68,7 +69,7 @@ export class ScenarioComparisonEngine {
     result: any,
     config: SimulationConfiguration,
     hasTransitions: boolean
-  ): import("../types/milestones.ts").Milestone[] {
+  ): Milestone[] {
     const transitionPoints = hasTransitions && 'transitionPoints' in result 
       ? result.transitionPoints 
       : undefined;
@@ -88,7 +89,7 @@ export class ScenarioComparisonEngine {
   private static generateAdviceForScenario(
     result: any,
     config: SimulationConfiguration
-  ): import("../types/milestones.ts").RetirementAdvice {
+  ): RetirementAdvice {
     const milestones = result.milestones || [];
     const adviceResult = generateRetirementAdvice(
       result,
@@ -104,12 +105,12 @@ export class ScenarioComparisonEngine {
    * Validates: Requirements 5.2, 5.3
    */
   static compareMilestones(
-    withTransitionsMilestones: import("../types/milestones.ts").Milestone[],
-    withoutTransitionsMilestones: import("../types/milestones.ts").Milestone[]
+    withTransitionsMilestones: Milestone[],
+    withoutTransitionsMilestones: Milestone[]
   ): MilestoneComparison {
     const commonMilestones: MilestoneTimingComparison[] = [];
-    const uniqueToWithTransitions: import("../types/milestones.ts").Milestone[] = [];
-    const uniqueToWithoutTransitions: import("../types/milestones.ts").Milestone[] = [];
+    const uniqueToWithTransitions: Milestone[] = [];
+    const uniqueToWithoutTransitions: Milestone[] = [];
 
     // Find common milestones by type and compare timing
     for (const withMilestone of withTransitionsMilestones) {
@@ -167,16 +168,16 @@ export class ScenarioComparisonEngine {
    * Finds a matching milestone in the other scenario
    */
   private static findMatchingMilestone(
-    milestone: import("../types/milestones.ts").Milestone,
-    otherMilestones: import("../types/milestones.ts").Milestone[]
-  ): import("../types/milestones.ts").Milestone | null {
+    milestone: Milestone,
+    otherMilestones: Milestone[]
+  ): Milestone | null {
     return otherMilestones.find(other => this.milestonesMatch(milestone, other)) || null;
   }
 
   /**
    * Determines if two milestones represent the same event
    */
-  private static milestonesMatch(milestone1: import("../types/milestones.ts").Milestone, milestone2: import("../types/milestones.ts").Milestone): boolean {
+  private static milestonesMatch(milestone1: Milestone, milestone2: Milestone): boolean {
     // Match by type and specific identifiers
     if (milestone1.type !== milestone2.type) {
       return false;
@@ -215,8 +216,8 @@ export class ScenarioComparisonEngine {
    * Calculates difference in financial impact between milestones
    */
   private static calculateImpactDifference(
-    milestone1: import("../types/milestones.ts").Milestone,
-    milestone2: import("../types/milestones.ts").Milestone
+    milestone1: Milestone,
+    milestone2: Milestone
   ): number | undefined {
     if (milestone1.financialImpact !== undefined && milestone2.financialImpact !== undefined) {
       return milestone1.financialImpact - milestone2.financialImpact;
@@ -230,7 +231,7 @@ export class ScenarioComparisonEngine {
   private static calculateTimingDifferencesSummary(
     commonMilestones: MilestoneTimingComparison[]
   ): MilestoneTimingDifference[] {
-    const summaryMap = new Map<import("../types/milestones.ts").MilestoneType, {
+    const summaryMap = new Map<MilestoneType, {
       differences: number[];
       count: number;
     }>();
@@ -284,8 +285,8 @@ export class ScenarioComparisonEngine {
    * Validates: Requirements 5.4, 5.5
    */
   static compareAdvice(
-    withTransitionsAdvice: import("../types/milestones.ts").RetirementAdvice,
-    withoutTransitionsAdvice: import("../types/milestones.ts").RetirementAdvice,
+    withTransitionsAdvice: RetirementAdvice,
+    withoutTransitionsAdvice: RetirementAdvice,
     comparison: ComparisonSimulationResult
   ): AdviceComparison {
     const adviceDifferences = this.analyzeAdviceDifferences(
@@ -311,10 +312,10 @@ export class ScenarioComparisonEngine {
    * Analyzes differences in advice between scenarios
    */
   private static analyzeAdviceDifferences(
-    withTransitionsAdvice: import("../types/milestones.ts").RetirementAdvice,
-    withoutTransitionsAdvice: import("../types/milestones.ts").RetirementAdvice
+    withTransitionsAdvice: RetirementAdvice,
+    withoutTransitionsAdvice: RetirementAdvice
   ): AdviceDifference[] {
-    const categories: import("../types/milestones.ts").AdviceCategory[] = ['debt', 'investment', 'expense', 'income'];
+    const categories: AdviceCategory[] = ['debt', 'investment', 'expense', 'income'];
     const differences: AdviceDifference[] = [];
 
     for (const category of categories) {
@@ -324,8 +325,8 @@ export class ScenarioComparisonEngine {
       const withoutTransitionsItems = withoutTransitionsAdvice.recommendations
         .filter(item => item.category === category);
 
-      const uniqueToWithTransitions: import("../types/milestones.ts").AdviceItem[] = [];
-      const uniqueToWithoutTransitions: import("../types/milestones.ts").AdviceItem[] = [];
+      const uniqueToWithTransitions: AdviceItem[] = [];
+      const uniqueToWithoutTransitions: AdviceItem[] = [];
       const changedAdvice: AdviceChangeComparison[] = [];
 
       // Find unique and changed advice items
@@ -378,16 +379,16 @@ export class ScenarioComparisonEngine {
    * Finds matching advice item in the other scenario
    */
   private static findMatchingAdviceItem(
-    adviceItem: import("../types/milestones.ts").AdviceItem,
-    otherItems: import("../types/milestones.ts").AdviceItem[]
-  ): import("../types/milestones.ts").AdviceItem | null {
+    adviceItem: AdviceItem,
+    otherItems: AdviceItem[]
+  ): AdviceItem | null {
     return otherItems.find(other => this.adviceItemsMatch(adviceItem, other)) || null;
   }
 
   /**
    * Determines if two advice items represent the same recommendation
    */
-  private static adviceItemsMatch(item1: import("../types/milestones.ts").AdviceItem, item2: import("../types/milestones.ts").AdviceItem): boolean {
+  private static adviceItemsMatch(item1: AdviceItem, item2: AdviceItem): boolean {
     // Match by category and similar title/description
     if (item1.category !== item2.category) {
       return false;
@@ -437,8 +438,8 @@ export class ScenarioComparisonEngine {
    * Analyzes changes between two advice items
    */
   private static analyzeAdviceChanges(
-    withTransitions: import("../types/milestones.ts").AdviceItem,
-    withoutTransitions: import("../types/milestones.ts").AdviceItem
+    withTransitions: AdviceItem,
+    withoutTransitions: AdviceItem
   ) {
     return {
       priorityChanged: withTransitions.priority !== withoutTransitions.priority,
@@ -451,7 +452,7 @@ export class ScenarioComparisonEngine {
   /**
    * Checks if projected impact has changed significantly
    */
-  private static hasImpactChanged(item1: import("../types/milestones.ts").AdviceItem, item2: import("../types/milestones.ts").AdviceItem): boolean {
+  private static hasImpactChanged(item1: AdviceItem, item2: AdviceItem): boolean {
     const impact1 = item1.projectedImpact;
     const impact2 = item2.projectedImpact;
 
@@ -490,8 +491,8 @@ export class ScenarioComparisonEngine {
    * Generates explanation for why advice changed
    */
   private static generateChangeExplanation(
-    withTransitions: import("../types/milestones.ts").AdviceItem,
-    withoutTransitions: import("../types/milestones.ts").AdviceItem,
+    withTransitions: AdviceItem,
+    withoutTransitions: AdviceItem,
     changes: any
   ): string {
     const explanations: string[] = [];
@@ -521,8 +522,8 @@ export class ScenarioComparisonEngine {
    * Generates explanation for why advice varies between scenarios
    */
   private static generateAdviceVariationExplanation(
-    withTransitionsAdvice: import("../types/milestones.ts").RetirementAdvice,
-    withoutTransitionsAdvice: import("../types/milestones.ts").RetirementAdvice,
+    withTransitionsAdvice: RetirementAdvice,
+    withoutTransitionsAdvice: RetirementAdvice,
     comparison: ComparisonSimulationResult
   ): string[] {
     const explanations: string[] = [];

@@ -8,8 +8,9 @@ import type {
   TimeInterval,
   UserParameters,
   TaxBracket,
-  PaymentFrequency,
+  PaymentFrequency, IncomeSource,
 } from "../types/financial.ts";
+import {ExpenseItem} from "../types/expenses.ts";
 
 /**
  * Converts a time interval to number of periods per year
@@ -133,7 +134,7 @@ export const IncomeProcessor = {
    * @returns Annual income amount from this source
    */
   calculateIncomeFromSource(
-    source: import("../types/financial.ts").IncomeSource,
+    source: IncomeSource,
     currentDate?: Date
   ): number {
     // Check if this is a one-off income
@@ -362,7 +363,7 @@ export const ExpenseProcessor = {
    * @returns Total expense amount for the interval
    */
   calculateExpensesFromItems(
-    items: import("../types/expenses.ts").ExpenseItem[],
+    items: ExpenseItem[],
     interval: TimeInterval,
     currentDate?: Date
   ): number {
@@ -448,7 +449,7 @@ export const ExpenseProcessor = {
    * @param items Array of expense items
    * @returns Monthly total
    */
-  calculateMonthlyTotal(items: import("../types/expenses.ts").ExpenseItem[]): number {
+  calculateMonthlyTotal(items: ExpenseItem[]): number {
     return this.calculateExpensesFromItems(items, "month");
   },
 };

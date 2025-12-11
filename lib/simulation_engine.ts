@@ -929,7 +929,7 @@ export const SimulationEngine = {
         : undefined;
 
     // Collect all super accounts from all people (household mode) or top-level superAccounts
-    const allSuperAccountsTransitions: import("../types/financial.ts").SuperAccount[] = [];
+    const allSuperAccountsTransitions: SuperAccount[] = [];
     
     if (currentParams.householdMode === "couple" && currentParams.people && currentParams.people.length > 0) {
       // Collect super accounts from all people

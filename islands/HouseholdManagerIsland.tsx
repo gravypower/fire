@@ -4,7 +4,13 @@
  */
 
 import { useState } from "preact/hooks";
-import type { SimulationConfiguration, Person, IncomeSource, PaymentFrequency } from "../types/financial.ts";
+import type {
+  SimulationConfiguration,
+  Person,
+  IncomeSource,
+  PaymentFrequency,
+  SuperAccount, UserParameters
+} from "../types/financial.ts";
 
 interface HouseholdManagerIslandProps {
   config: SimulationConfiguration;
@@ -25,7 +31,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
   // Super account management state
   const [isAddingSuper, setIsAddingSuper] = useState(false);
   const [editingSuperId, setEditingSuperId] = useState<string | null>(null);
-  const [superFormData, setSuperFormData] = useState<Partial<import("../types/financial.ts").SuperAccount>>({});
+  const [superFormData, setSuperFormData] = useState<Partial<SuperAccount>>({});
   const [superPersonId, setSuperPersonId] = useState<string | null>(null);
 
   /**
@@ -113,8 +119,8 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
     );
 
     // Sync legacy fields with first person's data for backward compatibility
-    const firstPerson = updatedPeople[0];
-    const legacyUpdates: Partial<import("../types/financial.ts").UserParameters> = {};
+    const firstPerson = updatedPeople[0] as UserParameters;
+    const legacyUpdates: Partial<UserParameters> = {};
     
     if (firstPerson) {
       if (updates.currentAge !== undefined) {
@@ -258,7 +264,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
   /**
    * Starts editing a super account
    */
-  const startEditSuper = (personId: string, superAcc: import("../types/financial.ts").SuperAccount) => {
+  const startEditSuper = (personId: string, superAcc: SuperAccount) => {
     setSuperFormData({ ...superAcc });
     setSuperPersonId(personId);
     setIsAddingSuper(false);
@@ -291,11 +297,11 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
         if (editingSuperId) {
           // Update existing super
           updatedSuperAccounts = person.superAccounts.map(sup =>
-            sup.id === editingSuperId ? { ...sup, ...superFormData } as import("../types/financial.ts").SuperAccount : sup
+            sup.id === editingSuperId ? { ...sup, ...superFormData } as SuperAccount : sup
           );
         } else {
           // Add new super
-          const newSuper: import("../types/financial.ts").SuperAccount = {
+          const newSuper: SuperAccount = {
             id: `super-${Date.now()}`,
             personId: superPersonId,
             ...superFormData as any,

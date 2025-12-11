@@ -4,7 +4,14 @@
  */
 
 import { useEffect, useState } from "preact/hooks";
-import type { UserParameters, PaymentFrequency, SimulationConfiguration, TaxBracket } from "../types/financial.ts";
+import type {
+  UserParameters,
+  PaymentFrequency,
+  SimulationConfiguration,
+  TaxBracket,
+  Loan,
+  SuperAccount
+} from "../types/financial.ts";
 import { DEFAULT_AU_TAX_BRACKETS } from "../lib/processors.ts";
 import {
   validatePositiveNumber,
@@ -284,7 +291,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   // Loan management state
   const [isAddingLoan, setIsAddingLoan] = useState(false);
   const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
-  const [loanFormData, setLoanFormData] = useState<Partial<import("../types/financial.ts").Loan>>({});
+  const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
 
   /**
    * Starts adding a new loan
@@ -308,7 +315,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   /**
    * Starts editing a loan
    */
-  const startEditLoan = (loan: import("../types/financial.ts").Loan) => {
+  const startEditLoan = (loan: Loan) => {
     setLoanFormData({ ...loan });
     setIsAddingLoan(false);
     setEditingLoanId(loan.id);
@@ -338,11 +345,11 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
     if (editingLoanId) {
       // Update existing loan
       updatedLoans = loans.map(loan =>
-        loan.id === editingLoanId ? { ...loan, ...loanFormData } as import("../types/financial.ts").Loan : loan
+        loan.id === editingLoanId ? { ...loan, ...loanFormData } as Loan : loan
       );
     } else {
       // Add new loan
-      const newLoan: import("../types/financial.ts").Loan = {
+      const newLoan: Loan = {
         id: `loan-${Date.now()}`,
         ...loanFormData as any,
       };
@@ -394,7 +401,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   // Super account management state
   const [isAddingSuper, setIsAddingSuper] = useState(false);
   const [editingSuperId, setEditingSuperId] = useState<string | null>(null);
-  const [superFormData, setSuperFormData] = useState<Partial<import("../types/financial.ts").SuperAccount>>({});
+  const [superFormData, setSuperFormData] = useState<Partial<SuperAccount>>({});
 
   /**
    * Starts adding a new super account
@@ -413,7 +420,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   /**
    * Starts editing a super account
    */
-  const startEditSuper = (superAcc: import("../types/financial.ts").SuperAccount) => {
+  const startEditSuper = (superAcc: SuperAccount) => {
     setSuperFormData({ ...superAcc });
     setIsAddingSuper(false);
     setEditingSuperId(superAcc.id);
@@ -443,11 +450,11 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
     if (editingSuperId) {
       // Update existing super
       updatedSupers = superAccounts.map(superAcc =>
-        superAcc.id === editingSuperId ? { ...superAcc, ...superFormData } as import("../types/financial.ts").SuperAccount : superAcc
+        superAcc.id === editingSuperId ? { ...superAcc, ...superFormData } as SuperAccount : superAcc
       );
     } else {
       // Add new super
-      const newSuper: import("../types/financial.ts").SuperAccount = {
+      const newSuper: SuperAccount = {
         id: `super-${Date.now()}`,
         ...superFormData as any,
       };

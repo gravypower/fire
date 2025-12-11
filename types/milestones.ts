@@ -2,6 +2,8 @@
  * Data models for financial milestones and retirement advice
  */
 
+import {IncomeSource, SuperAccount, UserParameters} from "./financial.ts";
+
 /**
  * Types of milestones that can be detected during simulation
  */
@@ -204,7 +206,7 @@ export interface AdviceItem {
   /** Person this advice applies to (for household mode) */
   personId?: string;
   /** Suggested parameter changes to implement this advice */
-  parameterChanges?: Partial<import("../types/financial.ts").UserParameters>;
+  parameterChanges?: Partial<UserParameters>;
   /** Person-specific parameter changes (for modifying individual people in household) */
   personSpecificChanges?: {
     /** ID of the person to modify */
@@ -218,7 +220,7 @@ export interface AdviceItem {
         /** Income source ID (for update/remove) */
         id?: string;
         /** Income source data (for add/update) */
-        data?: Partial<import("../types/financial.ts").IncomeSource>;
+        data?: Partial<IncomeSource>;
       }>;
       /** Updates to super accounts */
       superAccounts?: Array<{
@@ -227,7 +229,7 @@ export interface AdviceItem {
         /** Super account ID (for update/remove) */
         id?: string;
         /** Super account data (for add/update) */
-        data?: Partial<import("../types/financial.ts").SuperAccount>;
+        data?: Partial<SuperAccount>;
       }>;
       /** Updates to person properties */
       personUpdates?: {
