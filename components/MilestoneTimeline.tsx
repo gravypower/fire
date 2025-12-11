@@ -51,6 +51,8 @@ function getMilestoneIcon(type: MilestoneType): string {
       return '🏖️';
     case 'parameter_transition':
       return '📊';
+    case 'expense_expiration':
+      return '💸';
     default:
       return '📅';
   }
@@ -93,6 +95,13 @@ function getCategoryColors(category: MilestoneCategory): {
         border: 'border-yellow-200',
         bg: 'bg-yellow-50',
         dot: 'bg-yellow-600 border-yellow-600',
+      };
+    case 'expense':
+      return {
+        badge: 'bg-orange-100 text-orange-800',
+        border: 'border-orange-200',
+        bg: 'bg-orange-50',
+        dot: 'bg-orange-600 border-orange-600',
       };
     default:
       return {

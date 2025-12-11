@@ -5,7 +5,7 @@
  * In Fresh, useState can only be used in island components, not in routes.
  */
 
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import type {
   SimulationConfiguration,
   EnhancedSimulationResult,
@@ -19,13 +19,45 @@ import ExpenseManagerIsland from "./ExpenseManagerIsland.tsx";
 import HouseholdManagerIsland from "./HouseholdManagerIsland.tsx";
 import InvestmentManagerIsland from "./InvestmentManagerIsland.tsx";
 import ErrorBoundary from "../components/ErrorBoundary.tsx";
+import MilestoneTimeline from "../components/MilestoneTimeline.tsx";
+import RetirementAdvicePanel from "../components/RetirementAdvicePanel.tsx";
 import { SimulationEngine } from "../lib/simulation_engine.ts";
 import { storageService } from "../lib/storage.ts";
+import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
+import type { RetirementAdvice } from "../types/milestones.ts";
 
 export default function MainIsland() {
   const [config, setConfig] = useState<SimulationConfiguration | null>(null);
   const [simulationResult, setSimulationResult] = useState<EnhancedSimulationResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"configure" | "results" | "investments">("configure");
+  const [retirementAdvice, setRetirementAdvice] = useState<RetirementAdvice | null>(null);
+  const [activeTab, setActiveTab] = useState<"configure" | "results" | "investments" | "milestones" | "advice">("configure");
+  
+  // Scroll position tracking
+  const scrollPositions = useRef<Record<string, number>>({
+    configure: 0,
+    results: 0,
+    investments: 0,
+    milestones: 0,
+    advice: 0,
+  });
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Add scroll listener to continuously save position
+  useEffect(() => {
+    const handleScroll = () => {
+      if (contentRef.current) {
+        scrollPositions.current[activeTab] = contentRef.current.scrollTop;
+      }
+    };
+
+    const scrollContainer = contentRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+      return () => {
+        scrollContainer.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [activeTab]);
 
   // Load configuration on mount
   useEffect(() => {
@@ -93,9 +125,25 @@ export default function MainIsland() {
     try {
       const result = SimulationEngine.runSimulationWithTransitions(configuration);
       setSimulationResult(result);
+      
+      // Generate retirement advice
+      try {
+        const adviceResult = generateRetirementAdvice(
+          result,
+          configuration.baseParameters,
+          result.milestones || []
+        );
+        setRetirementAdvice(adviceResult.advice);
+      } catch (error) {
+        console.warn('Failed to generate retirement advice:', error);
+        setRetirementAdvice(null);
+      }
+      
       // Don't auto-switch tabs - let user stay on current tab
     } catch (error) {
       console.error("Simulation failed:", error);
+      setSimulationResult(null);
+      setRetirementAdvice(null);
     }
   };
 
@@ -111,15 +159,41 @@ export default function MainIsland() {
     runSimulation(newConfig);
   };
 
+  // Save scroll position when switching tabs
+  const saveScrollPosition = () => {
+    if (contentRef.current) {
+      scrollPositions.current[activeTab] = contentRef.current.scrollTop;
+    }
+  };
+
+  // Restore scroll position when tab becomes active
+  const restoreScrollPosition = (tab: string) => {
+    // Use requestAnimationFrame for better timing with content rendering
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (contentRef.current) {
+          contentRef.current.scrollTop = scrollPositions.current[tab] || 0;
+        }
+      }, 100); // Longer delay for complex content like investments
+    });
+  };
+
+  // Handle tab switching with scroll position management
+  const handleTabSwitch = (tab: "configure" | "results" | "investments" | "milestones" | "advice") => {
+    saveScrollPosition();
+    setActiveTab(tab);
+    restoreScrollPosition(tab);
+  };
+
   return (
-    <main class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div class="min-h-screen bg-gray-50">
       <ErrorBoundary>
-        {/* Tab Navigation */}
-        <div class="mb-6">
-          <div class="border-b border-gray-200">
+        {/* Fixed Header with Tab Navigation */}
+        <div class="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm backdrop-blur-sm">
+          <div class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
               <button
-                onClick={() => setActiveTab("configure")}
+                onClick={() => handleTabSwitch("configure")}
                 class={`${
                   activeTab === "configure"
                     ? "border-blue-500 text-blue-600"
@@ -133,7 +207,7 @@ export default function MainIsland() {
                 Configure
               </button>
               <button
-                onClick={() => setActiveTab("investments")}
+                onClick={() => handleTabSwitch("investments")}
                 class={`${
                   activeTab === "investments"
                     ? "border-blue-500 text-blue-600"
@@ -151,7 +225,7 @@ export default function MainIsland() {
                 )}
               </button>
               <button
-                onClick={() => setActiveTab("results")}
+                onClick={() => handleTabSwitch("results")}
                 class={`${
                   activeTab === "results"
                     ? "border-blue-500 text-blue-600"
@@ -168,9 +242,53 @@ export default function MainIsland() {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => handleTabSwitch("milestones")}
+                class={`${
+                  activeTab === "milestones"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+                Milestones
+                {simulationResult?.milestones && simulationResult.milestones.length > 0 && (
+                  <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    {simulationResult.milestones.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => handleTabSwitch("advice")}
+                class={`${
+                  activeTab === "advice"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Advice
+                {retirementAdvice && (
+                  <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                    {retirementAdvice.recommendations.length}
+                  </span>
+                )}
+              </button>
             </nav>
           </div>
         </div>
+
+        {/* Scrollable Content Area */}
+        <div 
+          ref={contentRef}
+          class="overflow-y-auto"
+          style={{ height: "calc(100vh - 80px)" }} // Subtract header height (adjusted for proper spacing)
+        >
+          <main class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
 
         {/* Configure Tab */}
         {activeTab === "configure" && (
@@ -290,7 +408,7 @@ export default function MainIsland() {
                   Configure your financial parameters first to start tracking investments.
                 </p>
                 <button
-                  onClick={() => setActiveTab("configure")}
+                  onClick={() => handleTabSwitch("configure")}
                   class="btn-primary inline-flex items-center"
                 >
                   Go to Configure
@@ -345,7 +463,7 @@ export default function MainIsland() {
                   Configure your financial parameters in the Configure tab to see results.
                 </p>
                 <button
-                  onClick={() => setActiveTab("configure")}
+                  onClick={() => handleTabSwitch("configure")}
                   class="btn-primary inline-flex items-center"
                 >
                   <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,7 +476,121 @@ export default function MainIsland() {
             )}
           </div>
         )}
+
+        {/* Milestones Tab */}
+        {activeTab === "milestones" && (
+          <div class="space-y-4 sm:space-y-6 fade-in">
+            {simulationResult?.milestones && simulationResult.milestones.length > 0 ? (
+              <ErrorBoundary>
+                <MilestoneTimeline
+                  milestones={simulationResult.milestones}
+                  simulationStates={simulationResult.states}
+                  onMilestoneClick={(milestone) => {
+                    console.log('Milestone clicked:', milestone);
+                    // Could implement detailed milestone view here
+                  }}
+                />
+              </ErrorBoundary>
+            ) : (
+              <div class="card p-8 text-center fade-in">
+                <svg
+                  class="mx-auto h-16 w-16 text-gray-400 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                  />
+                </svg>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">
+                  No Milestones Found
+                </h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  {!simulationResult 
+                    ? "Run a simulation to see your financial milestones."
+                    : "No significant financial milestones were detected in your simulation."
+                  }
+                </p>
+                {!simulationResult && (
+                  <button
+                    onClick={() => handleTabSwitch("configure")}
+                    class="btn-primary inline-flex items-center"
+                  >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Go to Configure
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Advice Tab */}
+        {activeTab === "advice" && (
+          <div class="space-y-4 sm:space-y-6 fade-in">
+            {retirementAdvice && simulationResult ? (
+              <ErrorBoundary>
+                <RetirementAdvicePanel
+                  advice={retirementAdvice}
+                  currentScenario={simulationResult}
+                  onImplementStrategy={(strategy) => {
+                    console.log('Strategy to implement:', strategy);
+                    // Could implement strategy implementation here
+                  }}
+                />
+              </ErrorBoundary>
+            ) : (
+              <div class="card p-8 text-center fade-in">
+                <svg
+                  class="mx-auto h-16 w-16 text-gray-400 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                  />
+                </svg>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">
+                  No Advice Available
+                </h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  {!simulationResult 
+                    ? "Run a simulation to get personalized retirement advice."
+                    : !retirementAdvice
+                      ? "No retirement advice was generated for your current scenario."
+                      : "Retirement advice is being generated..."
+                  }
+                </p>
+                {!simulationResult && (
+                  <button
+                    onClick={() => handleTabSwitch("configure")}
+                    class="btn-primary inline-flex items-center"
+                  >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Go to Configure
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+          </main>
+        </div>
       </ErrorBoundary>
-    </main>
+    </div>
   );
 }

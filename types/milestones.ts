@@ -9,12 +9,13 @@ export type MilestoneType =
   | 'loan_payoff' 
   | 'offset_completion' 
   | 'retirement_eligibility' 
-  | 'parameter_transition';
+  | 'parameter_transition'
+  | 'expense_expiration';
 
 /**
  * Categories for organizing milestones
  */
-export type MilestoneCategory = 'debt' | 'investment' | 'retirement' | 'transition';
+export type MilestoneCategory = 'debt' | 'investment' | 'retirement' | 'transition' | 'expense';
 
 /**
  * Base milestone interface - common properties for all milestone types
@@ -103,13 +104,32 @@ export interface ParameterTransitionMilestone extends BaseMilestone {
 }
 
 /**
+ * Milestone for when an expense with an end date expires
+ */
+export interface ExpenseExpirationMilestone extends BaseMilestone {
+  type: 'expense_expiration';
+  category: 'expense';
+  /** ID of the expense that expired */
+  expenseId: string;
+  /** Name of the expense */
+  expenseName: string;
+  /** Monthly amount that will be saved */
+  monthlySavings: number;
+  /** Annual amount that will be saved */
+  annualSavings: number;
+  /** Category of the expense */
+  expenseCategory: string;
+}
+
+/**
  * Union type for all milestone types
  */
 export type Milestone = 
   | LoanPayoffMilestone 
   | OffsetCompletionMilestone 
   | RetirementMilestone 
-  | ParameterTransitionMilestone;
+  | ParameterTransitionMilestone
+  | ExpenseExpirationMilestone;
 
 /**
  * Result of milestone detection process
@@ -261,6 +281,8 @@ export interface MilestoneDetectionConfig {
   detectRetirementEligibility: boolean;
   /** Whether to detect parameter transition milestones */
   detectParameterTransitions: boolean;
+  /** Whether to detect expense expiration milestones */
+  detectExpenseExpirations: boolean;
   /** Minimum financial impact to consider a milestone significant */
   minimumImpactThreshold?: number;
 }

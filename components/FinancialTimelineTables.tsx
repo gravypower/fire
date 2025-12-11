@@ -64,6 +64,9 @@ function getEventInfo(
       case 'transition':
         rowClass = "bg-yellow-50 border-l-4 border-yellow-400";
         break;
+      case 'expense':
+        rowClass = "bg-orange-50 border-l-4 border-orange-400";
+        break;
       default:
         rowClass = "bg-gray-50 border-l-4 border-gray-400";
     }
@@ -79,6 +82,7 @@ function DateCell({ state, eventInfo }: { state: FinancialState; eventInfo: Retu
       case 'offset_completion': return '🏦';
       case 'retirement_eligibility': return '🏖️';
       case 'parameter_transition': return '📊';
+      case 'expense_expiration': return '💸';
       default: return '📅';
     }
   };
@@ -89,6 +93,7 @@ function DateCell({ state, eventInfo }: { state: FinancialState; eventInfo: Retu
       case 'investment': return { bg: 'bg-blue-100', text: 'text-blue-700' };
       case 'retirement': return { bg: 'bg-purple-100', text: 'text-purple-700' };
       case 'transition': return { bg: 'bg-yellow-100', text: 'text-yellow-700' };
+      case 'expense': return { bg: 'bg-orange-100', text: 'text-orange-700' };
       default: return { bg: 'bg-gray-100', text: 'text-gray-700' };
     }
   };

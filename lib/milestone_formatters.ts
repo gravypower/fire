@@ -10,6 +10,7 @@ import type {
   OffsetCompletionMilestone,
   RetirementMilestone,
   ParameterTransitionMilestone,
+  ExpenseExpirationMilestone,
   MilestoneCategory,
   MilestoneType,
 } from "../types/milestones.ts";
@@ -177,6 +178,35 @@ export function formatParameterTransitionMilestone(milestone: ParameterTransitio
 }
 
 /**
+ * Formats an expense expiration milestone for display
+ * @param milestone Expense expiration milestone
+ * @returns Formatted milestone display object
+ */
+export function formatExpenseExpirationMilestone(milestone: ExpenseExpirationMilestone): MilestoneDisplay {
+  const impact = formatFinancialImpact(milestone.annualSavings);
+  
+  return {
+    id: milestone.id,
+    type: milestone.type,
+    category: milestone.category,
+    date: formatMilestoneDate(milestone.date),
+    title: milestone.title,
+    description: milestone.description,
+    primaryDetail: `Saves ${formatCurrency(milestone.monthlySavings)}/month`,
+    secondaryDetails: [
+      `Expense: ${milestone.expenseName}`,
+      `Category: ${milestone.expenseCategory}`,
+      `Monthly savings: ${formatCurrency(milestone.monthlySavings)}`,
+      `Annual savings: ${formatCurrency(milestone.annualSavings)}`,
+      `End date: ${formatMilestoneDate(milestone.date)}`,
+    ],
+    financialImpact: impact,
+    icon: "💸",
+    badgeColor: "bg-orange-100 text-orange-800",
+  };
+}
+
+/**
  * Formats any milestone for display using the appropriate formatter
  * @param milestone Milestone to format
  * @returns Formatted milestone display object
@@ -191,6 +221,8 @@ export function formatMilestone(milestone: Milestone): MilestoneDisplay {
       return formatRetirementMilestone(milestone as RetirementMilestone);
     case 'parameter_transition':
       return formatParameterTransitionMilestone(milestone as ParameterTransitionMilestone);
+    case 'expense_expiration':
+      return formatExpenseExpirationMilestone(milestone as ExpenseExpirationMilestone);
     default:
       // Fallback for unknown milestone types
       const baseMilestone = milestone as Milestone;
@@ -285,6 +317,7 @@ export function groupMilestonesByCategory(
     investment: [],
     retirement: [],
     transition: [],
+    expense: [],
   };
 
   milestones.forEach(milestone => {

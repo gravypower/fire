@@ -12,12 +12,14 @@ import type {
   PaymentFrequency,
   IncomeSource,
 } from "../types/financial.ts";
+import type { ExpenseItem } from "../types/expenses.ts";
 import type {
   Milestone,
   LoanPayoffMilestone,
   OffsetCompletionMilestone,
   RetirementMilestone,
   ParameterTransitionMilestone,
+  ExpenseExpirationMilestone,
   MilestoneDetectionResult,
   MilestoneDetectionError,
   MilestoneDetectionConfig,
@@ -36,6 +38,7 @@ const DEFAULT_CONFIG: MilestoneDetectionConfig = {
   detectOffsetCompletion: true,
   detectRetirementEligibility: true,
   detectParameterTransitions: true,
+  detectExpenseExpirations: true,
   minimumImpactThreshold: 1000, // $1000 minimum impact
 };
 
@@ -102,6 +105,14 @@ export class MilestoneDetector {
         const transitionMilestones = this.detectParameterTransitions(states, transitionPoints);
         globalPerformanceMonitor.endOperation('transition_detection', transitionPoints.length);
         milestones.push(...transitionMilestones);
+      }
+
+      // Detect expense expiration milestones
+      if (this.config.detectExpenseExpirations) {
+        globalPerformanceMonitor.startOperation('expense_expiration_detection');
+        const expenseExpirations = this.detectExpenseExpirations(states, params);
+        globalPerformanceMonitor.endOperation('expense_expiration_detection', states.length);
+        milestones.push(...expenseExpirations);
       }
 
       // Optimized sorting for large datasets
@@ -626,6 +637,74 @@ export class MilestoneDetector {
     }
 
     return milestones;
+  }
+
+  /**
+   * Detects expense expiration milestones when expenses with end dates expire
+   * Validates: Requirements 1.6
+   */
+  detectExpenseExpirations(states: FinancialState[], params: UserParameters): ExpenseExpirationMilestone[] {
+    const milestones: ExpenseExpirationMilestone[] = [];
+
+    if (states.length === 0 || !params.expenseItems || params.expenseItems.length === 0) {
+      return milestones;
+    }
+
+    // Get simulation start and end dates
+    const startDate = states[0].date;
+    const endDate = states[states.length - 1].date;
+
+    // Check each expense item for end dates within the simulation period
+    for (const expense of params.expenseItems) {
+      if (!expense.endDate || !expense.enabled) {
+        continue; // Skip expenses without end dates or disabled expenses
+      }
+
+      // Check if the end date falls within the simulation period
+      if (expense.endDate >= startDate && expense.endDate <= endDate) {
+        // Calculate the savings from this expense ending
+        const monthlySavings = this.calculateMonthlyExpenseAmount(expense);
+        const annualSavings = monthlySavings * 12;
+
+        // Only create milestone if savings meet minimum threshold
+        if (!this.config.minimumImpactThreshold || annualSavings >= this.config.minimumImpactThreshold) {
+          milestones.push({
+            id: `expense-expiration-${expense.id}-${expense.endDate.getTime()}`,
+            type: 'expense_expiration',
+            category: 'expense',
+            date: new Date(expense.endDate),
+            title: `${expense.name} Expires`,
+            description: `${expense.name} (${expense.category}) ends, saving ${monthlySavings.toLocaleString()}/month (${annualSavings.toLocaleString()}/year). This expense will no longer be deducted from your budget.`,
+            financialImpact: annualSavings, // Positive impact as it's savings
+            expenseId: expense.id,
+            expenseName: expense.name,
+            monthlySavings,
+            annualSavings,
+            expenseCategory: expense.category,
+          });
+        }
+      }
+    }
+
+    return milestones;
+  }
+
+  /**
+   * Calculates the monthly amount for an expense based on its frequency
+   */
+  private calculateMonthlyExpenseAmount(expense: ExpenseItem): number {
+    switch (expense.frequency) {
+      case "weekly":
+        return expense.amount * 52 / 12; // 52 weeks per year / 12 months
+      case "fortnightly":
+        return expense.amount * 26 / 12; // 26 fortnights per year / 12 months
+      case "monthly":
+        return expense.amount;
+      case "yearly":
+        return expense.amount / 12;
+      default:
+        return expense.amount; // Default to monthly
+    }
   }
 
   /**

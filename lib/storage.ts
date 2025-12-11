@@ -130,6 +130,39 @@ function toSerializable(
 }
 
 /**
+ * Converts dates in nested objects (like expense items, income sources, etc.)
+ * @param obj - Object that may contain date strings
+ * @returns Object with date strings converted to Date objects
+ */
+function convertNestedDates(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(convertNestedDates);
+  }
+  
+  if (typeof obj === 'object') {
+    const converted: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      // Convert known date fields
+      if ((key === 'startDate' || key === 'endDate' || key === 'oneOffDate') && 
+          typeof value === 'string') {
+        converted[key] = new Date(value);
+      } else if (typeof value === 'object') {
+        converted[key] = convertNestedDates(value);
+      } else {
+        converted[key] = value;
+      }
+    }
+    return converted;
+  }
+  
+  return obj;
+}
+
+/**
  * Converts serializable format back to UserParameters
  * @param serializable - The serializable parameters
  * @returns UserParameters with Date object restored
@@ -137,10 +170,25 @@ function toSerializable(
 function fromSerializable(
   serializable: SerializableUserParameters,
 ): UserParameters {
-  return {
+  const result = {
     ...serializable,
     startDate: new Date(serializable.startDate),
   };
+  
+  // Convert nested dates in arrays
+  if (result.expenseItems) {
+    result.expenseItems = convertNestedDates(result.expenseItems);
+  }
+  
+  if (result.incomeSources) {
+    result.incomeSources = convertNestedDates(result.incomeSources);
+  }
+  
+  if (result.people) {
+    result.people = convertNestedDates(result.people);
+  }
+  
+  return result as UserParameters;
 }
 
 /**

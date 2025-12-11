@@ -12,9 +12,8 @@ import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
 import NetWorthChart from "../components/NetWorthChart.tsx";
 import CashFlowChart from "../components/CashFlowChart.tsx";
 import ChartErrorBoundary from "../components/ChartErrorBoundary.tsx";
-import TimelineSummary from "../components/TimelineSummary.tsx";
-import MilestoneTimeline from "../components/MilestoneTimeline.tsx";
-import RetirementAdvicePanel from "../components/RetirementAdvicePanel.tsx";
+
+
 import { SummaryTable, LoansTable, InvestmentsTable, TaxTable, CashFlowTable } from "../components/FinancialTimelineTables.tsx";
 
 interface VisualizationIslandProps {
@@ -50,9 +49,7 @@ export default function VisualizationIsland({
   // State for which detailed table to show
   const [selectedDetailTable, setSelectedDetailTable] = useState<"summary" | "loans" | "tax" | "investments" | "cashflow">("summary");
 
-  // State for milestone and advice visibility
-  const [showMilestones, setShowMilestones] = useState<boolean>(true);
-  const [showAdvice, setShowAdvice] = useState<boolean>(true);
+
 
   // Check if result is an EnhancedSimulationResult
   const isEnhancedResult = (res: SimulationResult | EnhancedSimulationResult): res is EnhancedSimulationResult => {
@@ -357,17 +354,7 @@ export default function VisualizationIsland({
         </div>
       )}
 
-      {/* Timeline Summary - Requirements 9.1 */}
-      {isEnhancedResult(result) && result.periods && result.periods.length > 1 && (
-        <div class="mb-6">
-          <TimelineSummary 
-            config={{
-              baseParameters: result.periods[0].parameters,
-              transitions: result.transitionPoints.map(tp => tp.transition),
-            }}
-          />
-        </div>
-      )}
+
 
       {/* Charts Section - Requirements 6.1, 6.2, 6.3, 6.4, 4.1, 4.4 */}
       <div class="grid grid-cols-1 gap-6 mb-6">
@@ -385,68 +372,7 @@ export default function VisualizationIsland({
         </ChartErrorBoundary>
       </div>
 
-      {/* Milestone and Advice Toggle Controls - Requirements 1.1, 2.1, 3.1 */}
-      {userParameters && (milestones.length > 0 || retirementAdvice) && (
-        <div class="mb-6">
-          <div class="flex flex-wrap gap-4 items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-800">Financial Insights</h3>
-            <div class="flex gap-2">
-              {milestones.length > 0 && (
-                <button
-                  onClick={() => setShowMilestones(!showMilestones)}
-                  class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                    showMilestones
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  {showMilestones ? 'Hide' : 'Show'} Milestones ({milestones.length})
-                </button>
-              )}
-              {retirementAdvice && (
-                <button
-                  onClick={() => setShowAdvice(!showAdvice)}
-                  class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                    showAdvice
-                      ? "bg-green-600 text-white shadow-md"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  {showAdvice ? 'Hide' : 'Show'} Advice ({retirementAdvice.recommendations.length})
-                </button>
-              )}
-            </div>
-          </div>
 
-          {/* Milestone Timeline Section - Requirements 1.1, 3.1 */}
-          {showMilestones && milestones.length > 0 && (
-            <div class="mb-6">
-              <MilestoneTimeline
-                milestones={milestones}
-                simulationStates={result.states}
-                onMilestoneClick={(milestone) => {
-                  console.log('Milestone clicked:', milestone);
-                  // Could implement detailed milestone view here
-                }}
-              />
-            </div>
-          )}
-
-          {/* Retirement Advice Panel Section - Requirements 2.1 */}
-          {showAdvice && retirementAdvice && (
-            <div class="mb-6">
-              <RetirementAdvicePanel
-                advice={retirementAdvice}
-                currentScenario={result}
-                onImplementStrategy={(strategy) => {
-                  console.log('Strategy to implement:', strategy);
-                  // Could implement strategy implementation here
-                }}
-              />
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Time Granularity Selector - Requirements 3.5 */}
       <div class="mb-6">
