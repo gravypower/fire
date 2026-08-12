@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fire-dev",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["run", "-A", "--watch=static/,routes/", "dev.ts"],
+      "port": 8000
+    }
+  ]
+}
