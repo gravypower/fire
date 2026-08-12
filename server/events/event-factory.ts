@@ -338,6 +338,10 @@ export class FinancialEventFactory {
     superBalances?: { [superId: string]: number },
     offsetBalances?: { [loanId: string]: number },
     investmentBalances?: { [holdingId: string]: number },
+    taxPaid?: number,
+    expenses?: number,
+    interestSaved?: number,
+    deductibleInterest?: number,
     metadata?: Partial<EventMetadata>
   ): FinancialStateCalculatedEvent {
     return this.createEvent(EVENT_TYPES.FINANCIAL_STATE_CALCULATED, {
@@ -353,6 +357,10 @@ export class FinancialEventFactory {
       superBalances,
       offsetBalances,
       investmentBalances,
+      taxPaid,
+      expenses,
+      interestSaved,
+      deductibleInterest,
     }, metadata) as FinancialStateCalculatedEvent;
   }
 

@@ -218,6 +218,10 @@ export interface FinancialStateCalculatedEvent extends FinancialEvent {
     superBalances?: { [superId: string]: number };
     offsetBalances?: { [loanId: string]: number };
     investmentBalances?: { [holdingId: string]: number };
+    taxPaid?: number;
+    expenses?: number;
+    interestSaved?: number;
+    deductibleInterest?: number;
   };
 }
 

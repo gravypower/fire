@@ -433,9 +433,18 @@ export class TimelineProjectionBuilder
         offsetBalance: projection.currentState.offsetBalance,
         netWorth: projection.currentState.netWorth,
         cashFlow: projection.currentState.cashFlow,
-        taxPaid: 0, // Will be calculated from tax events
-        expenses: 0, // Will be calculated from expense events
-        interestSaved: 0, // Will be calculated from loan events
+        taxPaid: typeof event.data.taxPaid === "number"
+          ? event.data.taxPaid
+          : 0,
+        expenses: typeof event.data.expenses === "number"
+          ? event.data.expenses
+          : 0,
+        interestSaved: typeof event.data.interestSaved === "number"
+          ? event.data.interestSaved
+          : 0,
+        deductibleInterest: typeof event.data.deductibleInterest === "number"
+          ? event.data.deductibleInterest
+          : undefined,
         loanBalances: projection.balanceBreakdown.loanBalances,
         superBalances: projection.balanceBreakdown.superBalances,
         offsetBalances: projection.balanceBreakdown.offsetBalances,

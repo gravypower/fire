@@ -1282,7 +1282,11 @@ export class StateEventProcessor {
     offsetBalances?: { [loanId: string]: number },
     investmentBalances?: { [holdingId: string]: number },
     netWorth?: number,
-    cashFlow?: number
+    cashFlow?: number,
+    taxPaid?: number,
+    expenses?: number,
+    interestSaved?: number,
+    deductibleInterest?: number
   ): FinancialEvent {
     EventValidation.validateDate(date, 'date');
 
@@ -1302,7 +1306,11 @@ export class StateEventProcessor {
       loanBalances,
       superBalances,
       offsetBalances,
-      investmentBalances
+      investmentBalances,
+      taxPaid,
+      expenses,
+      interestSaved,
+      deductibleInterest
     );
   }
 }

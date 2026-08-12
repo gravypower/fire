@@ -215,6 +215,10 @@ export class FinancialAggregateRoot implements FinancialAggregate {
               state.investmentBalances,
               state.netWorth,
               state.cashFlow,
+              state.taxPaid,
+              state.expenses,
+              state.interestSaved,
+              state.deductibleInterest,
             ),
           );
         }
