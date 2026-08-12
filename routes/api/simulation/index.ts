@@ -9,9 +9,10 @@ export const handler: Handlers = {
   async GET(_req) {
     try {
       const apiDocumentation = {
-        name: "Event-Sourced Financial Simulation API",
-        version: "1.0.0",
-        description: "Server-side API for financial simulation using event sourcing architecture",
+        name: "Financial Simulation API",
+        version: "2.0.0",
+        description:
+          "Server-side API for running financial simulations. Each session caches its most recent simulation result; projections are views over that cached result.",
         endpoints: {
           session: {
             path: "/api/simulation/session",
@@ -51,7 +52,8 @@ export const handler: Handlers = {
             path: "/api/simulation/commands",
             methods: {
               POST: {
-                description: "Process a command (RunSimulation, UpdateParameters, ClearCache)",
+                description:
+                  "Process a command (RunSimulation, UpdateParameters, ClearCache, CompareScenarios)",
                 body: {
                   id: "string (required)",
                   type: "string (required)",
@@ -62,7 +64,6 @@ export const handler: Handlers = {
                 response: {
                   success: "boolean",
                   commandId: "string",
-                  events: "FinancialEvent[]",
                   data: "object",
                 },
               },
@@ -75,46 +76,18 @@ export const handler: Handlers = {
               },
             },
           },
-          events: {
-            path: "/api/simulation/events",
-            methods: {
-              GET: {
-                description: "Get events for a session",
-                query: {
-                  sessionId: "string (required)",
-                  type: "string (optional) - filter by event type",
-                  fromVersion: "number (optional) - get events from version",
-                  fromDate: "string (optional) - get events from date",
-                  toDate: "string (optional) - get events to date",
-                },
-                response: {
-                  events: "FinancialEvent[]",
-                  count: "number",
-                },
-              },
-              DELETE: {
-                description: "Clear events for a session",
-                query: { sessionId: "string (required)" },
-                response: { message: "string" },
-              },
-            },
-          },
           projections: {
             path: "/api/simulation/projections",
             methods: {
               GET: {
-                description: "Get projections for a session",
+                description:
+                  "Get a view of the session's cached simulation result",
                 query: {
                   sessionId: "string (required)",
                   type: "string (optional) - financial|timeline|milestone|all",
-                  rebuild: "boolean (optional) - force rebuild",
                 },
-                response: "FinancialProjection | TimelineProjection | MilestoneProjection | AllProjections",
-              },
-              DELETE: {
-                description: "Clear projections for a session",
-                query: { sessionId: "string (required)" },
-                response: { message: "string" },
+                response:
+                  "FinancialProjection | TimelineProjection | MilestoneProjection | AllProjections",
               },
             },
           },
@@ -135,7 +108,6 @@ export const handler: Handlers = {
                     pong: "Heartbeat response",
                     subscribed: "Subscription confirmed",
                     projection_update: "Projection data updated",
-                    event_added: "New events added",
                     error: "Error message",
                   },
                 },
@@ -149,10 +121,7 @@ export const handler: Handlers = {
                 description: "Get system statistics",
                 response: {
                   sessions: "SessionStats",
-                  events: "EventStats",
-                  projections: "ProjectionStats",
                   websockets: "WebSocketStats",
-                  cache: "CacheStats",
                   system: "SystemStats",
                 },
               },
@@ -168,23 +137,6 @@ export const handler: Handlers = {
         authentication: {
           type: "Session-based",
           description: "All requests (except session creation) require a valid sessionId",
-        },
-        eventSourcing: {
-          description: "The API uses event sourcing architecture where all state changes are stored as immutable events",
-          eventTypes: [
-            "SalaryReceived",
-            "TaxCalculated", 
-            "ExpensePaid",
-            "LoanInterestCalculated",
-            "LoanPrincipalPaid",
-            "OffsetBalanceUpdated",
-            "InvestmentContributionMade",
-            "InvestmentGrowthApplied",
-            "SuperContributionMade",
-            "SuperGrowthApplied",
-            "ParameterChanged",
-            "FinancialStateCalculated",
-          ],
         },
       };
 

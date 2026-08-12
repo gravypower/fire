@@ -1,33 +1,23 @@
 # Server Interfaces
 
-This directory contains the core TypeScript interfaces for the event-sourced financial simulation system.
+This directory contains the core TypeScript interfaces for the simulation API.
 
 ## Interface Files
 
-- `events.ts` - Financial event definitions and types
-- `commands.ts` - Command definitions and handlers
-- `projections.ts` - Projection interfaces for read models
-- `session.ts` - Session management interfaces
-- `cache.ts` - Event cache interfaces
-- `aggregate.ts` - Aggregate root and repository interfaces
+- `commands.ts` - Command definitions (RunSimulation, UpdateParameters, ClearCache, CompareScenarios)
+- `projections.ts` - Read-model shapes returned by `/api/simulation/projections`
+- `session.ts` - Session management interfaces, including the cached simulation result
 
 ## Key Concepts
 
-### Events
-Events represent immutable facts about what happened in the system. Each event has:
-- Unique ID and timestamp
-- Session and aggregate association
-- Type-specific data payload
-- Metadata for traceability
-
 ### Commands
-Commands represent requests to change system state. They are processed by aggregates and may generate events.
+Commands represent requests handled by `/api/simulation/commands`. `RunSimulation` runs
+`SimulationEngine` and caches the result on the session; the others read or update session state.
 
 ### Projections
-Projections are read-only views built from events, optimized for specific queries and use cases.
+Projections are read-only views over a session's cached simulation result - reshaped per
+request, not reconstructed from a stored log.
 
 ### Sessions
-Sessions provide isolation between different users and simulation runs.
-
-### Aggregates
-Aggregates are the consistency boundaries that process commands and generate events.
+Sessions provide isolation between different users and simulation runs, and hold the user's
+parameters plus their most recent simulation result.

@@ -75,63 +75,10 @@ export interface MilestoneProjection extends Projection {
 }
 
 /**
- * Performance metrics projection
- */
-export interface PerformanceProjection extends Projection {
-  /** Calculation performance metrics */
-  metrics: {
-    totalEvents: number;
-    processingTimeMs: number;
-    eventsPerSecond: number;
-    memoryUsageMB: number;
-  };
-  /** Event type distribution */
-  eventDistribution: Record<string, number>;
-  /** Processing bottlenecks */
-  bottlenecks: string[];
-}
-
-/**
- * Projection builder interface
- */
-export interface ProjectionBuilder<T extends Projection> {
-  /** Build projection from events */
-  build(sessionId: string): Promise<T>;
-  /** Update projection with new events */
-  update(projection: T, events: any[]): Promise<T>;
-  /** Rebuild projection from scratch */
-  rebuild(sessionId: string): Promise<T>;
-}
-
-/**
- * Projection store interface
- */
-export interface ProjectionStore {
-  /** Get projection by session and type */
-  get<T extends Projection>(sessionId: string, type: string): Promise<T | null>;
-  /** Save projection */
-  save<T extends Projection>(projection: T, type: string): Promise<void>;
-  /** Delete projection */
-  delete(sessionId: string, type: string): Promise<void>;
-  /** Clear all projections for session */
-  clearSession(sessionId: string): Promise<void>;
-  /** Get store statistics (optional) */
-  getStats?(): Promise<{
-    totalProjections: number;
-    projectionsByType: Record<string, number>;
-    sessionCount: number;
-    memoryUsageMB: number;
-  }>;
-  /** Cleanup old projections (optional) */
-  cleanup?(maxAgeMs: number): Promise<number>;
-}
-
-/**
  * Projection type registry
  */
 export const PROJECTION_TYPES = {
   FINANCIAL: 'financial',
   TIMELINE: 'timeline',
   MILESTONE: 'milestone',
-  PERFORMANCE: 'performance',
 } as const;

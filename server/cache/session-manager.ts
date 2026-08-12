@@ -2,13 +2,14 @@
  * In-memory session manager implementation
  */
 
-import type { 
-  SessionManager, 
-  SessionContext, 
-  SessionConfig, 
-  SessionStats 
+import type {
+  SessionManager,
+  SessionContext,
+  SessionConfig,
+  SessionStats
 } from "../interfaces/session.ts";
-import type { UserParameters } from "../../types/financial.ts";
+import type { SimulationResult, UserParameters } from "../../types/financial.ts";
+import type { Milestone } from "../../types/milestones.ts";
 
 /**
  * Default session configuration
@@ -17,7 +18,6 @@ const DEFAULT_CONFIG: SessionConfig = {
   timeoutMs: 30 * 60 * 1000, // 30 minutes
   maxSessions: 1000,
   cleanupIntervalMs: 5 * 60 * 1000, // 5 minutes
-  maxEventsPerSession: 10000,
 };
 
 /**
@@ -53,6 +53,7 @@ export class InMemorySessionManager implements SessionManager {
       expiresAt: new Date(now.getTime() + this.config.timeoutMs),
       parameters: parameters || this.getDefaultParameters(),
       metadata: {},
+      resultVersion: 0,
     };
 
     this.sessions.set(sessionId, session);
@@ -87,6 +88,16 @@ export class InMemorySessionManager implements SessionManager {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.parameters = { ...session.parameters, ...parameters };
+      await this.touchSession(sessionId);
+    }
+  }
+
+  async updateSessionResult(sessionId: string, result: SimulationResult, milestones: Milestone[]): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.result = result;
+      session.milestones = milestones;
+      session.resultVersion++;
       await this.touchSession(sessionId);
     }
   }
@@ -135,10 +146,8 @@ export class InMemorySessionManager implements SessionManager {
 
     return {
       activeSessions: sessions.length,
-      totalEvents: 0, // Will be updated by event cache
       memoryUsageMB: this.estimateMemoryUsage(),
       oldestSessionAgeMinutes: oldestAge,
-      averageEventsPerSession: 0, // Will be updated by event cache
     };
   }
 

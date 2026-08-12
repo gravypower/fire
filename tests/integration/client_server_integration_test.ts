@@ -141,7 +141,7 @@ Deno.test("Client-Server Integration - Command processing", async () => {
     assertEquals(commandResponse.status, 200);
     const commandData = await commandResponse.json();
     assertEquals(commandData.success, true);
-    assertExists(commandData.data.events);
+    assertExists(commandData.data.commandId);
 
     // Test UpdateParameters command
     const updateResponse = await fetch('http://localhost:8000/api/simulation/commands', {

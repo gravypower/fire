@@ -3,57 +3,130 @@
  */
 
 import { Handlers } from "$fresh/server.ts";
-import { InMemoryCommandBus } from "../../../server/aggregates/command-bus.ts";
-import { FinancialAggregateRoot } from "../../../server/aggregates/financial-aggregate.ts";
 import { sessionManager } from "./session.ts";
-import { eventCache } from "./events.ts";
 import { projectionService } from "./projections.ts";
-import { broadcastEventAdded, broadcastProjectionUpdate } from "./websocket.ts";
-// Import command interfaces
+import { broadcastProjectionUpdate } from "./websocket.ts";
 import type {
+  ClearCacheCommand,
   Command,
   CompareScenariosCommand,
+  RunSimulationCommand,
+  UpdateParametersCommand,
 } from "../../../server/interfaces/commands.ts";
+import { detectMilestonesFromSimulation } from "../../../lib/milestone_detector.ts";
 import { ScenarioComparisonEngine } from "../../../lib/scenario_comparison_engine.ts";
 import { SimulationEngine } from "../../../lib/simulation_engine.ts";
+import type { SimulationConfiguration } from "../../../types/financial.ts";
 
-// Global command bus instance
-const commandBus = new InMemoryCommandBus();
+interface CommandResponse {
+  success: boolean;
+  commandId: string;
+  error?: string;
+  data?: any;
+}
 
-// Register command handlers
-commandBus.registerHandler("CompareScenarios", async (command) => {
-  const cmd = command as CompareScenariosCommand;
-  const { configuration } = cmd.data;
+async function runAndCacheSimulation(
+  sessionId: string,
+  configuration: SimulationConfiguration,
+): Promise<void> {
+  const hasTransitions = configuration.transitions &&
+    configuration.transitions.length > 0;
 
-  // Run simulation with transitions (current config)
-  // Note: SimulationEngine usage here assumes it can handle parameters.
-  // If transitions need to be applied, SimulationEngine must be enhanced or we need to use FinancialAggregate.
-  // For this refactor, we are moving the logic to backend.
-  const withTransitionsResult = SimulationEngine.runSimulation(
+  const result = hasTransitions
+    ? SimulationEngine.runSimulationWithTransitions(configuration)
+    : SimulationEngine.runSimulation(configuration.baseParameters);
+
+  const milestoneResult = detectMilestonesFromSimulation(
+    result.states,
     configuration.baseParameters,
   );
 
-  // Run simulation without transitions (base parameters only)
+  await sessionManager.updateSessionParameters(
+    sessionId,
+    configuration.baseParameters,
+  );
+  await sessionManager.updateSessionResult(
+    sessionId,
+    result,
+    milestoneResult.milestones,
+  );
+
+  const [financial, timeline] = await Promise.all([
+    projectionService.getFinancialProjection(sessionId),
+    projectionService.getTimelineProjection(sessionId),
+  ]);
+
+  broadcastProjectionUpdate(sessionId, "financial", financial);
+  broadcastProjectionUpdate(sessionId, "timeline", timeline);
+}
+
+async function handleRunSimulation(
+  command: RunSimulationCommand,
+): Promise<CommandResponse> {
+  const { parameters, configuration } = command.data;
+
+  await runAndCacheSimulation(
+    command.sessionId,
+    configuration ?? { baseParameters: parameters, transitions: [] },
+  );
+
+  return { success: true, commandId: command.id };
+}
+
+async function handleUpdateParameters(
+  command: UpdateParametersCommand,
+): Promise<CommandResponse> {
+  // Only updates the session's stored parameters; the client always follows
+  // this with a RunSimulation command to actually re-simulate.
+  await sessionManager.updateSessionParameters(
+    command.sessionId,
+    command.data.parameterChanges,
+  );
+
+  return { success: true, commandId: command.id };
+}
+
+async function handleClearCache(
+  command: ClearCacheCommand,
+): Promise<CommandResponse> {
+  await sessionManager.updateSessionResult(command.sessionId, {
+    states: [],
+    retirementDate: null,
+    retirementAge: null,
+    isSustainable: false,
+    warnings: [],
+  }, []);
+
+  return {
+    success: true,
+    commandId: command.id,
+    data: { message: "Cache cleared successfully" },
+  };
+}
+
+async function handleCompareScenarios(
+  command: CompareScenariosCommand,
+): Promise<CommandResponse> {
+  const { configuration } = command.data;
+
+  const withTransitionsResult = SimulationEngine.runSimulationWithTransitions(
+    configuration,
+  );
   const withoutTransitionsResult = SimulationEngine.runSimulation(
     configuration.baseParameters,
   );
 
-  // Helper to convert SimulationResult to EnhancedSimulationResult
-  // Since we bypass the projection service, we mock the extra fields for now
   const withTransitions = {
     ...withTransitionsResult,
-    transitionPoints: [],
-    periods: [],
+    transitionPoints: withTransitionsResult.transitionPoints ?? [],
+    periods: withTransitionsResult.periods ?? [],
   };
 
-  // Calculate comparison metrics
   let retirementDateDifference: number | null = null;
-  if (
-    withTransitions.retirementDate && withoutTransitionsResult.retirementDate
-  ) {
+  if (withTransitions.retirementDate && withoutTransitionsResult.retirementDate) {
     const diffMs = withTransitions.retirementDate.getTime() -
       withoutTransitionsResult.retirementDate.getTime();
-    retirementDateDifference = diffMs / (1000 * 60 * 60 * 24 * 365.25); // Convert to years
+    retirementDateDifference = diffMs / (1000 * 60 * 60 * 24 * 365.25);
   }
 
   const finalNetWorthWithTransitions = withTransitions.states.length > 0
@@ -61,11 +134,8 @@ commandBus.registerHandler("CompareScenarios", async (command) => {
     : 0;
 
   const finalNetWorthWithoutTransitions =
-    withoutTransitionsResult.states.length >
-        0
-      ? withoutTransitionsResult
-        .states[withoutTransitionsResult.states.length - 1]
-        .netWorth
+    withoutTransitionsResult.states.length > 0
+      ? withoutTransitionsResult.states[withoutTransitionsResult.states.length - 1].netWorth
       : 0;
 
   const finalNetWorthDifference = finalNetWorthWithTransitions -
@@ -84,267 +154,138 @@ commandBus.registerHandler("CompareScenarios", async (command) => {
     },
   };
 
-  // Enhance with milestone and advice comparison using the engine
   const comparisonResult = ScenarioComparisonEngine
-    .enhanceComparisonWithMilestonesAndAdvice(
-      baseComparison,
-      configuration,
-    );
+    .enhanceComparisonWithMilestonesAndAdvice(baseComparison, configuration);
 
   return {
     success: true,
     commandId: command.id,
-    events: [],
     data: comparisonResult,
   };
-});
+}
 
-commandBus.registerHandler("RunSimulation", async (command) => {
-  const aggregate = new FinancialAggregateRoot(
-    `aggregate_${command.sessionId}`,
-    command.sessionId,
-  );
+async function dispatch(command: Command): Promise<CommandResponse> {
+  switch (command.type) {
+    case "RunSimulation":
+      return handleRunSimulation(command as RunSimulationCommand);
+    case "UpdateParameters":
+      return handleUpdateParameters(command as UpdateParametersCommand);
+    case "ClearCache":
+      return handleClearCache(command as ClearCacheCommand);
+    case "CompareScenarios":
+      return handleCompareScenarios(command as CompareScenariosCommand);
+    default:
+      return {
+        success: false,
+        commandId: command.id,
+        error: `Unsupported command type: ${command.type}`,
+      };
+  }
+}
 
-  const result = await aggregate.processCommand(command);
-
-  if (result.success) {
-    // Store events in cache
-    const events = aggregate.getUncommittedEvents();
-    if (events.length > 0) {
-      await eventCache.appendEvents(command.sessionId, events);
-
-      // Broadcast new events via WebSocket
-      broadcastEventAdded(command.sessionId, events);
-
-      // Update projections and broadcast updates
-      await projectionService.updateProjections(command.sessionId, events);
-
-      // Broadcast updated projections
-      const [financial, timeline] = await Promise.all([
-        projectionService.getFinancialProjection(command.sessionId),
-        projectionService.getTimelineProjection(command.sessionId),
-      ]);
-
-      broadcastProjectionUpdate(command.sessionId, "financial", financial);
-      broadcastProjectionUpdate(command.sessionId, "timeline", timeline);
-    }
-    aggregate.markEventsAsCommitted();
+/**
+ * Recursively deserializes ISO date strings to Date objects
+ */
+function deserializeDates(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
   }
 
-  return result;
-});
-
-commandBus.registerHandler("UpdateParameters", async (command) => {
-  const aggregate = new FinancialAggregateRoot(
-    `aggregate_${command.sessionId}`,
-    command.sessionId,
-  );
-
-  const result = await aggregate.processCommand(command);
-
-  if (result.success) {
-    // Store events in cache
-    const events = aggregate.getUncommittedEvents();
-    if (events.length > 0) {
-      await eventCache.appendEvents(command.sessionId, events);
-
-      // Broadcast new events via WebSocket
-      broadcastEventAdded(command.sessionId, events);
-
-      // Update projections and broadcast updates
-      await projectionService.updateProjections(command.sessionId, events);
-
-      // Broadcast updated projections
-      const [financial, timeline] = await Promise.all([
-        projectionService.getFinancialProjection(command.sessionId),
-        projectionService.getTimelineProjection(command.sessionId),
-      ]);
-
-      broadcastProjectionUpdate(command.sessionId, "financial", financial);
-      broadcastProjectionUpdate(command.sessionId, "timeline", timeline);
+  if (typeof obj === "string") {
+    if (
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*Z$/.test(obj) ||
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(obj)
+    ) {
+      const date = new Date(obj);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
     }
-    aggregate.markEventsAsCommitted();
-
-    // Update session parameters
-    await sessionManager.updateSessionParameters(
-      command.sessionId,
-      (command as any).data.parameterChanges,
-    );
+    return obj;
   }
 
-  return result;
-});
+  if (Array.isArray(obj)) {
+    return obj.map((item) => deserializeDates(item));
+  }
 
-commandBus.registerHandler("ClearCache", async (command) => {
-  await eventCache.clearSession(command.sessionId);
+  if (typeof obj === "object") {
+    const result: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        result[key] = deserializeDates(obj[key]);
+      }
+    }
+    return result;
+  }
 
-  return {
-    success: true,
-    commandId: command.id,
-    events: [],
-    data: { message: "Cache cleared successfully" },
-  };
-});
+  return obj;
+}
 
 export const handler: Handlers = {
   // POST /api/simulation/commands - Process a command
   async POST(req) {
     try {
       const body = await req.json();
-      // Helper to deserializes ISO date strings to Date objects recursively
-      const deserializeDates = (obj: any): any => {
-        if (obj === null || obj === undefined) {
-          return obj;
-        }
-
-        if (typeof obj === "string") {
-          // Check if string is an ISO date
-          // Simplified regex for ISO 8601 date format
-          if (
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*Z$/.test(obj) ||
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(obj)
-          ) {
-            const date = new Date(obj);
-            if (!isNaN(date.getTime())) {
-              return date;
-            }
-          }
-          return obj;
-        }
-
-        if (Array.isArray(obj)) {
-          return obj.map((item) => deserializeDates(item));
-        }
-
-        if (typeof obj === "object") {
-          const result: any = {};
-          for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
-              result[key] = deserializeDates(obj[key]);
-            }
-          }
-          return result;
-        }
-
-        return obj;
-      };
-
-      // Deserializes dates in command
       const command = deserializeDates(body) as Command;
 
-      // Validate required fields
       if (!command.id || !command.type || !command.sessionId) {
         return new Response(
           JSON.stringify({
             success: false,
             error: "Command must have id, type, and sessionId",
           }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          },
+          { status: 400, headers: { "Content-Type": "application/json" } },
         );
       }
 
-      // Convert top-level timestamp if it wasn't caught by the general deserializer
-      // (e.g. if the regex missed it or it wasn't in regex format)
-      if (typeof command.timestamp === "string") {
-        command.timestamp = new Date(command.timestamp);
-      }
-
-      // Validate session exists
       const isValid = await sessionManager.isValidSession(command.sessionId);
       if (!isValid) {
         return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Invalid or expired session",
-          }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          },
+          JSON.stringify({ success: false, error: "Invalid or expired session" }),
+          { status: 401, headers: { "Content-Type": "application/json" } },
         );
       }
 
-      // Ensure timestamp is set
-      if (
-        !command.timestamp || !(command.timestamp instanceof Date) ||
-        isNaN(command.timestamp.getTime())
-      ) {
-        command.timestamp = new Date();
-      }
+      const result = await dispatch(command);
 
-      // Process command
-      const result = await commandBus.dispatch(command);
-
-      if (result.success) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data: result,
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      } else {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: result.error || "Command processing failed",
-            data: result,
-          }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
+      return new Response(
+        JSON.stringify({
+          success: result.success,
+          error: result.error,
+          data: result,
+        }),
+        {
+          status: result.success ? 200 : 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } catch (error) {
       return new Response(
         JSON.stringify({
           success: false,
           error: error instanceof Error ? error.message : String(error),
         }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        },
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   },
 
   // GET /api/simulation/commands - Get available command types
-  async GET(_req) {
-    try {
-      const handlers = commandBus.getRegisteredHandlers();
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: {
-            availableCommands: handlers,
-            description: "Available command types that can be processed",
-          },
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
+  GET(_req) {
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          availableCommands: [
+            "RunSimulation",
+            "UpdateParameters",
+            "ClearCache",
+            "CompareScenarios",
+          ],
+          description: "Available command types that can be processed",
         },
-      );
-    } catch (error) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
   },
 };

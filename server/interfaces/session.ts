@@ -2,7 +2,8 @@
  * Session management interfaces for the event-sourced financial simulation system
  */
 
-import type { UserParameters } from "../../types/financial.ts";
+import type { SimulationResult, UserParameters } from "../../types/financial.ts";
+import type { Milestone } from "../../types/milestones.ts";
 
 /**
  * Session context information
@@ -22,6 +23,12 @@ export interface SessionContext {
   parameters: UserParameters;
   /** Session metadata */
   metadata: Record<string, any>;
+  /** Most recent simulation result, cached so projections can be reshaped without re-simulating */
+  result?: SimulationResult;
+  /** Milestones detected from the most recent result */
+  milestones?: Milestone[];
+  /** Incremented each time a new result is cached; used as the projection version */
+  resultVersion: number;
 }
 
 /**
@@ -34,8 +41,6 @@ export interface SessionConfig {
   maxSessions: number;
   /** Cleanup interval in milliseconds */
   cleanupIntervalMs: number;
-  /** Maximum events per session */
-  maxEventsPerSession: number;
 }
 
 /**
@@ -44,25 +49,28 @@ export interface SessionConfig {
 export interface SessionManager {
   /** Create a new session */
   createSession(userId?: string, parameters?: UserParameters): Promise<SessionContext>;
-  
+
   /** Get session by ID */
   getSession(sessionId: string): Promise<SessionContext | null>;
-  
+
   /** Update session last accessed time */
   touchSession(sessionId: string): Promise<void>;
-  
+
   /** Update session parameters */
   updateSessionParameters(sessionId: string, parameters: Partial<UserParameters>): Promise<void>;
-  
+
+  /** Cache the latest simulation result and detected milestones for a session */
+  updateSessionResult(sessionId: string, result: SimulationResult, milestones: Milestone[]): Promise<void>;
+
   /** Delete a session */
   deleteSession(sessionId: string): Promise<void>;
-  
+
   /** Clean up expired sessions */
   cleanupExpiredSessions(): Promise<number>;
-  
+
   /** Get all active sessions */
   getActiveSessions(): Promise<SessionContext[]>;
-  
+
   /** Check if session exists and is valid */
   isValidSession(sessionId: string): Promise<boolean>;
 }
@@ -73,12 +81,8 @@ export interface SessionManager {
 export interface SessionStats {
   /** Total active sessions */
   activeSessions: number;
-  /** Total events across all sessions */
-  totalEvents: number;
   /** Memory usage in MB */
   memoryUsageMB: number;
   /** Oldest session age in minutes */
   oldestSessionAgeMinutes: number;
-  /** Average events per session */
-  averageEventsPerSession: number;
 }

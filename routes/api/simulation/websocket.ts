@@ -10,7 +10,7 @@ const activeConnections = new Map<string, Set<WebSocket>>();
 
 // Message types for WebSocket communication
 interface WebSocketMessage {
-  type: 'subscribe' | 'unsubscribe' | 'ping' | 'projection_update' | 'event_added' | 'error';
+  type: 'subscribe' | 'unsubscribe' | 'ping' | 'projection_update' | 'error';
   sessionId?: string;
   data?: any;
   timestamp?: Date;
@@ -67,19 +67,6 @@ export function broadcastProjectionUpdate(sessionId: string, projectionType: str
     data: {
       projectionType,
       projection,
-    },
-  });
-}
-
-/**
- * Broadcast new events to session
- */
-export function broadcastEventAdded(sessionId: string, events: any[]): void {
-  broadcastToSession(sessionId, {
-    type: 'event_added',
-    data: {
-      events,
-      count: events.length,
     },
   });
 }

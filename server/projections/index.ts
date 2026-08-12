@@ -4,28 +4,21 @@
 
 // Builders
 export {
-  FinancialProjectionBuilder,
-  TimelineProjectionBuilder,
-  MilestoneProjectionBuilder,
-  ProjectionBuilderFactory,
+  buildFinancialProjection,
+  buildMilestoneProjection,
+  buildTimelineProjection,
 } from "./projection-builder.ts";
 
-// Store
-export { InMemoryProjectionStore } from "./projection-store.ts";
-
 // Service
-export { 
+export {
   ProjectionService,
   createProjectionService,
-  type ProjectionServiceConfig 
 } from "./projection-service.ts";
 
 // Re-export interfaces
 export type {
-  ProjectionBuilder,
   FinancialProjection,
-  TimelineProjection,
   MilestoneProjection,
-  ProjectionStore,
   Projection,
+  TimelineProjection,
 } from "../interfaces/projections.ts";
