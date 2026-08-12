@@ -14,6 +14,30 @@ import type {
 import { ExpenseItem } from "../types/expenses.ts";
 
 /**
+ * Whether any person in the household has explicit income sources configured.
+ * The UI always stores income sources under params.people (even in "single"
+ * mode, where people[0] is the one person), so this - not householdMode - is
+ * the correct signal for whether per-person income data should be used
+ * instead of the legacy annualSalary/incomeTaxRate fields.
+ */
+export function peopleHaveIncomeSources(params: UserParameters): boolean {
+  return !!params.people?.some((p) =>
+    p.incomeSources && p.incomeSources.length > 0
+  );
+}
+
+/**
+ * Whether any person in the household has explicit super accounts configured.
+ * Same rationale as peopleHaveIncomeSources: the UI stores super accounts
+ * under params.people regardless of householdMode.
+ */
+export function peopleHaveSuperAccounts(params: UserParameters): boolean {
+  return !!params.people?.some((p) =>
+    p.superAccounts && p.superAccounts.length > 0
+  );
+}
+
+/**
  * Converts a time interval to number of periods per year
  */
 function intervalToPeriodsPerYear(interval: TimeInterval): number {
@@ -101,13 +125,10 @@ export const IncomeProcessor = {
     params: UserParameters,
     currentDate?: Date,
   ): number {
-    // If household mode, sum income from all people
-    if (
-      params.householdMode === "couple" && params.people &&
-      params.people.length > 0
-    ) {
+    // If any person has explicit income sources, sum income from all people
+    if (peopleHaveIncomeSources(params)) {
       let totalAnnual = 0;
-      for (const person of params.people) {
+      for (const person of params.people!) {
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (source.isBeforeTax) {
@@ -191,13 +212,10 @@ export const IncomeProcessor = {
     params: UserParameters,
     currentDate?: Date,
   ): number {
-    // If household mode, sum after-tax income from all people
-    if (
-      params.householdMode === "couple" && params.people &&
-      params.people.length > 0
-    ) {
+    // If any person has explicit income sources, sum after-tax income from all people
+    if (peopleHaveIncomeSources(params)) {
       let totalAnnual = 0;
-      for (const person of params.people) {
+      for (const person of params.people!) {
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (!source.isBeforeTax) {
@@ -282,11 +300,8 @@ export const IncomeProcessor = {
     interval: TimeInterval,
     currentDate?: Date,
   ): number {
-    // If household mode is couple, calculate tax per person
-    if (
-      params.householdMode === "couple" && params.people &&
-      params.people.length > 0
-    ) {
+    // If any person has explicit income sources, calculate tax per person
+    if (peopleHaveIncomeSources(params)) {
       return this.calculateHouseholdTax(params, interval, currentDate);
     }
 

@@ -21,6 +21,8 @@ import {
   IncomeProcessor,
   InvestmentProcessor,
   LoanProcessor,
+  peopleHaveIncomeSources,
+  peopleHaveSuperAccounts,
   RetirementCalculator,
 } from "./processors.ts";
 import { formatCurrency, generateWarnings } from "./result_utils.ts";
@@ -150,15 +152,12 @@ export const SimulationEngine = {
         )
         : undefined;
 
-    // Collect all super accounts from all people (household mode) or top-level superAccounts
+    // Collect all super accounts from all people, or top-level superAccounts
     const allSuperAccounts: SuperAccount[] = [];
 
-    if (
-      params.householdMode === "couple" && params.people &&
-      params.people.length > 0
-    ) {
+    if (peopleHaveSuperAccounts(params)) {
       // Collect super accounts from all people
-      for (const person of params.people) {
+      for (const person of params.people!) {
         allSuperAccounts.push(...person.superAccounts);
       }
     } else if (params.superAccounts && params.superAccounts.length > 0) {
@@ -342,16 +341,13 @@ export const SimulationEngine = {
       (currentState.date.getTime() - params.startDate.getTime()) /
       (1000 * 60 * 60 * 24 * 365.25);
 
-    // Handle household mode with multiple people
+    // Handle one or more people with explicit income sources
     let grossIncome = 0;
     let anyPersonStillWorking = false;
 
-    if (
-      params.householdMode === "couple" && params.people &&
-      params.people.length > 0
-    ) {
-      // Multiple people - check each person's retirement status
-      for (const person of params.people) {
+    if (peopleHaveIncomeSources(params)) {
+      // One or more people - check each person's retirement status
+      for (const person of params.people!) {
         const personCurrentAge = person.currentAge + yearsElapsed;
         if (personCurrentAge < person.retirementAge) {
           anyPersonStillWorking = true;
@@ -367,22 +363,8 @@ export const SimulationEngine = {
           }
         }
       }
-
-      // Add any household-level income sources (legacy support)
-      if (params.annualSalary > 0) {
-        const legacyCurrentAge = params.currentAge + yearsElapsed;
-        if (legacyCurrentAge < params.retirementAge) {
-          anyPersonStillWorking = true;
-          const legacyIncome = IncomeProcessor.calculateIncome(
-            params,
-            interval,
-            currentState.date,
-          );
-          grossIncome += legacyIncome;
-        }
-      }
     } else {
-      // Single person or legacy mode
+      // Legacy mode - top-level incomeSources or annualSalary
       const currentAge = params.currentAge + yearsElapsed;
       if (currentAge < params.retirementAge) {
         anyPersonStillWorking = true;
@@ -808,15 +790,12 @@ export const SimulationEngine = {
     // Handle multiple super accounts if provided, otherwise use legacy single super
     let superBalances: { [superId: string]: number } = {};
 
-    // Collect all super accounts from all people (household mode) or top-level superAccounts
+    // Collect all super accounts from all people, or top-level superAccounts
     const allSuperAccounts: SuperAccount[] = [];
 
-    if (
-      params.householdMode === "couple" && params.people &&
-      params.people.length > 0
-    ) {
+    if (peopleHaveSuperAccounts(params)) {
       // Collect super accounts from all people
-      for (const person of params.people) {
+      for (const person of params.people!) {
         allSuperAccounts.push(...person.superAccounts);
       }
     } else if (params.superAccounts && params.superAccounts.length > 0) {
@@ -1226,15 +1205,12 @@ export const SimulationEngine = {
         )
         : undefined;
 
-    // Collect all super accounts from all people (household mode) or top-level superAccounts
+    // Collect all super accounts from all people, or top-level superAccounts
     const allSuperAccountsTransitions: SuperAccount[] = [];
 
-    if (
-      currentParams.householdMode === "couple" && currentParams.people &&
-      currentParams.people.length > 0
-    ) {
+    if (peopleHaveSuperAccounts(currentParams)) {
       // Collect super accounts from all people
-      for (const person of currentParams.people) {
+      for (const person of currentParams.people!) {
         allSuperAccountsTransitions.push(...person.superAccounts);
       }
     } else if (
