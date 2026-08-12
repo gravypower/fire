@@ -6,33 +6,32 @@
 
 import type {
   FinancialState,
-  UserParameters,
+  Person,
   SimulationResult,
+  UserParameters,
 } from "../types/financial.ts";
 import type {
-  RetirementAdvice,
+  AdviceGenerationConfig,
+  AdviceGenerationError,
+  AdviceGenerationResult,
   AdviceItem,
+  AdvicePriority,
+  Milestone,
   RankedAdvice,
+  RetirementAdvice,
   RetirementAssessment,
   RetirementFeasibility,
-  AdvicePriority,
-  AdviceGenerationResult,
-  AdviceGenerationError,
-  AdviceGenerationConfig,
-  Milestone,
 } from "../types/milestones.ts";
 import { formatCurrency } from "./result_utils.ts";
-import { 
-  globalPerformanceMonitor, 
-  MemoizationCache 
+import {
+  globalPerformanceMonitor,
+  MemoizationCache,
 } from "./performance_utils.ts";
 import {
   createPersonSpecificAdvice,
-  createSuperContributionAdvice,
   createRetirementAgeAdvice,
-  createIncomeSourceAdvice,
+  createSuperContributionAdvice,
   validatePersonSpecificAdvice,
-  getAdviceTargetName,
 } from "./person_specific_advice_utils.ts";
 
 /**
@@ -60,12 +59,24 @@ export class RetirementAdviceEngine {
 
   constructor(config: Partial<AdviceGenerationConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    
+
     // Initialize caches with different sizes based on expected usage
-    this.debtAdviceCache = new MemoizationCache<string, AdviceItem[]>(30, 10 * 60 * 1000); // 10 min
-    this.investmentAdviceCache = new MemoizationCache<string, AdviceItem[]>(30, 10 * 60 * 1000);
-    this.expenseAdviceCache = new MemoizationCache<string, AdviceItem[]>(20, 15 * 60 * 1000); // 15 min (more stable)
-    this.incomeAdviceCache = new MemoizationCache<string, AdviceItem[]>(20, 15 * 60 * 1000);
+    this.debtAdviceCache = new MemoizationCache<string, AdviceItem[]>(
+      30,
+      10 * 60 * 1000,
+    ); // 10 min
+    this.investmentAdviceCache = new MemoizationCache<string, AdviceItem[]>(
+      30,
+      10 * 60 * 1000,
+    );
+    this.expenseAdviceCache = new MemoizationCache<string, AdviceItem[]>(
+      20,
+      15 * 60 * 1000,
+    ); // 15 min (more stable)
+    this.incomeAdviceCache = new MemoizationCache<string, AdviceItem[]>(
+      20,
+      15 * 60 * 1000,
+    );
   }
 
   /**
@@ -75,63 +86,90 @@ export class RetirementAdviceEngine {
   generateAdvice(
     result: SimulationResult,
     params: UserParameters,
-    _milestones?: Milestone[]
+    _milestones?: Milestone[],
   ): AdviceGenerationResult {
-    globalPerformanceMonitor.startOperation('advice_generation_full');
+    globalPerformanceMonitor.startOperation("advice_generation_full");
     const errors: AdviceGenerationError[] = [];
     const warnings: string[] = [];
 
     try {
-      globalPerformanceMonitor.startOperation('advice_generation_batch', {
+      globalPerformanceMonitor.startOperation("advice_generation_batch", {
         statesCount: result.states.length,
         includeDebt: this.config.includeDebtAdvice,
         includeInvestment: this.config.includeInvestmentAdvice,
         includeExpense: this.config.includeExpenseAdvice,
-        includeIncome: this.config.includeIncomeAdvice
+        includeIncome: this.config.includeIncomeAdvice,
       });
 
       // Assess overall retirement readiness
-      globalPerformanceMonitor.startOperation('retirement_assessment');
+      globalPerformanceMonitor.startOperation("retirement_assessment");
       const overallAssessment = this.assessRetirementReadiness(result, params);
-      const retirementFeasibility = this.analyzeRetirementFeasibility(result, params);
-      globalPerformanceMonitor.endOperation('retirement_assessment');
+      const retirementFeasibility = this.analyzeRetirementFeasibility(
+        result,
+        params,
+      );
+      globalPerformanceMonitor.endOperation("retirement_assessment");
 
       // Generate all advice categories with caching
       const allAdvice: AdviceItem[] = [];
 
       if (this.config.includeDebtAdvice) {
-        globalPerformanceMonitor.startOperation('debt_advice_generation');
-        const debtAdvice = this.analyzeDebtStrategyCached(result.states, params);
-        globalPerformanceMonitor.endOperation('debt_advice_generation', debtAdvice.length);
+        globalPerformanceMonitor.startOperation("debt_advice_generation");
+        const debtAdvice = this.analyzeDebtStrategyCached(
+          result.states,
+          params,
+        );
+        globalPerformanceMonitor.endOperation(
+          "debt_advice_generation",
+          debtAdvice.length,
+        );
         allAdvice.push(...debtAdvice);
       }
 
       if (this.config.includeInvestmentAdvice) {
-        globalPerformanceMonitor.startOperation('investment_advice_generation');
-        const investmentAdvice = this.analyzeInvestmentStrategyCached(result.states, params);
-        globalPerformanceMonitor.endOperation('investment_advice_generation', investmentAdvice.length);
+        globalPerformanceMonitor.startOperation("investment_advice_generation");
+        const investmentAdvice = this.analyzeInvestmentStrategyCached(
+          result.states,
+          params,
+        );
+        globalPerformanceMonitor.endOperation(
+          "investment_advice_generation",
+          investmentAdvice.length,
+        );
         allAdvice.push(...investmentAdvice);
       }
 
       if (this.config.includeExpenseAdvice) {
-        globalPerformanceMonitor.startOperation('expense_advice_generation');
-        const expenseAdvice = this.analyzeExpenseOptimizationCached(result.states, params);
-        globalPerformanceMonitor.endOperation('expense_advice_generation', expenseAdvice.length);
+        globalPerformanceMonitor.startOperation("expense_advice_generation");
+        const expenseAdvice = this.analyzeExpenseOptimizationCached(
+          result.states,
+          params,
+        );
+        globalPerformanceMonitor.endOperation(
+          "expense_advice_generation",
+          expenseAdvice.length,
+        );
         allAdvice.push(...expenseAdvice);
       }
 
       if (this.config.includeIncomeAdvice) {
-        globalPerformanceMonitor.startOperation('income_advice_generation');
-        const incomeAdvice = this.analyzeIncomeStrategyCached(result.states, params);
-        globalPerformanceMonitor.endOperation('income_advice_generation', incomeAdvice.length);
+        globalPerformanceMonitor.startOperation("income_advice_generation");
+        const incomeAdvice = this.analyzeIncomeStrategyCached(
+          result.states,
+          params,
+        );
+        globalPerformanceMonitor.endOperation(
+          "income_advice_generation",
+          incomeAdvice.length,
+        );
         allAdvice.push(...incomeAdvice);
       }
 
       // Validate person-specific advice
-      globalPerformanceMonitor.startOperation('advice_validation');
+      globalPerformanceMonitor.startOperation("advice_validation");
       const validatedAdvice: AdviceItem[] = [];
       const validationErrors: AdviceGenerationError[] = [];
-      
+
       for (const adviceItem of allAdvice) {
         if (adviceItem.personId || adviceItem.personSpecificChanges) {
           const validation = validatePersonSpecificAdvice(adviceItem, params);
@@ -139,10 +177,15 @@ export class RetirementAdviceEngine {
             validatedAdvice.push(adviceItem);
           } else {
             validationErrors.push({
-              code: 'PERSON_SPECIFIC_VALIDATION_FAILED',
-              message: `Person-specific advice validation failed: ${validation.errors.join(', ')}`,
-              context: { adviceId: adviceItem.id, personId: adviceItem.personId },
-              severity: 'warning',
+              code: "PERSON_SPECIFIC_VALIDATION_FAILED",
+              message: `Person-specific advice validation failed: ${
+                validation.errors.join(", ")
+              }`,
+              context: {
+                adviceId: adviceItem.id,
+                personId: adviceItem.personId,
+              },
+              severity: "warning",
             });
             // Still include the advice but log the validation issues
             validatedAdvice.push(adviceItem);
@@ -151,13 +194,18 @@ export class RetirementAdviceEngine {
           validatedAdvice.push(adviceItem);
         }
       }
-      
+
       errors.push(...validationErrors);
-      globalPerformanceMonitor.endOperation('advice_validation', validatedAdvice.length);
+      globalPerformanceMonitor.endOperation(
+        "advice_validation",
+        validatedAdvice.length,
+      );
 
       // Filter by effectiveness threshold
       const filteredAdvice = this.config.minEffectivenessThreshold
-        ? validatedAdvice.filter(advice => advice.effectivenessScore >= this.config.minEffectivenessThreshold!)
+        ? validatedAdvice.filter((advice) =>
+          advice.effectivenessScore >= this.config.minEffectivenessThreshold!
+        )
         : validatedAdvice;
 
       // Rank recommendations
@@ -169,11 +217,11 @@ export class RetirementAdviceEngine {
         : rankedRecommendations;
 
       // Categorize into quick wins and long-term strategies
-      const quickWins = limitedRecommendations.filter(advice => 
-        advice.feasibilityScore >= 80 && advice.priority === 'high'
+      const quickWins = limitedRecommendations.filter((advice) =>
+        advice.feasibilityScore >= 80 && advice.priority === "high"
       );
 
-      const longTermStrategies = limitedRecommendations.filter(advice => 
+      const longTermStrategies = limitedRecommendations.filter((advice) =>
         advice.feasibilityScore < 80 || advice.effectivenessScore >= 70
       );
 
@@ -185,8 +233,14 @@ export class RetirementAdviceEngine {
         longTermStrategies,
       };
 
-      globalPerformanceMonitor.endOperation('advice_generation_batch', limitedRecommendations.length);
-      globalPerformanceMonitor.endOperation('advice_generation_full', limitedRecommendations.length);
+      globalPerformanceMonitor.endOperation(
+        "advice_generation_batch",
+        limitedRecommendations.length,
+      );
+      globalPerformanceMonitor.endOperation(
+        "advice_generation_full",
+        limitedRecommendations.length,
+      );
 
       return {
         advice,
@@ -194,18 +248,20 @@ export class RetirementAdviceEngine {
         warnings,
       };
     } catch (error) {
-      globalPerformanceMonitor.endOperation('advice_generation_full');
+      globalPerformanceMonitor.endOperation("advice_generation_full");
       errors.push({
-        code: 'ADVICE_GENERATION_FAILED',
-        message: `Advice generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        severity: 'critical',
+        code: "ADVICE_GENERATION_FAILED",
+        message: `Advice generation failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        severity: "critical",
         context: { error: String(error) },
       });
 
       // Return minimal advice structure on error
       return {
         advice: {
-          overallAssessment: 'critical',
+          overallAssessment: "critical",
           retirementFeasibility: {
             canRetireAtTarget: false,
           },
@@ -222,41 +278,47 @@ export class RetirementAdviceEngine {
   /**
    * Assesses overall retirement readiness
    */
-  private assessRetirementReadiness(result: SimulationResult, params: UserParameters): RetirementAssessment {
+  private assessRetirementReadiness(
+    result: SimulationResult,
+    params: UserParameters,
+  ): RetirementAssessment {
+    // Check sustainability first - if you run out of money, you're not on track
+    if (!result.isSustainable) {
+      return "critical";
+    }
+
     // Check if retirement is achievable at target age
     if (result.retirementDate && result.retirementAge) {
       if (result.retirementAge <= params.retirementAge + 2) {
-        return 'on_track';
+        return "on_track";
       } else if (result.retirementAge <= params.retirementAge + 10) {
-        return 'needs_improvement';
+        return "needs_improvement";
       }
-    }
-
-    // Check sustainability
-    if (!result.isSustainable) {
-      return 'critical';
     }
 
     // Check final net worth trajectory
     if (result.states.length >= 2) {
       const finalState = result.states[result.states.length - 1];
       const midState = result.states[Math.floor(result.states.length / 2)];
-      
+
       // If net worth is declining in the second half
       if (finalState.netWorth < midState.netWorth * 0.9) {
-        return 'critical';
+        return "critical";
       }
     }
 
-    return 'needs_improvement';
+    return "needs_improvement";
   }
 
   /**
    * Analyzes retirement feasibility
    */
-  private analyzeRetirementFeasibility(result: SimulationResult, params: UserParameters): RetirementFeasibility {
-    const canRetireAtTarget = result.retirementDate !== null && 
-      result.retirementAge !== null && 
+  private analyzeRetirementFeasibility(
+    result: SimulationResult,
+    params: UserParameters,
+  ): RetirementFeasibility {
+    const canRetireAtTarget = result.retirementDate !== null &&
+      result.retirementAge !== null &&
       result.retirementAge <= params.retirementAge + 1;
 
     const feasibility: RetirementFeasibility = {
@@ -286,12 +348,16 @@ export class RetirementAdviceEngine {
   /**
    * Generate cache key for advice generation
    */
-  private generateAdviceCacheKey(states: FinancialState[], params: UserParameters, category: string): string {
+  private generateAdviceCacheKey(
+    states: FinancialState[],
+    params: UserParameters,
+    category: string,
+  ): string {
     // Use key financial metrics to generate cache key
     const firstState = states[0];
     const lastState = states[states.length - 1];
     const midState = states[Math.floor(states.length / 2)];
-    
+
     const keyData = {
       category,
       statesLength: states.length,
@@ -304,15 +370,18 @@ export class RetirementAdviceEngine {
       age: params.currentAge,
       retirementAge: params.retirementAge,
     };
-    
+
     return JSON.stringify(keyData);
   }
 
   /**
    * Cached version of debt strategy analysis
    */
-  private analyzeDebtStrategyCached(states: FinancialState[], params: UserParameters): AdviceItem[] {
-    const cacheKey = this.generateAdviceCacheKey(states, params, 'debt');
+  private analyzeDebtStrategyCached(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
+    const cacheKey = this.generateAdviceCacheKey(states, params, "debt");
     const cachedResult = this.debtAdviceCache.get(cacheKey);
     if (cachedResult) {
       return cachedResult;
@@ -326,8 +395,11 @@ export class RetirementAdviceEngine {
   /**
    * Cached version of investment strategy analysis
    */
-  private analyzeInvestmentStrategyCached(states: FinancialState[], params: UserParameters): AdviceItem[] {
-    const cacheKey = this.generateAdviceCacheKey(states, params, 'investment');
+  private analyzeInvestmentStrategyCached(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
+    const cacheKey = this.generateAdviceCacheKey(states, params, "investment");
     const cachedResult = this.investmentAdviceCache.get(cacheKey);
     if (cachedResult) {
       return cachedResult;
@@ -341,8 +413,11 @@ export class RetirementAdviceEngine {
   /**
    * Cached version of expense optimization analysis
    */
-  private analyzeExpenseOptimizationCached(states: FinancialState[], params: UserParameters): AdviceItem[] {
-    const cacheKey = this.generateAdviceCacheKey(states, params, 'expense');
+  private analyzeExpenseOptimizationCached(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
+    const cacheKey = this.generateAdviceCacheKey(states, params, "expense");
     const cachedResult = this.expenseAdviceCache.get(cacheKey);
     if (cachedResult) {
       return cachedResult;
@@ -356,8 +431,11 @@ export class RetirementAdviceEngine {
   /**
    * Cached version of income strategy analysis
    */
-  private analyzeIncomeStrategyCached(states: FinancialState[], params: UserParameters): AdviceItem[] {
-    const cacheKey = this.generateAdviceCacheKey(states, params, 'income');
+  private analyzeIncomeStrategyCached(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
+    const cacheKey = this.generateAdviceCacheKey(states, params, "income");
     const cachedResult = this.incomeAdviceCache.get(cacheKey);
     if (cachedResult) {
       return cachedResult;
@@ -372,7 +450,10 @@ export class RetirementAdviceEngine {
    * Analyzes debt acceleration strategies and generates recommendations
    * Validates: Requirements 2.2, 4.1
    */
-  analyzeDebtStrategy(states: FinancialState[], params: UserParameters): AdviceItem[] {
+  analyzeDebtStrategy(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     if (states.length === 0) {
@@ -382,8 +463,11 @@ export class RetirementAdviceEngine {
     // Check if there are active loans at the beginning of the simulation
     // (Don't use final state as loans might be paid off by then)
     const initialState = states[0];
-    const hasActiveLoans = initialState.loanBalance > 0 || 
-      (initialState.loanBalances && Object.values(initialState.loanBalances).some(balance => balance > 0));
+    const hasActiveLoans = initialState.loanBalance > 0 ||
+      (initialState.loanBalances &&
+        Object.values(initialState.loanBalances).some((balance) =>
+          balance > 0
+        ));
 
     if (!hasActiveLoans) {
       return advice;
@@ -396,12 +480,24 @@ export class RetirementAdviceEngine {
       for (const loan of params.loans) {
         const currentBalance = finalState.loanBalances?.[loan.id] ?? 0;
         if (currentBalance > 0) {
-          advice.push(...this.generateLoanAccelerationAdvice(loan, currentBalance, states));
+          advice.push(
+            ...this.generateLoanAccelerationAdvice(
+              loan,
+              currentBalance,
+              states,
+            ),
+          );
         }
       }
     } else if (finalState.loanBalance > 0) {
       // Legacy single loan
-      advice.push(...this.generateLegacyLoanAccelerationAdvice(params, finalState.loanBalance, states));
+      advice.push(
+        ...this.generateLegacyLoanAccelerationAdvice(
+          params,
+          finalState.loanBalance,
+          states,
+        ),
+      );
     }
 
     // Analyze offset account optimization
@@ -414,43 +510,69 @@ export class RetirementAdviceEngine {
   /**
    * Generates loan acceleration advice for individual loans
    */
-  private generateLoanAccelerationAdvice(loan: any, currentBalance: number, states: FinancialState[]): AdviceItem[] {
+  private generateLoanAccelerationAdvice(
+    loan: any,
+    currentBalance: number,
+    states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     // Calculate potential extra payment amounts
     const extraPaymentOptions = [100, 250, 500, 1000];
-    
+
     for (const extraPayment of extraPaymentOptions) {
       // Estimate time savings (simplified calculation)
       const monthlyRate = loan.interestRate / 100 / 12;
       const currentPayment = loan.paymentAmount;
-      
+
       // Calculate months to pay off with current payment
-      const currentMonths = this.calculateLoanPayoffTime(currentBalance, currentPayment, monthlyRate);
-      
+      const currentMonths = this.calculateLoanPayoffTime(
+        currentBalance,
+        currentPayment,
+        monthlyRate,
+      );
+
       // Calculate months to pay off with extra payment
-      const acceleratedMonths = this.calculateLoanPayoffTime(currentBalance, currentPayment + extraPayment, monthlyRate);
-      
+      const acceleratedMonths = this.calculateLoanPayoffTime(
+        currentBalance,
+        currentPayment + extraPayment,
+        monthlyRate,
+      );
+
       const timeSavings = (currentMonths - acceleratedMonths) / 12; // Convert to years
-      const interestSavings = (currentMonths - acceleratedMonths) * currentPayment * monthlyRate;
+      const interestSavings = (currentMonths - acceleratedMonths) *
+        currentPayment * monthlyRate;
 
       if (timeSavings > 0.5) { // Only suggest if saves at least 6 months
         advice.push({
           id: `debt-acceleration-${loan.id}-${extraPayment}`,
-          category: 'debt',
-          priority: extraPayment <= 250 ? 'high' : 'medium',
-          title: `Accelerate ${loan.label} Payments (+${formatCurrency(extraPayment)}/month)`,
-          description: `Add ${formatCurrency(extraPayment)} to your monthly ${loan.label} payment to save ${timeSavings.toFixed(1)} years and ${formatCurrency(interestSavings)} in interest.`,
+          category: "debt",
+          priority: extraPayment <= 250 ? "high" : "medium",
+          title: `Accelerate ${loan.label} Payments (+${
+            formatCurrency(extraPayment)
+          }/month)`,
+          description: `Add ${
+            formatCurrency(extraPayment)
+          } to your monthly ${loan.label} payment to save ${
+            timeSavings.toFixed(1)
+          } years and ${formatCurrency(interestSavings)} in interest.`,
           specificActions: [
-            `Increase monthly payment from ${formatCurrency(currentPayment)} to ${formatCurrency(currentPayment + extraPayment)}`,
+            `Increase monthly payment from ${
+              formatCurrency(currentPayment)
+            } to ${formatCurrency(currentPayment + extraPayment)}`,
             `Set up automatic extra payment to ensure consistency`,
-            `Review budget to identify where extra ${formatCurrency(extraPayment)} can come from`,
+            `Review budget to identify where extra ${
+              formatCurrency(extraPayment)
+            } can come from`,
           ],
           projectedImpact: {
             timelineSavings: timeSavings,
             costSavings: interestSavings,
           },
-          feasibilityScore: this.calculateFeasibilityScore(extraPayment, states),
+          feasibilityScore: this.calculateFeasibilityScore(
+            extraPayment,
+            states,
+          ),
           effectivenessScore: Math.min(95, (timeSavings / 5) * 100), // Scale based on years saved
         });
       }
@@ -462,7 +584,11 @@ export class RetirementAdviceEngine {
   /**
    * Generates legacy loan acceleration advice
    */
-  private generateLegacyLoanAccelerationAdvice(params: UserParameters, currentBalance: number, states: FinancialState[]): AdviceItem[] {
+  private generateLegacyLoanAccelerationAdvice(
+    params: UserParameters,
+    currentBalance: number,
+    states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     const extraPaymentOptions = [100, 250, 500, 1000];
@@ -470,21 +596,38 @@ export class RetirementAdviceEngine {
     const currentPayment = params.loanPaymentAmount;
 
     for (const extraPayment of extraPaymentOptions) {
-      const currentMonths = this.calculateLoanPayoffTime(currentBalance, currentPayment, monthlyRate);
-      const acceleratedMonths = this.calculateLoanPayoffTime(currentBalance, currentPayment + extraPayment, monthlyRate);
-      
+      const currentMonths = this.calculateLoanPayoffTime(
+        currentBalance,
+        currentPayment,
+        monthlyRate,
+      );
+      const acceleratedMonths = this.calculateLoanPayoffTime(
+        currentBalance,
+        currentPayment + extraPayment,
+        monthlyRate,
+      );
+
       const timeSavings = (currentMonths - acceleratedMonths) / 12;
-      const interestSavings = (currentMonths - acceleratedMonths) * currentPayment * monthlyRate;
+      const interestSavings = (currentMonths - acceleratedMonths) *
+        currentPayment * monthlyRate;
 
       if (timeSavings > 0.5) {
         advice.push({
           id: `debt-acceleration-legacy-${extraPayment}`,
-          category: 'debt',
-          priority: extraPayment <= 250 ? 'high' : 'medium',
-          title: `Accelerate Loan Payments (+${formatCurrency(extraPayment)}/month)`,
-          description: `Add ${formatCurrency(extraPayment)} to your monthly loan payment to save ${timeSavings.toFixed(1)} years and ${formatCurrency(interestSavings)} in interest.`,
+          category: "debt",
+          priority: extraPayment <= 250 ? "high" : "medium",
+          title: `Accelerate Loan Payments (+${
+            formatCurrency(extraPayment)
+          }/month)`,
+          description: `Add ${
+            formatCurrency(extraPayment)
+          } to your monthly loan payment to save ${
+            timeSavings.toFixed(1)
+          } years and ${formatCurrency(interestSavings)} in interest.`,
           specificActions: [
-            `Increase monthly payment from ${formatCurrency(currentPayment)} to ${formatCurrency(currentPayment + extraPayment)}`,
+            `Increase monthly payment from ${
+              formatCurrency(currentPayment)
+            } to ${formatCurrency(currentPayment + extraPayment)}`,
             `Set up automatic extra payment`,
             `Review budget for extra ${formatCurrency(extraPayment)}`,
           ],
@@ -492,7 +635,10 @@ export class RetirementAdviceEngine {
             timelineSavings: timeSavings,
             costSavings: interestSavings,
           },
-          feasibilityScore: this.calculateFeasibilityScore(extraPayment, states),
+          feasibilityScore: this.calculateFeasibilityScore(
+            extraPayment,
+            states,
+          ),
           effectivenessScore: Math.min(95, (timeSavings / 5) * 100),
         });
       }
@@ -504,12 +650,15 @@ export class RetirementAdviceEngine {
   /**
    * Generates offset account optimization advice
    */
-  private generateOffsetOptimizationAdvice(params: UserParameters, states: FinancialState[]): AdviceItem[] {
+  private generateOffsetOptimizationAdvice(
+    params: UserParameters,
+    states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     // Check if offset accounts are available but not being used optimally
-    const hasOffsetCapability = params.useOffsetAccount || 
-      (params.loans && params.loans.some(loan => loan.hasOffset));
+    const hasOffsetCapability = params.useOffsetAccount ||
+      (params.loans && params.loans.some((loan) => loan.hasOffset));
 
     if (!hasOffsetCapability || states.length === 0) {
       return advice;
@@ -519,21 +668,25 @@ export class RetirementAdviceEngine {
     // Look at a representative early state where cash has had time to accumulate
     const currentStateIndex = Math.min(12, states.length - 1); // Look at ~1 year in
     const currentState = states[currentStateIndex];
-    
+
     // Check if there are active loans at the current time
     const hasActiveLoans = this.hasActiveLoansAtState(currentState, params);
-    
+
     if (!hasActiveLoans) {
       return advice; // No active loans to benefit from offset
     }
 
     // Find when loans will be paid off to calculate realistic savings period
-    const loanPayoffTimeframe = this.estimateLoanPayoffTimeframe(states, params, currentStateIndex);
-    
+    const loanPayoffTimeframe = this.estimateLoanPayoffTimeframe(
+      states,
+      params,
+      currentStateIndex,
+    );
+
     // If there's cash sitting around that could be in offset
     if (currentState.cash > 1000) {
-      const interestRate = params.loans && params.loans.length > 0 
-        ? Math.max(...params.loans.map(loan => loan.interestRate))
+      const interestRate = params.loans && params.loans.length > 0
+        ? Math.max(...params.loans.map((loan) => loan.interestRate))
         : params.loanInterestRate;
 
       // Calculate savings only for the period when loans are active
@@ -543,22 +696,32 @@ export class RetirementAdviceEngine {
 
       // Only suggest if there's meaningful time left on the loans
       if (yearsOfSavings > 0.5) {
-        const timeframeText = yearsOfSavings < 10 
-          ? ` over the next ${yearsOfSavings.toFixed(1)} years until loan payoff`
+        const timeframeText = yearsOfSavings < 10
+          ? ` over the next ${
+            yearsOfSavings.toFixed(1)
+          } years until loan payoff`
           : ` annually`;
 
         advice.push({
-          id: 'offset-optimization-cash',
-          category: 'debt',
-          priority: 'high',
-          title: 'Optimize Offset Account Usage',
-          description: `Move ${formatCurrency(currentState.cash)} from cash to offset account to save ${formatCurrency(annualSavings)} annually in interest${timeframeText}.`,
+          id: "offset-optimization-cash",
+          category: "debt",
+          priority: "high",
+          title: "Optimize Offset Account Usage",
+          description: `Move ${
+            formatCurrency(currentState.cash)
+          } from cash to offset account to save ${
+            formatCurrency(annualSavings)
+          } annually in interest${timeframeText}.`,
           specificActions: [
-            'Transfer excess cash to offset account',
-            'Set up automatic sweep from transaction account to offset',
-            'Review cash flow needs to maintain appropriate buffer',
-            yearsOfSavings < 10 ? `Note: Loan will be paid off in approximately ${yearsOfSavings.toFixed(1)} years` : '',
-          ].filter(action => action !== ''), // Remove empty strings
+            "Transfer excess cash to offset account",
+            "Set up automatic sweep from transaction account to offset",
+            "Review cash flow needs to maintain appropriate buffer",
+            yearsOfSavings < 10
+              ? `Note: Loan will be paid off in approximately ${
+                yearsOfSavings.toFixed(1)
+              } years`
+              : "",
+          ].filter((action) => action !== ""), // Remove empty strings
           projectedImpact: {
             costSavings: totalSavings,
           },
@@ -574,7 +737,10 @@ export class RetirementAdviceEngine {
   /**
    * Helper method to check if there are active loans at a given state
    */
-  private hasActiveLoansAtState(state: FinancialState, params: UserParameters): boolean {
+  private hasActiveLoansAtState(
+    state: FinancialState,
+    params: UserParameters,
+  ): boolean {
     // Check legacy single loan
     if (state.loanBalance > 0) {
       return true;
@@ -582,7 +748,7 @@ export class RetirementAdviceEngine {
 
     // Check multiple loans
     if (params.loans && params.loans.length > 0 && state.loanBalances) {
-      return Object.values(state.loanBalances).some(balance => balance > 0);
+      return Object.values(state.loanBalances).some((balance) => balance > 0);
     }
 
     return false;
@@ -591,17 +757,22 @@ export class RetirementAdviceEngine {
   /**
    * Helper method to estimate when loans will be paid off from current evaluation point
    */
-  private estimateLoanPayoffTimeframe(states: FinancialState[], params: UserParameters, currentStateIndex: number = 0): number {
+  private estimateLoanPayoffTimeframe(
+    states: FinancialState[],
+    params: UserParameters,
+    currentStateIndex: number = 0,
+  ): number {
     // Look for the point where all loans are paid off, starting from current evaluation point
     for (let i = currentStateIndex; i < states.length; i++) {
       const state = states[i];
       const hasActiveLoans = this.hasActiveLoansAtState(state, params);
-      
+
       if (!hasActiveLoans) {
         // Found payoff point, calculate years from current evaluation point
         const currentDate = states[currentStateIndex].date;
         const payoffDate = state.date;
-        const yearsToPayoff = (payoffDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        const yearsToPayoff = (payoffDate.getTime() - currentDate.getTime()) /
+          (1000 * 60 * 60 * 24 * 365.25);
         return Math.max(0, yearsToPayoff);
       }
     }
@@ -614,7 +785,10 @@ export class RetirementAdviceEngine {
    * Analyzes investment optimization strategies
    * Validates: Requirements 2.3, 4.2
    */
-  analyzeInvestmentStrategy(states: FinancialState[], params: UserParameters): AdviceItem[] {
+  analyzeInvestmentStrategy(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     if (states.length === 0) {
@@ -622,15 +796,24 @@ export class RetirementAdviceEngine {
     }
 
     // Analyze contribution increases
-    const contributionAdvice = this.generateInvestmentContributionAdvice(params, states);
+    const contributionAdvice = this.generateInvestmentContributionAdvice(
+      params,
+      states,
+    );
     advice.push(...contributionAdvice);
 
     // Analyze person-specific super contribution increases
-    const personSpecificSuperAdvice = this.generatePersonSpecificSuperAdvice(params, states);
+    const personSpecificSuperAdvice = this.generatePersonSpecificSuperAdvice(
+      params,
+      states,
+    );
     advice.push(...personSpecificSuperAdvice);
 
     // Analyze allocation optimization
-    const allocationAdvice = this.generateAllocationOptimizationAdvice(params, states);
+    const allocationAdvice = this.generateAllocationOptimizationAdvice(
+      params,
+      states,
+    );
     advice.push(...allocationAdvice);
 
     return advice;
@@ -640,11 +823,17 @@ export class RetirementAdviceEngine {
    * Generates person-specific superannuation contribution advice
    * Ensures changes are applied to the correct person
    */
-  private generatePersonSpecificSuperAdvice(params: UserParameters, states: FinancialState[]): AdviceItem[] {
+  private generatePersonSpecificSuperAdvice(
+    params: UserParameters,
+    states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     // Only generate person-specific advice for household mode
-    if (params.householdMode !== 'couple' || !params.people || params.people.length === 0) {
+    if (
+      params.householdMode !== "couple" || !params.people ||
+      params.people.length === 0
+    ) {
       return advice;
     }
 
@@ -652,58 +841,77 @@ export class RetirementAdviceEngine {
       // Check each person's super accounts
       for (const superAccount of person.superAccounts) {
         const currentRate = superAccount.contributionRate;
-        
+
         // Suggest increases in 1% increments up to 15%
-        const suggestedRates = [currentRate + 1, currentRate + 2, Math.min(15, currentRate + 3)];
-        
+        const suggestedRates = [
+          currentRate + 1,
+          currentRate + 2,
+          Math.min(15, currentRate + 3),
+        ];
+
         for (const suggestedRate of suggestedRates) {
           if (suggestedRate <= currentRate || suggestedRate > 15) continue;
-          
+
           // Calculate projected benefit over 10 years
           const rateIncrease = suggestedRate - currentRate;
-          
+
           // Find person's income to calculate contribution increase
           const totalIncome = person.incomeSources.reduce((sum, income) => {
             if (income.isBeforeTax) {
               // Convert to annual amount
-              const multiplier = income.frequency === 'weekly' ? 52 :
-                               income.frequency === 'fortnightly' ? 26 :
-                               income.frequency === 'monthly' ? 12 : 1;
+              const multiplier = income.frequency === "weekly"
+                ? 52
+                : income.frequency === "fortnightly"
+                ? 26
+                : income.frequency === "monthly"
+                ? 12
+                : 1;
               return sum + (income.amount * multiplier);
             }
             return sum;
           }, 0);
-          
+
           if (totalIncome === 0) continue;
-          
-          const additionalAnnualContribution = (totalIncome * rateIncrease) / 100;
+
+          const additionalAnnualContribution = (totalIncome * rateIncrease) /
+            100;
           const projectedBenefit = this.calculateFutureValue(
-            additionalAnnualContribution, 
-            superAccount.returnRate / 100, 
-            10
+            additionalAnnualContribution,
+            superAccount.returnRate / 100,
+            10,
           );
-          
+
           // Only suggest if benefit is meaningful and feasible
-          if (projectedBenefit > 5000 && additionalAnnualContribution < totalIncome * 0.05) {
+          if (
+            projectedBenefit > 5000 &&
+            additionalAnnualContribution < totalIncome * 0.05
+          ) {
             const personSpecificAdvice = createSuperContributionAdvice(
               person,
               currentRate,
               suggestedRate,
               projectedBenefit,
-              superAccount.id
+              superAccount.id,
             );
-            
+
             // Validate the advice before adding
-            const validation = validatePersonSpecificAdvice(personSpecificAdvice, params);
+            const validation = validatePersonSpecificAdvice(
+              personSpecificAdvice,
+              params,
+            );
             if (validation.isValid) {
               advice.push(personSpecificAdvice);
             }
           }
         }
       }
-      
+
       // Suggest retirement age adjustments if beneficial
-      const retirementAgeAdvice = this.generateRetirementAgeAdvice(person, params, states);
+      const retirementAgeAdvice = this.generateRetirementAgeAdvice(
+        person,
+        params,
+        states,
+      );
       advice.push(...retirementAgeAdvice);
     }
 
@@ -713,61 +921,82 @@ export class RetirementAdviceEngine {
   /**
    * Generates retirement age adjustment advice for a specific person
    */
-  private generateRetirementAgeAdvice(person: Person, params: UserParameters, states: FinancialState[]): AdviceItem[] {
+  private generateRetirementAgeAdvice(
+    person: Person,
+    params: UserParameters,
+    _states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
     const currentRetirementAge = person.retirementAge;
-    
+
     // Consider delaying retirement by 1-3 years
     for (let delay = 1; delay <= 3; delay++) {
       const suggestedAge = currentRetirementAge + delay;
-      
+
       if (suggestedAge > 70) continue; // Don't suggest retiring after 70
-      
+
       // Calculate benefit of working additional years
       const additionalWorkingYears = delay;
       const personIncome = person.incomeSources.reduce((sum, income) => {
         if (income.isBeforeTax) {
-          const multiplier = income.frequency === 'weekly' ? 52 :
-                           income.frequency === 'fortnightly' ? 26 :
-                           income.frequency === 'monthly' ? 12 : 1;
+          const multiplier = income.frequency === "weekly"
+            ? 52
+            : income.frequency === "fortnightly"
+            ? 26
+            : income.frequency === "monthly"
+            ? 12
+            : 1;
           return sum + (income.amount * multiplier);
         }
         return sum;
       }, 0);
-      
+
       // Rough calculation: additional income + super growth + delayed withdrawal
       const additionalEarnings = personIncome * additionalWorkingYears;
       const superGrowth = person.superAccounts.reduce((sum, acc) => {
-        return sum + (acc.balance * Math.pow(1 + acc.returnRate / 100, additionalWorkingYears) - acc.balance);
+        return sum +
+          (acc.balance *
+              Math.pow(1 + acc.returnRate / 100, additionalWorkingYears) -
+            acc.balance);
       }, 0);
-      
+
       const totalBenefit = additionalEarnings + superGrowth;
-      
+
       if (totalBenefit > 50000) { // Only suggest if significant benefit
-        const reason = `Working ${delay} additional year${delay > 1 ? 's' : ''} could provide ${formatCurrency(totalBenefit)} in additional retirement security.`;
-        
+        const reason = `Working ${delay} additional year${
+          delay > 1 ? "s" : ""
+        } could provide ${
+          formatCurrency(totalBenefit)
+        } in additional retirement security.`;
+
         const retirementAdvice = createRetirementAgeAdvice(
           person,
           suggestedAge,
           currentRetirementAge,
           totalBenefit,
-          reason
+          reason,
         );
-        
-        const validation = validatePersonSpecificAdvice(retirementAdvice, params);
+
+        const validation = validatePersonSpecificAdvice(
+          retirementAdvice,
+          params,
+        );
         if (validation.isValid) {
           advice.push(retirementAdvice);
         }
       }
     }
-    
+
     return advice;
   }
 
   /**
    * Generates investment contribution increase advice
    */
-  private generateInvestmentContributionAdvice(params: UserParameters, states: FinancialState[]): AdviceItem[] {
+  private generateInvestmentContributionAdvice(
+    params: UserParameters,
+    states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     const currentContribution = params.monthlyInvestmentContribution;
@@ -780,22 +1009,41 @@ export class RetirementAdviceEngine {
       // Estimate impact over 10 years with compound growth
       const returnRate = params.investmentReturnRate / 100;
       const years = Math.min(10, params.retirementAge - params.currentAge);
-      const futureValue = this.calculateFutureValue(annualIncrease, returnRate, years);
+      const futureValue = this.calculateFutureValue(
+        annualIncrease,
+        returnRate,
+        years,
+      );
 
       advice.push({
         id: `investment-increase-${increase}`,
-        category: 'investment',
-        priority: increase <= 100 ? 'high' : 'medium',
-        title: `Increase Investment Contributions (+${formatCurrency(increase)}/month)`,
-        description: `Boost monthly investments from ${formatCurrency(currentContribution)} to ${formatCurrency(newContribution)}. This could generate an additional ${formatCurrency(futureValue)} over ${years} years.`,
+        category: "investment",
+        priority: increase <= 100 ? "high" : "medium",
+        title: `Increase Investment Contributions (+${
+          formatCurrency(increase)
+        }/month)`,
+        description: `Boost monthly investments from ${
+          formatCurrency(currentContribution)
+        } to ${
+          formatCurrency(newContribution)
+        }. This could generate an additional ${
+          formatCurrency(futureValue)
+        } over ${years} years.`,
         specificActions: [
-          `Increase automatic investment contribution by ${formatCurrency(increase)} per month`,
-          `Review budget to accommodate additional ${formatCurrency(annualIncrease)} annually`,
+          `Increase automatic investment contribution by ${
+            formatCurrency(increase)
+          } per month`,
+          `Review budget to accommodate additional ${
+            formatCurrency(annualIncrease)
+          } annually`,
           `Consider dollar-cost averaging to reduce market timing risk`,
         ],
         projectedImpact: {
           additionalAssets: futureValue,
-          timelineSavings: this.estimateRetirementAcceleration(futureValue, params),
+          timelineSavings: this.estimateRetirementAcceleration(
+            futureValue,
+            params,
+          ),
         },
         feasibilityScore: this.calculateFeasibilityScore(increase, states),
         effectivenessScore: Math.min(95, (futureValue / 10000) * 10), // Scale based on future value
@@ -808,7 +1056,10 @@ export class RetirementAdviceEngine {
   /**
    * Generates allocation optimization advice
    */
-  private generateAllocationOptimizationAdvice(params: UserParameters, _states: FinancialState[]): AdviceItem[] {
+  private generateAllocationOptimizationAdvice(
+    params: UserParameters,
+    _states: FinancialState[],
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     // Suggest more aggressive allocation if young and conservative
@@ -818,25 +1069,37 @@ export class RetirementAdviceEngine {
     if (yearsToRetirement > 10 && currentReturnRate < 7) {
       const suggestedRate = Math.min(8, currentReturnRate + 1.5);
       const additionalReturn = suggestedRate - currentReturnRate;
-      
+
       // Calculate impact on final portfolio value
       const currentBalance = params.currentInvestmentBalance;
       const monthlyContribution = params.monthlyInvestmentContribution;
-      
-      const currentFutureValue = this.calculateFutureValue(monthlyContribution * 12, currentReturnRate / 100, yearsToRetirement) + 
-        currentBalance * Math.pow(1 + currentReturnRate / 100, yearsToRetirement);
-      
-      const improvedFutureValue = this.calculateFutureValue(monthlyContribution * 12, suggestedRate / 100, yearsToRetirement) + 
+
+      const currentFutureValue = this.calculateFutureValue(
+        monthlyContribution * 12,
+        currentReturnRate / 100,
+        yearsToRetirement,
+      ) +
+        currentBalance *
+          Math.pow(1 + currentReturnRate / 100, yearsToRetirement);
+
+      const improvedFutureValue = this.calculateFutureValue(
+        monthlyContribution * 12,
+        suggestedRate / 100,
+        yearsToRetirement,
+      ) +
         currentBalance * Math.pow(1 + suggestedRate / 100, yearsToRetirement);
-      
+
       const additionalValue = improvedFutureValue - currentFutureValue;
 
       advice.push({
-        id: 'allocation-optimization-aggressive',
-        category: 'investment',
-        priority: 'medium',
+        id: "allocation-optimization-aggressive",
+        category: "investment",
+        priority: "medium",
         title: `Optimize Investment Allocation for Growth`,
-        description: `Consider a more growth-oriented portfolio targeting ${suggestedRate}% returns instead of ${currentReturnRate}%. This could add ${formatCurrency(additionalValue)} to your retirement savings.`,
+        description:
+          `Consider a more growth-oriented portfolio targeting ${suggestedRate}% returns instead of ${currentReturnRate}%. This could add ${
+            formatCurrency(additionalValue)
+          } to your retirement savings.`,
         specificActions: [
           `Review current investment allocation with a financial advisor`,
           `Consider increasing equity allocation given your ${yearsToRetirement}-year time horizon`,
@@ -845,7 +1108,10 @@ export class RetirementAdviceEngine {
         ],
         projectedImpact: {
           additionalAssets: additionalValue,
-          timelineSavings: this.estimateRetirementAcceleration(additionalValue, params),
+          timelineSavings: this.estimateRetirementAcceleration(
+            additionalValue,
+            params,
+          ),
         },
         feasibilityScore: 70, // Requires some knowledge and risk tolerance
         effectivenessScore: Math.min(90, (additionalReturn / 2) * 100), // Scale based on additional return
@@ -859,7 +1125,10 @@ export class RetirementAdviceEngine {
    * Analyzes expense reduction opportunities
    * Validates: Requirements 4.3
    */
-  analyzeExpenseOptimization(states: FinancialState[], params: UserParameters): AdviceItem[] {
+  analyzeExpenseOptimization(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     if (states.length === 0) {
@@ -868,8 +1137,16 @@ export class RetirementAdviceEngine {
 
     // Suggest expense reductions in high-impact categories
     const expenseCategories = [
-      { name: 'Living Expenses', amount: params.monthlyLivingExpenses, reductionPotential: 0.15 },
-      { name: 'Housing Costs', amount: params.monthlyRentOrMortgage, reductionPotential: 0.10 },
+      {
+        name: "Living Expenses",
+        amount: params.monthlyLivingExpenses,
+        reductionPotential: 0.15,
+      },
+      {
+        name: "Housing Costs",
+        amount: params.monthlyRentOrMortgage,
+        reductionPotential: 0.10,
+      },
     ];
 
     for (const category of expenseCategories) {
@@ -883,20 +1160,34 @@ export class RetirementAdviceEngine {
         for (let i = 0; i < reductionAmounts.length; i++) {
           const reduction = reductionAmounts[i];
           const annualSavings = reduction * 12;
-          
+
           // Calculate impact if invested
           const yearsToRetirement = params.retirementAge - params.currentAge;
-          const investedValue = this.calculateFutureValue(annualSavings, params.investmentReturnRate / 100, yearsToRetirement);
+          const investedValue = this.calculateFutureValue(
+            annualSavings,
+            params.investmentReturnRate / 100,
+            yearsToRetirement,
+          );
 
-          const priority: AdvicePriority = i === 0 ? 'high' : i === 1 ? 'medium' : 'low';
+          const priority: AdvicePriority = i === 0
+            ? "high"
+            : i === 1
+            ? "medium"
+            : "low";
           const percentage = ((i + 1) * 5).toString();
 
           advice.push({
-            id: `expense-reduction-${category.name.toLowerCase().replace(' ', '-')}-${percentage}`,
-            category: 'expense',
+            id: `expense-reduction-${
+              category.name.toLowerCase().replace(" ", "-")
+            }-${percentage}`,
+            category: "expense",
             priority,
             title: `Reduce ${category.name} by ${percentage}%`,
-            description: `Cut ${category.name} by ${formatCurrency(reduction)}/month (${percentage}% reduction). Invest the savings to potentially gain ${formatCurrency(investedValue)} by retirement.`,
+            description: `Cut ${category.name} by ${
+              formatCurrency(reduction)
+            }/month (${percentage}% reduction). Invest the savings to potentially gain ${
+              formatCurrency(investedValue)
+            } by retirement.`,
             specificActions: [
               `Review ${category.name.toLowerCase()} for optimization opportunities`,
               `Set a target to reduce by ${formatCurrency(reduction)} monthly`,
@@ -906,7 +1197,10 @@ export class RetirementAdviceEngine {
             projectedImpact: {
               costSavings: annualSavings,
               additionalAssets: investedValue,
-              timelineSavings: this.estimateRetirementAcceleration(investedValue, params),
+              timelineSavings: this.estimateRetirementAcceleration(
+                investedValue,
+                params,
+              ),
             },
             feasibilityScore: 90 - (i * 20), // Easier reductions have higher feasibility
             effectivenessScore: Math.min(85, (investedValue / 10000) * 10),
@@ -922,7 +1216,10 @@ export class RetirementAdviceEngine {
    * Analyzes income enhancement strategies
    * Validates: Requirements 4.4
    */
-  analyzeIncomeStrategy(states: FinancialState[], params: UserParameters): AdviceItem[] {
+  analyzeIncomeStrategy(
+    states: FinancialState[],
+    params: UserParameters,
+  ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     if (states.length === 0) {
@@ -932,27 +1229,41 @@ export class RetirementAdviceEngine {
     // Analyze income increase opportunities
     const currentAnnualSalary = params.annualSalary;
     const increaseOptions = [
-      { amount: currentAnnualSalary * 0.05, label: '5% raise' },
-      { amount: currentAnnualSalary * 0.10, label: '10% raise' },
-      { amount: currentAnnualSalary * 0.20, label: '20% raise (promotion)' },
+      { amount: currentAnnualSalary * 0.05, label: "5% raise" },
+      { amount: currentAnnualSalary * 0.10, label: "10% raise" },
+      { amount: currentAnnualSalary * 0.20, label: "20% raise (promotion)" },
     ];
 
     for (let i = 0; i < increaseOptions.length; i++) {
       const option = increaseOptions[i];
       const netIncrease = option.amount * (1 - params.incomeTaxRate / 100); // After tax
-      
+
       // Calculate impact if additional income is invested
       const yearsToRetirement = params.retirementAge - params.currentAge;
-      const investedValue = this.calculateFutureValue(netIncrease, params.investmentReturnRate / 100, yearsToRetirement);
+      const investedValue = this.calculateFutureValue(
+        netIncrease,
+        params.investmentReturnRate / 100,
+        yearsToRetirement,
+      );
 
-      const priority: AdvicePriority = i === 0 ? 'high' : i === 1 ? 'medium' : 'low';
+      const priority: AdvicePriority = i === 0
+        ? "high"
+        : i === 1
+        ? "medium"
+        : "low";
 
       advice.push({
         id: `income-increase-${i}`,
-        category: 'income',
+        category: "income",
         priority,
         title: `Pursue ${option.label}`,
-        description: `Increase annual income by ${formatCurrency(option.amount)} (${option.label}). After tax, this provides ${formatCurrency(netIncrease)} extra annually. If invested, could grow to ${formatCurrency(investedValue)} by retirement.`,
+        description: `Increase annual income by ${
+          formatCurrency(option.amount)
+        } (${option.label}). After tax, this provides ${
+          formatCurrency(netIncrease)
+        } extra annually. If invested, could grow to ${
+          formatCurrency(investedValue)
+        } by retirement.`,
         specificActions: [
           `Discuss career advancement opportunities with manager`,
           `Update skills and qualifications to justify increase`,
@@ -961,10 +1272,16 @@ export class RetirementAdviceEngine {
         ],
         projectedImpact: {
           additionalAssets: investedValue,
-          timelineSavings: this.estimateRetirementAcceleration(investedValue, params),
+          timelineSavings: this.estimateRetirementAcceleration(
+            investedValue,
+            params,
+          ),
         },
         feasibilityScore: 80 - (i * 15), // Smaller increases more feasible
-        effectivenessScore: Math.min(95, (option.amount / currentAnnualSalary) * 200), // Scale based on percentage increase
+        effectivenessScore: Math.min(
+          95,
+          (option.amount / currentAnnualSalary) * 200,
+        ), // Scale based on percentage increase
       });
     }
 
@@ -977,10 +1294,11 @@ export class RetirementAdviceEngine {
    */
   rankRecommendations(advice: AdviceItem[]): RankedAdvice[] {
     // Calculate overall score for each advice item
-    const scoredAdvice = advice.map(item => {
+    const scoredAdvice = advice.map((item) => {
       // Weight effectiveness more heavily than feasibility
-      const overallScore = (item.effectivenessScore * 0.7) + (item.feasibilityScore * 0.3);
-      
+      const overallScore = (item.effectivenessScore * 0.7) +
+        (item.feasibilityScore * 0.3);
+
       return {
         ...item,
         overallScore,
@@ -1001,25 +1319,35 @@ export class RetirementAdviceEngine {
   /**
    * Helper method to calculate loan payoff time in months
    */
-  private calculateLoanPayoffTime(balance: number, monthlyPayment: number, monthlyRate: number): number {
+  private calculateLoanPayoffTime(
+    balance: number,
+    monthlyPayment: number,
+    monthlyRate: number,
+  ): number {
     if (monthlyRate === 0) {
       return balance / monthlyPayment;
     }
-    
-    return Math.log(1 + (balance * monthlyRate) / monthlyPayment) / Math.log(1 + monthlyRate);
+
+    return Math.log(1 + (balance * monthlyRate) / monthlyPayment) /
+      Math.log(1 + monthlyRate);
   }
 
   /**
    * Helper method to calculate feasibility score based on required cash flow
    */
-  private calculateFeasibilityScore(monthlyCost: number, states: FinancialState[]): number {
+  private calculateFeasibilityScore(
+    monthlyCost: number,
+    states: FinancialState[],
+  ): number {
     if (states.length === 0) {
       return 50; // Default moderate feasibility
     }
 
     // Look at average cash flow in recent states
     const recentStates = states.slice(-12); // Last 12 months
-    const avgCashFlow = recentStates.reduce((sum, state) => sum + state.cashFlow, 0) / recentStates.length;
+    const avgCashFlow =
+      recentStates.reduce((sum, state) => sum + state.cashFlow, 0) /
+      recentStates.length;
 
     // Calculate feasibility based on available cash flow
     if (avgCashFlow <= 0) {
@@ -1027,7 +1355,7 @@ export class RetirementAdviceEngine {
     }
 
     const feasibilityRatio = monthlyCost / avgCashFlow;
-    
+
     if (feasibilityRatio <= 0.1) return 95; // Very feasible
     if (feasibilityRatio <= 0.2) return 85; // Highly feasible
     if (feasibilityRatio <= 0.3) return 70; // Moderately feasible
@@ -1038,18 +1366,25 @@ export class RetirementAdviceEngine {
   /**
    * Helper method to calculate future value of annuity
    */
-  private calculateFutureValue(annualPayment: number, rate: number, years: number): number {
+  private calculateFutureValue(
+    annualPayment: number,
+    rate: number,
+    years: number,
+  ): number {
     if (rate === 0) {
       return annualPayment * years;
     }
-    
+
     return annualPayment * ((Math.pow(1 + rate, years) - 1) / rate);
   }
 
   /**
    * Helper method to estimate retirement timeline acceleration
    */
-  private estimateRetirementAcceleration(additionalAssets: number, _params: UserParameters): number {
+  private estimateRetirementAcceleration(
+    additionalAssets: number,
+    _params: UserParameters,
+  ): number {
     // Rough estimate: each $25,000 in additional assets = 1 year earlier retirement
     // This is based on the 4% rule: $25,000 * 0.04 = $1,000 annual income
     return additionalAssets / 25000;
@@ -1073,7 +1408,9 @@ export class RetirementAdviceEngine {
 /**
  * Convenience function to create a retirement advice engine with default configuration
  */
-export function createRetirementAdviceEngine(config?: Partial<AdviceGenerationConfig>): RetirementAdviceEngine {
+export function createRetirementAdviceEngine(
+  config?: Partial<AdviceGenerationConfig>,
+): RetirementAdviceEngine {
   return new RetirementAdviceEngine(config);
 }
 
@@ -1084,7 +1421,7 @@ export function generateRetirementAdvice(
   result: SimulationResult,
   params: UserParameters,
   milestones?: Milestone[],
-  config?: Partial<AdviceGenerationConfig>
+  config?: Partial<AdviceGenerationConfig>,
 ): AdviceGenerationResult {
   const engine = createRetirementAdviceEngine(config);
   return engine.generateAdvice(result, params, milestones);

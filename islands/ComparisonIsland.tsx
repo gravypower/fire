@@ -8,7 +8,7 @@ import type {
   ComparisonSimulationResult,
   SimulationConfiguration,
 } from "../types/financial.ts";
-import { SimulationEngine } from "../lib/simulation_engine.ts";
+import { apiClient } from "../lib/api-client.ts";
 import ComparisonView from "../components/ComparisonView.tsx";
 
 interface ComparisonIslandProps {
@@ -44,7 +44,8 @@ export default function ComparisonIsland({ config }: ComparisonIslandProps) {
       // Run comparison in a setTimeout to allow UI to update
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const comparisonResult = await SimulationEngine.runComparisonSimulation(config);
+      // Run comparison using server-side API
+      const comparisonResult = await apiClient.runComparison(config);
 
       setComparison(comparisonResult);
     } catch (err) {
@@ -91,6 +92,7 @@ export default function ComparisonIsland({ config }: ComparisonIslandProps) {
               </p>
             </div>
             <button
+              type="button"
               onClick={handleRunComparison}
               class="ml-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg font-medium flex items-center"
             >
@@ -164,12 +166,14 @@ export default function ComparisonIsland({ config }: ComparisonIslandProps) {
                 </div>
                 <div class="flex gap-3">
                   <button
+                    type="button"
                     onClick={handleRunComparison}
                     class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium"
                   >
                     Retry Comparison
                   </button>
                   <button
+                    type="button"
                     onClick={handleCloseComparison}
                     class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors duration-200 text-sm font-medium"
                   >
@@ -187,6 +191,7 @@ export default function ComparisonIsland({ config }: ComparisonIslandProps) {
         <div class="fade-in">
           <div class="mb-4 flex justify-end">
             <button
+              type="button"
               onClick={handleCloseComparison}
               class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors duration-200 text-sm font-medium flex items-center"
             >

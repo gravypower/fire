@@ -828,18 +828,6 @@ export class MilestoneDetector {
       return null; // Person doesn't retire within simulation period
     }
 
-    // Find the state closest to this person's retirement date
-    let closestState = states[0];
-    let closestTimeDiff = Math.abs(states[0].date.getTime() - retirementDate.getTime());
-
-    for (const state of states) {
-      const timeDiff = Math.abs(state.date.getTime() - retirementDate.getTime());
-      if (timeDiff < closestTimeDiff) {
-        closestTimeDiff = timeDiff;
-        closestState = state;
-      }
-    }
-
     // Calculate person's contribution to household income
     let personIncome = 0;
     for (const incomeSource of person.incomeSources) {

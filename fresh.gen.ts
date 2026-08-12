@@ -4,6 +4,13 @@
 
 import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
+import * as $api_simulation_commands from "./routes/api/simulation/commands.ts";
+import * as $api_simulation_events from "./routes/api/simulation/events.ts";
+import * as $api_simulation_index from "./routes/api/simulation/index.ts";
+import * as $api_simulation_projections from "./routes/api/simulation/projections.ts";
+import * as $api_simulation_session from "./routes/api/simulation/session.ts";
+import * as $api_simulation_stats from "./routes/api/simulation/stats.ts";
+import * as $api_simulation_websocket from "./routes/api/simulation/websocket.ts";
 import * as $api_tax_config from "./routes/api/tax-config.ts";
 import * as $greet_name_ from "./routes/greet/[name].tsx";
 import * as $help from "./routes/help.tsx";
@@ -27,6 +34,13 @@ const manifest = {
   routes: {
     "./routes/_404.tsx": $_404,
     "./routes/_app.tsx": $_app,
+    "./routes/api/simulation/commands.ts": $api_simulation_commands,
+    "./routes/api/simulation/events.ts": $api_simulation_events,
+    "./routes/api/simulation/index.ts": $api_simulation_index,
+    "./routes/api/simulation/projections.ts": $api_simulation_projections,
+    "./routes/api/simulation/session.ts": $api_simulation_session,
+    "./routes/api/simulation/stats.ts": $api_simulation_stats,
+    "./routes/api/simulation/websocket.ts": $api_simulation_websocket,
     "./routes/api/tax-config.ts": $api_tax_config,
     "./routes/greet/[name].tsx": $greet_name_,
     "./routes/help.tsx": $help,

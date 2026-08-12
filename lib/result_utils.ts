@@ -9,7 +9,7 @@ import type { FinancialState, TimeInterval } from "../types/financial.ts";
 /**
  * Groups simulation states by the specified time interval
  * Validates: Requirements 3.1
- * 
+ *
  * @param states Array of financial states from simulation
  * @param interval Target time interval for grouping (weekly/monthly/yearly)
  * @returns Array of financial states filtered to the specified interval
@@ -23,10 +23,10 @@ export function groupByTimeInterval(
   }
 
   const result: FinancialState[] = [];
-  
+
   // Always include the first state
   result.push(states[0]);
-  
+
   if (states.length === 1) {
     return result;
   }
@@ -55,8 +55,14 @@ export function groupByTimeInterval(
     const currentDate = states[i].date.getTime();
     const timeSinceLastIncluded = currentDate - lastIncludedDate;
 
+    // Determine threshold based on interval type to prevent drift
+    let threshold = 0.9; // Default 90% flexibility
+    if (interval === "year") {
+      threshold = 0.98; // Stricter 98% for years to ensure full 12 months/52 weeks
+    }
+
     // Include this state if enough time has passed
-    if (timeSinceLastIncluded >= intervalMs * 0.9) { // 90% threshold for flexibility
+    if (timeSinceLastIncluded >= intervalMs * threshold) {
       result.push(states[i]);
       lastIncludedDate = currentDate;
     }
@@ -74,7 +80,7 @@ export function groupByTimeInterval(
 /**
  * Formats a numeric currency value with symbol and decimal precision
  * Validates: Requirements 3.3
- * 
+ *
  * @param value Numeric currency value
  * @param currencySymbol Currency symbol to use (default: '$')
  * @param decimals Number of decimal places (default: 2)
@@ -106,7 +112,7 @@ export function formatCurrency(
 /**
  * Checks if a financial state contains all required fields
  * Validates: Requirements 3.2
- * 
+ *
  * @param state Financial state to check
  * @returns True if all required fields are present and valid, false otherwise
  */
@@ -179,12 +185,12 @@ export interface FinancialWarning {
 /**
  * Checks the sustainability of a financial trajectory
  * Validates: Requirements 10.1
- * 
+ *
  * Analyzes simulation states to detect:
  * - Increasing debt over time
  * - Consecutive negative cash flow periods (3+)
  * - Net worth growth
- * 
+ *
  * @param states Array of financial states from simulation
  * @returns Sustainability analysis result
  */
@@ -245,7 +251,7 @@ export function checkSustainability(
 /**
  * Detects if debt is increasing over time
  * Validates: Requirements 10.2
- * 
+ *
  * @param states Array of financial states from simulation
  * @returns True if loan balance at end is greater than at start
  */
@@ -256,14 +262,14 @@ export function detectIncreasingDebt(states: FinancialState[]): boolean {
 
   const firstLoanBalance = states[0].loanBalance;
   const lastLoanBalance = states[states.length - 1].loanBalance;
-  
+
   return lastLoanBalance > firstLoanBalance;
 }
 
 /**
  * Detects consecutive negative cash flow periods
  * Validates: Requirements 10.4
- * 
+ *
  * @param states Array of financial states from simulation
  * @param threshold Minimum number of consecutive periods to trigger (default: 3)
  * @returns Object with detection result and count of consecutive periods
@@ -300,7 +306,7 @@ export function detectNegativeCashFlow(
 /**
  * Detects net worth growth over the simulation period
  * Validates: Requirements 10.5
- * 
+ *
  * @param states Array of financial states from simulation
  * @returns True if net worth at end is greater than at start
  */
@@ -311,42 +317,42 @@ export function detectNetWorthGrowth(states: FinancialState[]): boolean {
 
   const firstNetWorth = states[0].netWorth;
   const lastNetWorth = states[states.length - 1].netWorth;
-  
+
   return lastNetWorth > firstNetWorth;
 }
 
 /**
  * Finds the date when the loan is paid off
- * 
+ *
  * @param states Array of financial states from simulation
  * @returns Date when loan balance reaches zero, or null if never paid off or no loan exists
  */
 export function findLoanPayoffDate(states: FinancialState[]): Date | null {
   if (states.length === 0) return null;
-  
+
   // Check if there's a loan to begin with
   if (states[0].loanBalance <= 0) return null;
-  
+
   // Find first state where loan balance is zero or near zero
   for (const state of states) {
     if (state.loanBalance <= 0.01) { // Use small threshold for floating point comparison
       return state.date;
     }
   }
-  
+
   return null; // Loan not paid off within simulation period
 }
 
 /**
  * Generates warnings and alerts for unsustainable financial scenarios
  * Validates: Requirements 7.3, 10.2, 10.4, 10.5
- * 
+ *
  * Analyzes simulation states and generates appropriate warnings/alerts:
  * - Debt increase warning (Requirements 10.2)
  * - Negative cash flow alert (Requirements 10.4)
  * - Net worth growth indication (Requirements 10.5)
  * - Unsustainable scenario flagging (Requirements 7.3)
- * 
+ *
  * @param states Array of financial states from simulation
  * @returns Array of financial warnings with severity levels
  */
@@ -365,9 +371,11 @@ export function generateWarnings(
     const firstBalance = states[0].loanBalance;
     const lastBalance = states[states.length - 1].loanBalance;
     const increase = lastBalance - firstBalance;
-    
+
     warnings.push({
-      message: `Loan balance is increasing over time (${formatCurrency(increase)} increase). This indicates unsustainable debt growth.`,
+      message: `Loan balance is increasing over time (${
+        formatCurrency(increase)
+      } increase). This indicates unsustainable debt growth.`,
       severity: "warning",
       type: "debt",
     });
@@ -377,7 +385,8 @@ export function generateWarnings(
   const cashFlowResult = detectNegativeCashFlow(states, 3);
   if (cashFlowResult.detected) {
     warnings.push({
-      message: `Sustained negative cash flow detected (${cashFlowResult.consecutivePeriods} consecutive periods). Your expenses exceed your income.`,
+      message:
+        `Sustained negative cash flow detected (${cashFlowResult.consecutivePeriods} consecutive periods). Your expenses exceed your income.`,
       severity: "alert",
       type: "cashflow",
     });
@@ -389,9 +398,11 @@ export function generateWarnings(
     const firstNetWorth = states[0].netWorth;
     const lastNetWorth = states[states.length - 1].netWorth;
     const decline = firstNetWorth - lastNetWorth;
-    
+
     warnings.push({
-      message: `Net worth is declining over time (${formatCurrency(decline)} decrease). Consider reducing expenses or increasing income.`,
+      message: `Net worth is declining over time (${
+        formatCurrency(decline)
+      } decrease). Consider reducing expenses or increasing income.`,
       severity: "warning",
       type: "sustainability",
     });
@@ -399,10 +410,12 @@ export function generateWarnings(
 
   // Check for unsustainable scenario where loan payments exceed available cash (Requirements 7.3)
   // Look for states where cash becomes deeply negative
-  const minCash = Math.min(...states.map(s => s.cash));
+  const minCash = Math.min(...states.map((s) => s.cash));
   if (minCash < -1000) { // Threshold for significant negative cash
     warnings.push({
-      message: `Cash reserves are severely depleted (minimum: ${formatCurrency(minCash)}). Loan payments may be exceeding available funds.`,
+      message: `Cash reserves are severely depleted (minimum: ${
+        formatCurrency(minCash)
+      }). Loan payments may be exceeding available funds.`,
       severity: "alert",
       type: "sustainability",
     });

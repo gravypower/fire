@@ -5,18 +5,24 @@
  */
 
 import type {
+  AdviceChangeComparison,
+  AdviceComparison,
+  AdviceDifference,
   ComparisonSimulationResult,
   MilestoneComparison,
   MilestoneTimingComparison,
   MilestoneTimingDifference,
-  AdviceComparison,
-  AdviceDifference,
-  AdviceChangeComparison,
   SimulationConfiguration,
 } from "../types/financial.ts";
 import { detectMilestonesFromSimulation } from "./milestone_detector.ts";
 import { generateRetirementAdvice } from "./retirement_advice_engine.ts";
-import {AdviceCategory, AdviceItem, Milestone, MilestoneType, RetirementAdvice} from "../types/milestones";
+import {
+  AdviceCategory,
+  AdviceItem,
+  Milestone,
+  MilestoneType,
+  RetirementAdvice,
+} from "../types/milestones.ts";
 
 /**
  * Scenario Comparison Engine
@@ -29,30 +35,45 @@ export class ScenarioComparisonEngine {
    */
   static enhanceComparisonWithMilestonesAndAdvice(
     comparison: ComparisonSimulationResult,
-    config: SimulationConfiguration
+    config: SimulationConfiguration,
   ): ComparisonSimulationResult {
     // Generate milestones for both scenarios if not already present
-    const withTransitionsMilestones = comparison.withTransitions.milestones || 
-      this.generateMilestonesForScenario(comparison.withTransitions, config, true);
-    
-    const withoutTransitionsMilestones = comparison.withoutTransitions.milestones || 
-      this.generateMilestonesForScenario(comparison.withoutTransitions, config, false);
+    const withTransitionsMilestones = comparison.withTransitions.milestones ||
+      this.generateMilestonesForScenario(
+        comparison.withTransitions,
+        config,
+        true,
+      );
+
+    const withoutTransitionsMilestones =
+      comparison.withoutTransitions.milestones ||
+      this.generateMilestonesForScenario(
+        comparison.withoutTransitions,
+        config,
+        false,
+      );
 
     // Generate advice for both scenarios
-    const withTransitionsAdvice = this.generateAdviceForScenario(comparison.withTransitions, config);
-    const withoutTransitionsAdvice = this.generateAdviceForScenario(comparison.withoutTransitions, config);
+    const withTransitionsAdvice = this.generateAdviceForScenario(
+      comparison.withTransitions,
+      config,
+    );
+    const withoutTransitionsAdvice = this.generateAdviceForScenario(
+      comparison.withoutTransitions,
+      config,
+    );
 
     // Compare milestones
     const milestoneComparison = this.compareMilestones(
       withTransitionsMilestones,
-      withoutTransitionsMilestones
+      withoutTransitionsMilestones,
     );
 
     // Compare advice
     const adviceComparison = this.compareAdvice(
       withTransitionsAdvice,
       withoutTransitionsAdvice,
-      comparison
+      comparison,
     );
 
     return {
@@ -68,16 +89,16 @@ export class ScenarioComparisonEngine {
   private static generateMilestonesForScenario(
     result: any,
     config: SimulationConfiguration,
-    hasTransitions: boolean
+    hasTransitions: boolean,
   ): Milestone[] {
-    const transitionPoints = hasTransitions && 'transitionPoints' in result 
-      ? result.transitionPoints 
+    const transitionPoints = hasTransitions && "transitionPoints" in result
+      ? result.transitionPoints
       : undefined;
 
     const milestoneResult = detectMilestonesFromSimulation(
       result.states,
       config.baseParameters,
-      transitionPoints
+      transitionPoints,
     );
 
     return milestoneResult.milestones;
@@ -88,13 +109,13 @@ export class ScenarioComparisonEngine {
    */
   private static generateAdviceForScenario(
     result: any,
-    config: SimulationConfiguration
+    config: SimulationConfiguration,
   ): RetirementAdvice {
     const milestones = result.milestones || [];
     const adviceResult = generateRetirementAdvice(
       result,
       config.baseParameters,
-      milestones
+      milestones,
     );
 
     return adviceResult.advice;
@@ -106,7 +127,7 @@ export class ScenarioComparisonEngine {
    */
   static compareMilestones(
     withTransitionsMilestones: Milestone[],
-    withoutTransitionsMilestones: Milestone[]
+    withoutTransitionsMilestones: Milestone[],
   ): MilestoneComparison {
     const commonMilestones: MilestoneTimingComparison[] = [];
     const uniqueToWithTransitions: Milestone[] = [];
@@ -116,18 +137,18 @@ export class ScenarioComparisonEngine {
     for (const withMilestone of withTransitionsMilestones) {
       const matchingWithoutMilestone = this.findMatchingMilestone(
         withMilestone,
-        withoutTransitionsMilestones
+        withoutTransitionsMilestones,
       );
 
       if (matchingWithoutMilestone) {
         const timingDifferenceInDays = this.calculateTimingDifference(
           withMilestone.date,
-          matchingWithoutMilestone.date
+          matchingWithoutMilestone.date,
         );
 
         const impactDifference = this.calculateImpactDifference(
           withMilestone,
-          matchingWithoutMilestone
+          matchingWithoutMilestone,
         );
 
         commonMilestones.push({
@@ -144,7 +165,7 @@ export class ScenarioComparisonEngine {
 
     // Find milestones unique to without-transitions scenario
     for (const withoutMilestone of withoutTransitionsMilestones) {
-      const hasMatch = withTransitionsMilestones.some(withMilestone =>
+      const hasMatch = withTransitionsMilestones.some((withMilestone) =>
         this.milestonesMatch(withMilestone, withoutMilestone)
       );
 
@@ -154,7 +175,9 @@ export class ScenarioComparisonEngine {
     }
 
     // Calculate timing differences summary
-    const timingDifferences = this.calculateTimingDifferencesSummary(commonMilestones);
+    const timingDifferences = this.calculateTimingDifferencesSummary(
+      commonMilestones,
+    );
 
     return {
       commonMilestones,
@@ -169,36 +192,41 @@ export class ScenarioComparisonEngine {
    */
   private static findMatchingMilestone(
     milestone: Milestone,
-    otherMilestones: Milestone[]
+    otherMilestones: Milestone[],
   ): Milestone | null {
-    return otherMilestones.find(other => this.milestonesMatch(milestone, other)) || null;
+    return otherMilestones.find((other) =>
+      this.milestonesMatch(milestone, other)
+    ) || null;
   }
 
   /**
    * Determines if two milestones represent the same event
    */
-  private static milestonesMatch(milestone1: Milestone, milestone2: Milestone): boolean {
+  private static milestonesMatch(
+    milestone1: Milestone,
+    milestone2: Milestone,
+  ): boolean {
     // Match by type and specific identifiers
     if (milestone1.type !== milestone2.type) {
       return false;
     }
 
     switch (milestone1.type) {
-      case 'loan_payoff':
-        return 'loanId' in milestone1 && 'loanId' in milestone2 && 
-               milestone1.loanId === milestone2.loanId;
-      
-      case 'offset_completion':
-        return 'loanId' in milestone1 && 'loanId' in milestone2 && 
-               milestone1.loanId === milestone2.loanId;
-      
-      case 'retirement_eligibility':
+      case "loan_payoff":
+        return "loanId" in milestone1 && "loanId" in milestone2 &&
+          milestone1.loanId === milestone2.loanId;
+
+      case "offset_completion":
+        return "loanId" in milestone1 && "loanId" in milestone2 &&
+          milestone1.loanId === milestone2.loanId;
+
+      case "retirement_eligibility":
         return true; // Only one retirement milestone per scenario
-      
-      case 'parameter_transition':
-        return 'transitionId' in milestone1 && 'transitionId' in milestone2 && 
-               milestone1.transitionId === milestone2.transitionId;
-      
+
+      case "parameter_transition":
+        return "transitionId" in milestone1 && "transitionId" in milestone2 &&
+          milestone1.transitionId === milestone2.transitionId;
+
       default:
         return false;
     }
@@ -217,9 +245,12 @@ export class ScenarioComparisonEngine {
    */
   private static calculateImpactDifference(
     milestone1: Milestone,
-    milestone2: Milestone
+    milestone2: Milestone,
   ): number | undefined {
-    if (milestone1.financialImpact !== undefined && milestone2.financialImpact !== undefined) {
+    if (
+      milestone1.financialImpact !== undefined &&
+      milestone2.financialImpact !== undefined
+    ) {
       return milestone1.financialImpact - milestone2.financialImpact;
     }
     return undefined;
@@ -229,7 +260,7 @@ export class ScenarioComparisonEngine {
    * Calculates summary of timing differences by milestone type
    */
   private static calculateTimingDifferencesSummary(
-    commonMilestones: MilestoneTimingComparison[]
+    commonMilestones: MilestoneTimingComparison[],
   ): MilestoneTimingDifference[] {
     const summaryMap = new Map<MilestoneType, {
       differences: number[];
@@ -251,22 +282,23 @@ export class ScenarioComparisonEngine {
     // Calculate summaries
     const summaries: MilestoneTimingDifference[] = [];
     for (const [milestoneType, data] of summaryMap.entries()) {
-      const averageTimingDifference = data.differences.reduce((sum, diff) => sum + diff, 0) / data.count;
-      
+      const averageTimingDifference = data.differences.reduce((sum, diff) =>
+        sum + diff, 0) / data.count;
+
       // Determine effect
-      let effect: 'accelerates' | 'delays' | 'mixed' | 'no_change';
-      const positiveCount = data.differences.filter(d => d > 0).length;
-      const negativeCount = data.differences.filter(d => d < 0).length;
-      const zeroCount = data.differences.filter(d => d === 0).length;
+      let effect: "accelerates" | "delays" | "mixed" | "no_change";
+      const positiveCount = data.differences.filter((d) => d > 0).length;
+      const negativeCount = data.differences.filter((d) => d < 0).length;
+      const zeroCount = data.differences.filter((d) => d === 0).length;
 
       if (zeroCount === data.count) {
-        effect = 'no_change';
+        effect = "no_change";
       } else if (positiveCount > 0 && negativeCount > 0) {
-        effect = 'mixed';
+        effect = "mixed";
       } else if (positiveCount > negativeCount) {
-        effect = 'accelerates';
+        effect = "accelerates";
       } else {
-        effect = 'delays';
+        effect = "delays";
       }
 
       summaries.push({
@@ -287,17 +319,17 @@ export class ScenarioComparisonEngine {
   static compareAdvice(
     withTransitionsAdvice: RetirementAdvice,
     withoutTransitionsAdvice: RetirementAdvice,
-    comparison: ComparisonSimulationResult
+    comparison: ComparisonSimulationResult,
   ): AdviceComparison {
     const adviceDifferences = this.analyzeAdviceDifferences(
       withTransitionsAdvice,
-      withoutTransitionsAdvice
+      withoutTransitionsAdvice,
     );
 
     const variationExplanation = this.generateAdviceVariationExplanation(
       withTransitionsAdvice,
       withoutTransitionsAdvice,
-      comparison
+      comparison,
     );
 
     return {
@@ -313,17 +345,22 @@ export class ScenarioComparisonEngine {
    */
   private static analyzeAdviceDifferences(
     withTransitionsAdvice: RetirementAdvice,
-    withoutTransitionsAdvice: RetirementAdvice
+    withoutTransitionsAdvice: RetirementAdvice,
   ): AdviceDifference[] {
-    const categories: AdviceCategory[] = ['debt', 'investment', 'expense', 'income'];
+    const categories: AdviceCategory[] = [
+      "debt",
+      "investment",
+      "expense",
+      "income",
+    ];
     const differences: AdviceDifference[] = [];
 
     for (const category of categories) {
       const withTransitionsItems = withTransitionsAdvice.recommendations
-        .filter(item => item.category === category);
-      
+        .filter((item) => item.category === category);
+
       const withoutTransitionsItems = withoutTransitionsAdvice.recommendations
-        .filter(item => item.category === category);
+        .filter((item) => item.category === category);
 
       const uniqueToWithTransitions: AdviceItem[] = [];
       const uniqueToWithoutTransitions: AdviceItem[] = [];
@@ -331,16 +368,26 @@ export class ScenarioComparisonEngine {
 
       // Find unique and changed advice items
       for (const withItem of withTransitionsItems) {
-        const matchingWithoutItem = this.findMatchingAdviceItem(withItem, withoutTransitionsItems);
-        
+        const matchingWithoutItem = this.findMatchingAdviceItem(
+          withItem,
+          withoutTransitionsItems,
+        );
+
         if (matchingWithoutItem) {
-          const changes = this.analyzeAdviceChanges(withItem, matchingWithoutItem);
+          const changes = this.analyzeAdviceChanges(
+            withItem,
+            matchingWithoutItem,
+          );
           if (this.hasSignificantChanges(changes)) {
             changedAdvice.push({
               withTransitions: withItem,
               withoutTransitions: matchingWithoutItem,
               changes,
-              changeExplanation: this.generateChangeExplanation(withItem, matchingWithoutItem, changes),
+              changeExplanation: this.generateChangeExplanation(
+                withItem,
+                matchingWithoutItem,
+                changes,
+              ),
             });
           }
         } else {
@@ -350,7 +397,7 @@ export class ScenarioComparisonEngine {
 
       // Find items unique to without-transitions scenario
       for (const withoutItem of withoutTransitionsItems) {
-        const hasMatch = withTransitionsItems.some(withItem =>
+        const hasMatch = withTransitionsItems.some((withItem) =>
           this.adviceItemsMatch(withItem, withoutItem)
         );
 
@@ -360,9 +407,11 @@ export class ScenarioComparisonEngine {
       }
 
       // Only include categories that have differences
-      if (uniqueToWithTransitions.length > 0 || 
-          uniqueToWithoutTransitions.length > 0 || 
-          changedAdvice.length > 0) {
+      if (
+        uniqueToWithTransitions.length > 0 ||
+        uniqueToWithoutTransitions.length > 0 ||
+        changedAdvice.length > 0
+      ) {
         differences.push({
           category,
           uniqueToWithTransitions,
@@ -380,15 +429,20 @@ export class ScenarioComparisonEngine {
    */
   private static findMatchingAdviceItem(
     adviceItem: AdviceItem,
-    otherItems: AdviceItem[]
+    otherItems: AdviceItem[],
   ): AdviceItem | null {
-    return otherItems.find(other => this.adviceItemsMatch(adviceItem, other)) || null;
+    return otherItems.find((other) =>
+      this.adviceItemsMatch(adviceItem, other)
+    ) || null;
   }
 
   /**
    * Determines if two advice items represent the same recommendation
    */
-  private static adviceItemsMatch(item1: AdviceItem, item2: AdviceItem): boolean {
+  private static adviceItemsMatch(
+    item1: AdviceItem,
+    item2: AdviceItem,
+  ): boolean {
     // Match by category and similar title/description
     if (item1.category !== item2.category) {
       return false;
@@ -397,12 +451,12 @@ export class ScenarioComparisonEngine {
     // Simple matching based on title similarity
     const title1 = item1.title.toLowerCase();
     const title2 = item2.title.toLowerCase();
-    
+
     // Check if titles contain similar key phrases
     const keyPhrases1 = this.extractKeyPhrases(title1);
     const keyPhrases2 = this.extractKeyPhrases(title2);
-    
-    return keyPhrases1.some(phrase => keyPhrases2.includes(phrase));
+
+    return keyPhrases1.some((phrase) => keyPhrases2.includes(phrase));
   }
 
   /**
@@ -410,27 +464,27 @@ export class ScenarioComparisonEngine {
    */
   private static extractKeyPhrases(title: string): string[] {
     const phrases: string[] = [];
-    
+
     // Common patterns in advice titles
-    if (title.includes('increase') && title.includes('payment')) {
-      phrases.push('increase_payment');
+    if (title.includes("increase") && title.includes("payment")) {
+      phrases.push("increase_payment");
     }
-    if (title.includes('reduce') && title.includes('expense')) {
-      phrases.push('reduce_expense');
+    if (title.includes("reduce") && title.includes("expense")) {
+      phrases.push("reduce_expense");
     }
-    if (title.includes('investment') && title.includes('contribution')) {
-      phrases.push('investment_contribution');
+    if (title.includes("investment") && title.includes("contribution")) {
+      phrases.push("investment_contribution");
     }
-    if (title.includes('offset')) {
-      phrases.push('offset_optimization');
+    if (title.includes("offset")) {
+      phrases.push("offset_optimization");
     }
-    if (title.includes('allocation')) {
-      phrases.push('allocation_optimization');
+    if (title.includes("allocation")) {
+      phrases.push("allocation_optimization");
     }
-    if (title.includes('raise') || title.includes('income')) {
-      phrases.push('income_increase');
+    if (title.includes("raise") || title.includes("income")) {
+      phrases.push("income_increase");
     }
-    
+
     return phrases;
   }
 
@@ -439,12 +493,20 @@ export class ScenarioComparisonEngine {
    */
   private static analyzeAdviceChanges(
     withTransitions: AdviceItem,
-    withoutTransitions: AdviceItem
+    withoutTransitions: AdviceItem,
   ) {
     return {
       priorityChanged: withTransitions.priority !== withoutTransitions.priority,
-      effectivenessChanged: Math.abs(withTransitions.effectivenessScore - withoutTransitions.effectivenessScore) > 5,
-      feasibilityChanged: Math.abs(withTransitions.feasibilityScore - withoutTransitions.feasibilityScore) > 5,
+      effectivenessChanged:
+        Math.abs(
+          withTransitions.effectivenessScore -
+            withoutTransitions.effectivenessScore,
+        ) > 5,
+      feasibilityChanged:
+        Math.abs(
+          withTransitions.feasibilityScore -
+            withoutTransitions.feasibilityScore,
+        ) > 5,
       impactChanged: this.hasImpactChanged(withTransitions, withoutTransitions),
     };
   }
@@ -452,7 +514,10 @@ export class ScenarioComparisonEngine {
   /**
    * Checks if projected impact has changed significantly
    */
-  private static hasImpactChanged(item1: AdviceItem, item2: AdviceItem): boolean {
+  private static hasImpactChanged(
+    item1: AdviceItem,
+    item2: AdviceItem,
+  ): boolean {
     const impact1 = item1.projectedImpact;
     const impact2 = item2.projectedImpact;
 
@@ -469,7 +534,9 @@ export class ScenarioComparisonEngine {
     }
 
     if (impact1.additionalAssets && impact2.additionalAssets) {
-      if (Math.abs(impact1.additionalAssets - impact2.additionalAssets) > 5000) {
+      if (
+        Math.abs(impact1.additionalAssets - impact2.additionalAssets) > 5000
+      ) {
         return true;
       }
     }
@@ -481,10 +548,10 @@ export class ScenarioComparisonEngine {
    * Determines if changes are significant enough to report
    */
   private static hasSignificantChanges(changes: any): boolean {
-    return changes.priorityChanged || 
-           changes.effectivenessChanged || 
-           changes.feasibilityChanged || 
-           changes.impactChanged;
+    return changes.priorityChanged ||
+      changes.effectivenessChanged ||
+      changes.feasibilityChanged ||
+      changes.impactChanged;
   }
 
   /**
@@ -493,29 +560,43 @@ export class ScenarioComparisonEngine {
   private static generateChangeExplanation(
     withTransitions: AdviceItem,
     withoutTransitions: AdviceItem,
-    changes: any
+    changes: any,
   ): string {
     const explanations: string[] = [];
 
     if (changes.priorityChanged) {
-      explanations.push(`Priority changed from ${withoutTransitions.priority} to ${withTransitions.priority}`);
+      explanations.push(
+        `Priority changed from ${withoutTransitions.priority} to ${withTransitions.priority}`,
+      );
     }
 
     if (changes.effectivenessChanged) {
-      const diff = withTransitions.effectivenessScore - withoutTransitions.effectivenessScore;
-      explanations.push(`Effectiveness ${diff > 0 ? 'increased' : 'decreased'} by ${Math.abs(diff).toFixed(0)} points`);
+      const diff = withTransitions.effectivenessScore -
+        withoutTransitions.effectivenessScore;
+      explanations.push(
+        `Effectiveness ${diff > 0 ? "increased" : "decreased"} by ${
+          Math.abs(diff).toFixed(0)
+        } points`,
+      );
     }
 
     if (changes.feasibilityChanged) {
-      const diff = withTransitions.feasibilityScore - withoutTransitions.feasibilityScore;
-      explanations.push(`Feasibility ${diff > 0 ? 'improved' : 'worsened'} by ${Math.abs(diff).toFixed(0)} points`);
+      const diff = withTransitions.feasibilityScore -
+        withoutTransitions.feasibilityScore;
+      explanations.push(
+        `Feasibility ${diff > 0 ? "improved" : "worsened"} by ${
+          Math.abs(diff).toFixed(0)
+        } points`,
+      );
     }
 
     if (changes.impactChanged) {
-      explanations.push('Projected impact changed due to different scenario outcomes');
+      explanations.push(
+        "Projected impact changed due to different scenario outcomes",
+      );
     }
 
-    return explanations.join('; ');
+    return explanations.join("; ");
   }
 
   /**
@@ -524,26 +605,35 @@ export class ScenarioComparisonEngine {
   private static generateAdviceVariationExplanation(
     withTransitionsAdvice: RetirementAdvice,
     withoutTransitionsAdvice: RetirementAdvice,
-    comparison: ComparisonSimulationResult
+    comparison: ComparisonSimulationResult,
   ): string[] {
     const explanations: string[] = [];
 
     // Overall assessment differences
-    if (withTransitionsAdvice.overallAssessment !== withoutTransitionsAdvice.overallAssessment) {
+    if (
+      withTransitionsAdvice.overallAssessment !==
+        withoutTransitionsAdvice.overallAssessment
+    ) {
       explanations.push(
-        `Overall retirement readiness improved from "${withoutTransitionsAdvice.overallAssessment}" to "${withTransitionsAdvice.overallAssessment}" with transitions`
+        `Overall retirement readiness improved from "${withoutTransitionsAdvice.overallAssessment}" to "${withTransitionsAdvice.overallAssessment}" with transitions`,
       );
     }
 
     // Retirement feasibility differences
-    const withFeasible = withTransitionsAdvice.retirementFeasibility.canRetireAtTarget;
-    const withoutFeasible = withoutTransitionsAdvice.retirementFeasibility.canRetireAtTarget;
-    
+    const withFeasible =
+      withTransitionsAdvice.retirementFeasibility.canRetireAtTarget;
+    const withoutFeasible =
+      withoutTransitionsAdvice.retirementFeasibility.canRetireAtTarget;
+
     if (withFeasible !== withoutFeasible) {
       if (withFeasible) {
-        explanations.push('Transitions enable retirement at target age, changing advice focus to optimization rather than catch-up strategies');
+        explanations.push(
+          "Transitions enable retirement at target age, changing advice focus to optimization rather than catch-up strategies",
+        );
       } else {
-        explanations.push('Transitions delay retirement feasibility, requiring more aggressive strategies');
+        explanations.push(
+          "Transitions delay retirement feasibility, requiring more aggressive strategies",
+        );
       }
     }
 
@@ -551,9 +641,17 @@ export class ScenarioComparisonEngine {
     if (comparison.comparison.finalNetWorthDifference !== 0) {
       const impact = comparison.comparison.finalNetWorthDifference;
       if (impact > 0) {
-        explanations.push(`Improved financial position (${Math.abs(impact).toLocaleString()} higher net worth) allows for more conservative advice strategies`);
+        explanations.push(
+          `Improved financial position (${
+            Math.abs(impact).toLocaleString()
+          } higher net worth) allows for more conservative advice strategies`,
+        );
       } else {
-        explanations.push(`Reduced financial position (${Math.abs(impact).toLocaleString()} lower net worth) requires more aggressive advice strategies`);
+        explanations.push(
+          `Reduced financial position (${
+            Math.abs(impact).toLocaleString()
+          } lower net worth) requires more aggressive advice strategies`,
+        );
       }
     }
 
@@ -561,18 +659,30 @@ export class ScenarioComparisonEngine {
     if (comparison.comparison.retirementDateDifference !== null) {
       const yearsDiff = comparison.comparison.retirementDateDifference;
       if (yearsDiff < 0) {
-        explanations.push(`Earlier retirement (${Math.abs(yearsDiff).toFixed(1)} years) reduces urgency of some recommendations`);
+        explanations.push(
+          `Earlier retirement (${
+            Math.abs(yearsDiff).toFixed(1)
+          } years) reduces urgency of some recommendations`,
+        );
       } else if (yearsDiff > 0) {
-        explanations.push(`Later retirement (${yearsDiff.toFixed(1)} years) increases urgency and aggressiveness of recommendations`);
+        explanations.push(
+          `Later retirement (${
+            yearsDiff.toFixed(1)
+          } years) increases urgency and aggressiveness of recommendations`,
+        );
       }
     }
 
     // Sustainability impact
     if (comparison.comparison.sustainabilityChanged) {
       if (comparison.withTransitions.isSustainable) {
-        explanations.push('Improved sustainability with transitions reduces need for emergency financial measures');
+        explanations.push(
+          "Improved sustainability with transitions reduces need for emergency financial measures",
+        );
       } else {
-        explanations.push('Reduced sustainability with transitions requires immediate corrective actions');
+        explanations.push(
+          "Reduced sustainability with transitions requires immediate corrective actions",
+        );
       }
     }
 

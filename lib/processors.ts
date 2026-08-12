@@ -5,12 +5,13 @@
 
 import type {
   FinancialState,
+  IncomeSource,
+  PaymentFrequency,
+  TaxBracket,
   TimeInterval,
   UserParameters,
-  TaxBracket,
-  PaymentFrequency, IncomeSource,
 } from "../types/financial.ts";
-import {ExpenseItem} from "../types/expenses.ts";
+import { ExpenseItem } from "../types/expenses.ts";
 
 /**
  * Converts a time interval to number of periods per year
@@ -48,26 +49,29 @@ function convertAnnualRateToInterval(
  * @param brackets Tax brackets to apply
  * @returns Total tax amount
  */
-export function calculateTaxWithBrackets(income: number, brackets: TaxBracket[]): number {
+export function calculateTaxWithBrackets(
+  income: number,
+  brackets: TaxBracket[],
+): number {
   let totalTax = 0;
-  
+
   for (const bracket of brackets) {
     const bracketMin = bracket.min;
     const bracketMax = bracket.max ?? Infinity;
-    
+
     if (income <= bracketMin) {
       // Income doesn't reach this bracket
       break;
     }
-    
+
     // Calculate taxable amount in this bracket
     const taxableInBracket = Math.min(income, bracketMax) - bracketMin;
-    
+
     if (taxableInBracket > 0) {
       totalTax += taxableInBracket * (bracket.rate / 100);
     }
   }
-  
+
   return totalTax;
 }
 
@@ -93,15 +97,24 @@ export const IncomeProcessor = {
    * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total annual income before tax
    */
-  calculateTotalAnnualIncome(params: UserParameters, currentDate?: Date): number {
+  calculateTotalAnnualIncome(
+    params: UserParameters,
+    currentDate?: Date,
+  ): number {
     // If household mode, sum income from all people
-    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
       let totalAnnual = 0;
       for (const person of params.people) {
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (source.isBeforeTax) {
-              const income = this.calculateIncomeFromSource(source, currentDate);
+              const income = this.calculateIncomeFromSource(
+                source,
+                currentDate,
+              );
               totalAnnual += income;
             }
           }
@@ -116,13 +129,13 @@ export const IncomeProcessor = {
       for (const source of params.incomeSources) {
         // Only count before-tax income for tax calculation
         if (!source.isBeforeTax) continue;
-        
+
         const income = this.calculateIncomeFromSource(source, currentDate);
         totalAnnual += income;
       }
       return totalAnnual;
     }
-    
+
     // Legacy: use annualSalary
     return params.annualSalary;
   },
@@ -135,7 +148,7 @@ export const IncomeProcessor = {
    */
   calculateIncomeFromSource(
     source: IncomeSource,
-    currentDate?: Date
+    currentDate?: Date,
   ): number {
     // Check if this is a one-off income
     if (source.isOneOff && source.oneOffDate && currentDate) {
@@ -143,7 +156,7 @@ export const IncomeProcessor = {
       // For simplicity, we'll apply it in the year it occurs
       const oneOffYear = source.oneOffDate.getFullYear();
       const currentYear = currentDate.getFullYear();
-      
+
       if (oneOffYear === currentYear) {
         return source.amount; // One-off amount is already the total
       } else {
@@ -157,7 +170,7 @@ export const IncomeProcessor = {
       if (source.startDate && currentDate < source.startDate) {
         return 0; // Income hasn't started yet
       }
-      
+
       // Check if income has ended
       if (source.endDate && currentDate >= source.endDate) {
         return 0; // Income has ended
@@ -174,15 +187,24 @@ export const IncomeProcessor = {
    * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total annual after-tax income
    */
-  calculateTotalAnnualAfterTaxIncome(params: UserParameters, currentDate?: Date): number {
+  calculateTotalAnnualAfterTaxIncome(
+    params: UserParameters,
+    currentDate?: Date,
+  ): number {
     // If household mode, sum after-tax income from all people
-    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
       let totalAnnual = 0;
       for (const person of params.people) {
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (!source.isBeforeTax) {
-              const income = this.calculateIncomeFromSource(source, currentDate);
+              const income = this.calculateIncomeFromSource(
+                source,
+                currentDate,
+              );
               totalAnnual += income;
             }
           }
@@ -196,13 +218,13 @@ export const IncomeProcessor = {
       for (const source of params.incomeSources) {
         // Only count after-tax income
         if (source.isBeforeTax) continue;
-        
+
         const income = this.calculateIncomeFromSource(source, currentDate);
         totalAnnual += income;
       }
       return totalAnnual;
     }
-    
+
     return 0;
   },
 
@@ -213,11 +235,21 @@ export const IncomeProcessor = {
    * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Gross income amount for the interval
    */
-  calculateIncome(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
-    const beforeTaxAnnual = this.calculateTotalAnnualIncome(params, currentDate);
-    const afterTaxAnnual = this.calculateTotalAnnualAfterTaxIncome(params, currentDate);
+  calculateIncome(
+    params: UserParameters,
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): number {
+    const beforeTaxAnnual = this.calculateTotalAnnualIncome(
+      params,
+      currentDate,
+    );
+    const afterTaxAnnual = this.calculateTotalAnnualAfterTaxIncome(
+      params,
+      currentDate,
+    );
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
-    
+
     // Return before-tax income (for tax calculation) + after-tax income
     return (beforeTaxAnnual + afterTaxAnnual) / intervalPeriodsPerYear;
   },
@@ -245,9 +277,16 @@ export const IncomeProcessor = {
    * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Tax amount for the interval
    */
-  calculateTax(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
+  calculateTax(
+    params: UserParameters,
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): number {
     // If household mode is couple, calculate tax per person
-    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
       return this.calculateHouseholdTax(params, interval, currentDate);
     }
 
@@ -266,7 +305,11 @@ export const IncomeProcessor = {
    * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total household tax amount for the interval
    */
-  calculateHouseholdTax(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
+  calculateHouseholdTax(
+    params: UserParameters,
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): number {
     if (!params.people || params.people.length === 0) {
       return 0;
     }
@@ -283,7 +326,10 @@ export const IncomeProcessor = {
       if (person.incomeSources && person.incomeSources.length > 0) {
         for (const source of person.incomeSources) {
           if (source.isBeforeTax) {
-            const annualAmount = this.calculateIncomeFromSource(source, currentDate);
+            const annualAmount = this.calculateIncomeFromSource(
+              source,
+              currentDate,
+            );
             personAnnualIncome += annualAmount;
           }
         }
@@ -293,7 +339,10 @@ export const IncomeProcessor = {
       let personAnnualTax = 0;
       if (params.taxBrackets && params.taxBrackets.length > 0) {
         // Use household tax brackets
-        personAnnualTax = calculateTaxWithBrackets(personAnnualIncome, params.taxBrackets);
+        personAnnualTax = calculateTaxWithBrackets(
+          personAnnualIncome,
+          params.taxBrackets,
+        );
       } else {
         // Fall back to flat rate
         personAnnualTax = personAnnualIncome * (params.incomeTaxRate / 100);
@@ -340,16 +389,37 @@ export const ExpenseProcessor = {
    * @param currentDate Current simulation date (optional, for date-based filtering)
    * @returns Total expense amount for the interval
    */
-  calculateExpenses(params: UserParameters, interval: TimeInterval, currentDate?: Date): number {
-    // Use individual expense items if provided, otherwise fall back to legacy fields
-    if (params.expenseItems && params.expenseItems.length > 0) {
-      return this.calculateExpensesFromItems(params.expenseItems, interval, currentDate);
+  calculateExpenses(
+    params: UserParameters,
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): number {
+    // Determine which calculation method to use
+    // We only use individual items if they are provided AND contain valid data
+    const hasValidItems = params.expenseItems &&
+      params.expenseItems.length > 0 &&
+      params.expenseItems.some((item) =>
+        item && (item.amount > 0 || (item.name && item.name.length > 0))
+      );
+
+    if (hasValidItems) {
+      const itemTotal = this.calculateExpensesFromItems(
+        params.expenseItems!,
+        interval,
+        currentDate,
+      );
+
+      // If we have items but the result is 0 (e.g. all disabled or out of date),
+      // we only fallback to legacy if legacy is non-zero and user hasn't explicitly
+      // migrated to the item system (checked by presence of items).
+      // However, if the items result in 0, and legacy is also 0, we're consistent.
+      return itemTotal;
     }
-    
+
     // Legacy calculation
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
-    const monthlyExpenses = params.monthlyLivingExpenses +
-      params.monthlyRentOrMortgage;
+    const monthlyExpenses = (params.monthlyLivingExpenses || 0) +
+      (params.monthlyRentOrMortgage || 0);
     const expensesPerInterval = (monthlyExpenses * 12) / intervalPeriodsPerYear;
 
     return expensesPerInterval;
@@ -365,75 +435,69 @@ export const ExpenseProcessor = {
   calculateExpensesFromItems(
     items: ExpenseItem[],
     interval: TimeInterval,
-    currentDate?: Date
+    currentDate?: Date,
   ): number {
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     let totalExpenses = 0;
 
     for (const item of items) {
-      if (!item.enabled) continue;
+      // Explicitly skip only if enabled is false (treat undefined/missing as true for better UX)
+      if (item.enabled === false) continue;
+
+      const current = currentDate ? new Date(currentDate) : null;
 
       // Check if this is a one-off expense
-      if (item.isOneOff && item.oneOffDate && currentDate) {
-        // One-off expenses only apply on their specific date
-        // Check if current date matches the one-off date (within the interval)
-        const oneOffTime = item.oneOffDate.getTime();
-        const currentTime = currentDate.getTime();
-        
-        // Calculate interval duration in milliseconds
-        let intervalMs = 0;
-        switch (interval) {
-          case "week":
-            intervalMs = 7 * 24 * 60 * 60 * 1000;
-            break;
-          case "fortnight":
-            intervalMs = 14 * 24 * 60 * 60 * 1000;
-            break;
-          case "month":
-            intervalMs = 30 * 24 * 60 * 60 * 1000; // Approximate
-            break;
-          case "year":
-            intervalMs = 365 * 24 * 60 * 60 * 1000;
-            break;
-        }
-        
-        // Check if one-off date falls within this interval
-        if (oneOffTime >= currentTime && oneOffTime < currentTime + intervalMs) {
-          totalExpenses += item.amount;
+      if (item.isOneOff && item.oneOffDate && current) {
+        const itemDate = new Date(item.oneOffDate);
+        // One-off expenses only apply on their specific date (within the same month)
+        // This matches the income source logic for consistency
+        const sameMonth = current.getFullYear() === itemDate.getFullYear() &&
+          current.getMonth() === itemDate.getMonth();
+
+        if (sameMonth) {
+          totalExpenses += item.amount || 0;
         }
         continue;
       }
 
       // Check date range for recurring expenses
-      if (currentDate) {
+      if (current) {
         // Check if expense has started
-        if (item.startDate && currentDate < item.startDate) {
-          continue; // Expense hasn't started yet
+        if (item.startDate) {
+          const startDate = new Date(item.startDate);
+          if (current < startDate) {
+            continue; // Expense hasn't started yet
+          }
         }
-        
-        // Check if expense has ended
-        if (item.endDate && currentDate >= item.endDate) {
-          continue; // Expense has ended
+
+        // Check if expense has ended (inclusive of end date, matching income logic)
+        if (item.endDate) {
+          const endDate = new Date(item.endDate);
+          if (current > endDate) {
+            continue; // Expense has ended
+          }
         }
       }
 
       // Convert item frequency to annual amount
       let annualAmount: number;
+      const amount = item.amount || 0;
+
       switch (item.frequency) {
         case "weekly":
-          annualAmount = item.amount * 52;
+          annualAmount = amount * 52;
           break;
         case "fortnightly":
-          annualAmount = item.amount * 26;
+          annualAmount = amount * 26;
           break;
         case "monthly":
-          annualAmount = item.amount * 12;
+          annualAmount = amount * 12;
           break;
         case "yearly":
-          annualAmount = item.amount;
+          annualAmount = amount;
           break;
         default:
-          annualAmount = item.amount * 12; // Default to monthly
+          annualAmount = amount * 12; // Default to monthly
       }
 
       // Convert annual to target interval
@@ -478,16 +542,22 @@ export const LoanProcessor = {
     interval: TimeInterval,
     useOffset: boolean = false,
     isDebtRecycling: boolean = false,
-  ): { 
-    newBalance: number; 
-    interestPaid: number; 
+  ): {
+    newBalance: number;
+    interestPaid: number;
     principalPaid: number;
     interestSaved: number;
     deductibleInterest: number;
   } {
     // If no balance, no payment needed
     if (balance <= 0) {
-      return { newBalance: 0, interestPaid: 0, principalPaid: 0, interestSaved: 0, deductibleInterest: 0 };
+      return {
+        newBalance: 0,
+        interestPaid: 0,
+        principalPaid: 0,
+        interestSaved: 0,
+        deductibleInterest: 0,
+      };
     }
 
     // Convert annual interest rate to interval rate
@@ -495,7 +565,7 @@ export const LoanProcessor = {
 
     // Calculate effective balance for interest calculation
     // Offset account reduces the balance on which interest is charged
-    const effectiveBalance = useOffset 
+    const effectiveBalance = useOffset
       ? Math.max(0, balance - offsetBalance)
       : balance;
 
@@ -504,14 +574,19 @@ export const LoanProcessor = {
 
     // Calculate interest saved due to offset account
     const interestWithoutOffset = balance * intervalRate;
-    const interestSaved = useOffset ? (interestWithoutOffset - interestPaid) : 0;
+    const interestSaved = useOffset
+      ? (interestWithoutOffset - interestPaid)
+      : 0;
 
     // Calculate deductible interest for debt recycling loans
     // Only the interest actually paid (not saved by offset) is deductible
     const deductibleInterest = isDebtRecycling ? interestPaid : 0;
 
     // Principal paid is the payment minus interest (but can't exceed remaining balance)
-    const principalPaid = Math.max(0, Math.min(payment - interestPaid, balance));
+    const principalPaid = Math.max(
+      0,
+      Math.min(payment - interestPaid, balance),
+    );
 
     // New balance is current balance minus principal paid
     // (Interest is paid but doesn't reduce the balance, only principal does)
@@ -532,12 +607,15 @@ export const LoanProcessor = {
    * @param interval Time interval for calculation
    * @returns Total payment amount for the interval
    */
-  calculateTotalLoanPayment(params: UserParameters, interval: TimeInterval): number {
+  calculateTotalLoanPayment(
+    params: UserParameters,
+    interval: TimeInterval,
+  ): number {
     // Use loans array if provided, otherwise fall back to legacy fields
     if (params.loans && params.loans.length > 0) {
       const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
       let totalPayment = 0;
-      
+
       for (const loan of params.loans) {
         // Convert loan payment to annual
         let annualPayment: number;
@@ -557,14 +635,14 @@ export const LoanProcessor = {
           default:
             annualPayment = loan.paymentAmount * 12; // Default to monthly
         }
-        
+
         // Convert to target interval
         totalPayment += annualPayment / intervalPeriodsPerYear;
       }
-      
+
       return totalPayment;
     }
-    
+
     // Legacy: use single loan fields
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     let annualPayment: number;
@@ -614,10 +692,9 @@ export const InvestmentProcessor = {
     // Apply growth to existing balance
     const balanceAfterGrowth = balance * (1 + intervalRate);
 
-    // Add contribution (which also grows for this period)
-    const contributionAfterGrowth = contribution * (1 + intervalRate);
-
-    return balanceAfterGrowth + contributionAfterGrowth;
+    // Add contribution without growth (contributions arrive throughout the period)
+    // so they should not receive full period growth
+    return balanceAfterGrowth + contribution;
   },
 
   /**
@@ -642,7 +719,8 @@ export const InvestmentProcessor = {
   } {
     // If no individual holdings, fall back to legacy calculation
     if (!params.investmentHoldings || params.investmentHoldings.length === 0) {
-      const contribution = (params.monthlyInvestmentContribution * 12) / intervalToPeriodsPerYear(interval);
+      const contribution = (params.monthlyInvestmentContribution * 12) /
+        intervalToPeriodsPerYear(interval);
       const actualContribution = Math.min(availableCash, contribution);
       const newBalance = this.calculateInvestmentGrowth(
         params.currentInvestmentBalance,
@@ -665,22 +743,26 @@ export const InvestmentProcessor = {
     for (const holding of params.investmentHoldings) {
       // Skip disabled holdings
       if (!holding.enabled) {
-        holdingBalances[holding.id] = currentBalances?.[holding.id] || holding.currentValue;
+        holdingBalances[holding.id] = currentBalances?.[holding.id] ||
+          holding.currentValue;
         continue;
       }
 
       // Check date range
       if (holding.startDate && currentDate < holding.startDate) {
-        holdingBalances[holding.id] = currentBalances?.[holding.id] || holding.currentValue;
+        holdingBalances[holding.id] = currentBalances?.[holding.id] ||
+          holding.currentValue;
         continue;
       }
       if (holding.endDate && currentDate > holding.endDate) {
-        holdingBalances[holding.id] = currentBalances?.[holding.id] || holding.currentValue;
+        holdingBalances[holding.id] = currentBalances?.[holding.id] ||
+          holding.currentValue;
         continue;
       }
 
       // Get current balance for this holding
-      const currentBalance = currentBalances?.[holding.id] || holding.currentValue;
+      const currentBalance = currentBalances?.[holding.id] ||
+        holding.currentValue;
 
       // Calculate contribution for this interval
       let contribution = 0;
@@ -789,7 +871,8 @@ export const RetirementCalculator = {
 
     // Check if we can retire at the desired age
     if (stateAtDesiredAge) {
-      const yearsElapsed = (stateAtDesiredAge.date.getTime() - startDate.getTime()) /
+      const yearsElapsed =
+        (stateAtDesiredAge.date.getTime() - startDate.getTime()) /
         (1000 * 60 * 60 * 24 * 365.25);
       const ageAtDesiredRetirement = currentAge + yearsElapsed;
 

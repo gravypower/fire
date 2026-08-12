@@ -4,7 +4,14 @@
 
 import type { ExpenseItem } from "./expenses.ts";
 import type { InvestmentHolding } from "./investments.ts";
-import {AdviceCategory, AdviceItem, Milestone, MilestoneType, RetirementAdvice} from "./milestones.ts";
+import {
+  AdviceCategory,
+  AdviceItem,
+  Milestone,
+  MilestoneType,
+  RetirementAdvice,
+} from "./milestones.ts";
+import type { AnySimulationEvent } from "../lib/simulation_events.ts";
 
 /**
  * Time interval granularity for simulation calculations
@@ -227,6 +234,8 @@ export interface UserParameters {
   desiredAnnualRetirementIncome: number;
   /** Target retirement age */
   retirementAge: number;
+  /** Age at which superannuation can be accessed (default: 60) */
+  preservationAge?: number;
   /** Current age */
   currentAge: number;
 
@@ -235,6 +244,10 @@ export interface UserParameters {
   simulationYears: number;
   /** Starting date for the simulation */
   startDate: Date;
+
+  // Drawdown Strategy
+  /** Strategy for withdrawing funds in retirement */
+  drawdownStrategy?: "investments_first" | "super_first" | "proportional";
 }
 
 /**
@@ -253,6 +266,8 @@ export interface SimulationResult {
   warnings: string[];
   /** Detected financial milestones during simulation */
   milestones?: Milestone[];
+  /** Complete event timeline for debugging and analysis */
+  events?: AnySimulationEvent[];
 }
 
 /**
@@ -416,7 +431,7 @@ export interface MilestoneTimingDifference {
   /** Number of milestones of this type compared */
   count: number;
   /** Whether transitions generally accelerate or delay this milestone type */
-  effect: 'accelerates' | 'delays' | 'mixed' | 'no_change';
+  effect: "accelerates" | "delays" | "mixed" | "no_change";
 }
 
 /**
@@ -549,8 +564,8 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     description: "Boost investment contributions",
     category: "financial",
     generateChanges: (current) => ({
-      monthlyInvestmentContribution:
-        current.monthlyInvestmentContribution * 1.5,
+      monthlyInvestmentContribution: current.monthlyInvestmentContribution *
+        1.5,
     }),
   },
 ];

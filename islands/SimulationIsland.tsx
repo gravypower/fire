@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { SimulationResult, UserParameters } from "../types/financial.ts";
-import { SimulationEngine } from "../lib/simulation_engine.ts";
+import { apiClient } from "../lib/api-client.ts";
 
 interface SimulationIslandProps {
   parameters: UserParameters;
@@ -44,10 +44,32 @@ export default function SimulationIsland({
         // This prevents blocking the UI thread for long simulations
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        const simulationResult = SimulationEngine.runSimulation(parameters);
+
+
+        // Create a basic configuration for the API
+        const config = {
+          baseParameters: parameters,
+          transitions: [],
+        };
+
+        // Ensure we have a session
+        if (!apiClient.getCurrentSessionId()) {
+          await apiClient.createSession(undefined, parameters);
+        }
+
+        const enhancedResult = await apiClient.runSimulation(config);
+
+        // Convert enhanced result to basic result for compatibility
+        const simulationResult = {
+          states: enhancedResult.states,
+          retirementDate: enhancedResult.retirementDate,
+          retirementAge: enhancedResult.retirementAge,
+          isSustainable: enhancedResult.isSustainable,
+          warnings: enhancedResult.warnings,
+        };
 
         setResult(simulationResult);
-        
+
         // Notify parent component if callback provided
         if (onSimulationComplete) {
           onSimulationComplete(simulationResult);
@@ -55,7 +77,7 @@ export default function SimulationIsland({
       } catch (err) {
         // Handle simulation errors gracefully with user-friendly messages
         let errorMessage = "An unexpected error occurred during simulation";
-        
+
         if (err instanceof Error) {
           // Provide more specific error messages based on error type
           if (err.message.includes("division by zero") || err.message.includes("divide by zero")) {
@@ -70,7 +92,7 @@ export default function SimulationIsland({
             errorMessage = err.message;
           }
         }
-        
+
         setError(errorMessage);
         console.error("Simulation error:", err);
       } finally {
@@ -142,13 +164,15 @@ export default function SimulationIsland({
               </div>
               <div class="flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setError(null)}
                   class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 text-sm font-medium"
                 >
                   Retry Simulation
                 </button>
                 <button
-                  onClick={() => window.location.reload()}
+                  type="button"
+                  onClick={() => globalThis.location.reload()}
                   class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors duration-200 text-sm font-medium"
                 >
                   Reset All
@@ -204,17 +228,15 @@ export default function SimulationIsland({
 
           {/* Sustainability */}
           <div
-            class={`metric-card ${
-              result.isSustainable ? "bg-green-50" : "bg-red-50"
-            }`}
+            class={`metric-card ${result.isSustainable ? "bg-green-50" : "bg-red-50"
+              }`}
           >
             <h3 class="text-sm font-medium text-gray-600 mb-1">
               Financial Health
             </h3>
             <p
-              class={`text-2xl font-bold ${
-                result.isSustainable ? "text-green-600" : "text-red-600"
-              }`}
+              class={`text-2xl font-bold ${result.isSustainable ? "text-green-600" : "text-red-600"
+                }`}
             >
               {result.isSustainable ? "Sustainable" : "Unsustainable"}
             </p>

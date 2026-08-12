@@ -21,10 +21,11 @@ import InvestmentManagerIsland from "./InvestmentManagerIsland.tsx";
 import ErrorBoundary from "../components/ErrorBoundary.tsx";
 import MilestoneTimeline from "../components/MilestoneTimeline.tsx";
 import RetirementAdvicePanel from "../components/RetirementAdvicePanel.tsx";
-import { SimulationEngine } from "../lib/simulation_engine.ts";
+import { apiClient } from "../lib/api-client.ts";
 import { storageService } from "../lib/storage.ts";
 import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
 import type { RetirementAdvice } from "../types/milestones.ts";
+import { validateSimulationYears } from "../lib/validation.ts";
 
 export default function MainIsland() {
   const [config, setConfig] = useState<SimulationConfiguration | null>(null);
@@ -32,7 +33,11 @@ export default function MainIsland() {
   const [retirementAdvice, setRetirementAdvice] = useState<RetirementAdvice | null>(null);
   const [activeTab, setActiveTab] = useState<"configure" | "results" | "investments" | "milestones" | "advice">("configure");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
+  const isOffline = connectionStatus === 'disconnected' || connectionStatus === 'error';
+
   // Scroll position tracking
   const scrollPositions = useRef<Record<string, number>>({
     configure: 0,
@@ -60,7 +65,7 @@ export default function MainIsland() {
     }
   }, [activeTab]);
 
-  // Load configuration on mount
+  // Load configuration on mount and setup real-time updates
   useEffect(() => {
     const loadedConfig = storageService.loadConfiguration();
     if (loadedConfig) {
@@ -94,6 +99,7 @@ export default function MainIsland() {
           retirementAge: 65,
           currentAge: 30,
           simulationYears: 40,
+          preservationAge: 60,
           startDate: new Date(),
           householdMode: "single",
           people: [
@@ -119,14 +125,82 @@ export default function MainIsland() {
       // Run initial simulation
       runSimulation(defaultConfig);
     }
+
+    // Setup real-time update subscriptions
+    const handleProjectionUpdate = (projectionType: string, projection: any) => {
+      console.log('Received projection update:', projectionType, projection);
+      // Update simulation result with new projection data
+      if (projectionType === 'timeline' && projection) {
+        setSimulationResult(prev => prev ? {
+          ...prev,
+          states: projection.states || prev.states,
+          retirementDate: projection.retirementAnalysis?.retirementDate || prev.retirementDate,
+          retirementAge: projection.retirementAnalysis?.retirementAge || prev.retirementAge,
+          isSustainable: projection.retirementAnalysis?.isSustainable ?? prev.isSustainable,
+        } : null);
+      }
+    };
+
+    const handleEventAdded = (events: any[]) => {
+      console.log('Received new events:', events);
+      // Could trigger a projection refresh here if needed
+    };
+
+    apiClient.onProjectionUpdate(handleProjectionUpdate);
+    apiClient.onEventAdded(handleEventAdded);
+
+    // Fetch server-side tax config to get the latest preservation age and brackets
+    apiClient.getTaxConfig().then(taxConfig => {
+      if (taxConfig && taxConfig.preservationAge) {
+        console.log("Loaded server-side tax config. Preservation age:", taxConfig.preservationAge);
+        setConfig(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            baseParameters: {
+              ...prev.baseParameters,
+              preservationAge: taxConfig.preservationAge,
+              taxBrackets: taxConfig.brackets || prev.baseParameters.taxBrackets
+            }
+          };
+        });
+      }
+    }).catch(err => {
+      console.error("Failed to load server tax config:", err);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      apiClient.disconnect();
+    };
   }, []);
 
   // Run simulation whenever config changes
-  const runSimulation = (configuration: SimulationConfiguration) => {
+  const runSimulation = async (configuration: SimulationConfiguration) => {
+    setIsSimulating(true);
+
     try {
-      const result = SimulationEngine.runSimulationWithTransitions(configuration);
+      let result: EnhancedSimulationResult;
+
+      // Try server-side simulation first
+      try {
+        setConnectionStatus('connecting');
+
+        // Ensure we have a session
+        if (!apiClient.getCurrentSessionId()) {
+          await apiClient.createSession(undefined, configuration.baseParameters);
+        }
+
+        result = await apiClient.runSimulation(configuration);
+        setConnectionStatus('connected');
+      } catch (serverError) {
+        console.warn('Server-side simulation failed:', serverError);
+        setConnectionStatus('error');
+        throw serverError;
+      }
+
       setSimulationResult(result);
-      
+
       // Generate retirement advice
       try {
         const adviceResult = generateRetirementAdvice(
@@ -139,23 +213,37 @@ export default function MainIsland() {
         console.warn('Failed to generate retirement advice:', error);
         setRetirementAdvice(null);
       }
-      
+
       // Don't auto-switch tabs - let user stay on current tab
     } catch (error) {
       console.error("Simulation failed:", error);
       setSimulationResult(null);
       setRetirementAdvice(null);
+      setConnectionStatus('error');
+    } finally {
+      setIsSimulating(false);
     }
   };
 
-  const handleConfigurationChange = (newConfig: SimulationConfiguration) => {
+  const handleConfigurationChange = async (newConfig: SimulationConfiguration) => {
     setConfig(newConfig);
+
     // Save to storage
     try {
       storageService.saveConfiguration(newConfig);
     } catch (error) {
       console.error("Failed to save configuration:", error);
     }
+
+    // Update server-side parameters if connected
+    try {
+      if (apiClient.getCurrentSessionId()) {
+        await apiClient.updateParameters(newConfig.baseParameters);
+      }
+    } catch (error) {
+      console.warn("Failed to update server parameters:", error);
+    }
+
     // Trigger simulation
     runSimulation(newConfig);
   };
@@ -215,7 +303,7 @@ export default function MainIsland() {
   const handleImportConfig = (event: Event) => {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
-    
+
     if (!file) {
       return;
     }
@@ -225,7 +313,7 @@ export default function MainIsland() {
       try {
         const jsonData = e.target?.result as string;
         const success = storageService.importConfiguration(jsonData);
-        
+
         if (success) {
           // Reload the configuration
           const loadedConfig = storageService.loadConfiguration();
@@ -241,29 +329,120 @@ export default function MainIsland() {
         console.error("Import failed:", error);
         alert("Failed to import configuration. The file may be corrupted or in the wrong format.");
       }
-      
+
       // Reset file input
       target.value = "";
     };
-    
+
     reader.readAsText(file);
   };
 
   return (
     <div class="h-full bg-gray-50 flex flex-col">
       <ErrorBoundary>
-        {/* Fixed Header with Tab Navigation */}
-        <div class="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm">
+        {/* Main Header with App Title and Global Controls */}
+        <header class="bg-white shadow-sm flex-shrink-0 z-50 relative">
+          <div class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center">
+                <svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <div>
+                  <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+                    Finance Simulation Tool
+                  </h1>
+                  <p class="text-xs text-gray-500 hidden sm:block">
+                    Model your financial future
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-4">
+                {/* Global Simulation Years Setting */}
+                {config && (
+                  <div class="flex items-center bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
+                    <label htmlFor="header-sim-years" class="text-sm font-medium text-gray-700 mr-2 whitespace-nowrap">
+                      Simulation Years:
+                    </label>
+                    <input
+                      id="header-sim-years"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={config.baseParameters.simulationYears}
+                      onInput={(e) => {
+                        const val = parseInt((e.target as HTMLInputElement).value);
+                        if (!isNaN(val)) {
+                          const validation = validateSimulationYears(val);
+                          if (validation.isValid) {
+                            const updatedConfig = {
+                              ...config,
+                              baseParameters: {
+                                ...config.baseParameters,
+                                simulationYears: val
+                              }
+                            };
+                            // Use the existing handleConfigurationChange which handles save, server update, and run
+                            handleConfigurationChange(updatedConfig);
+                          }
+                        }
+                      }}
+                      class="w-16 text-center text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 py-1"
+                    />
+                  </div>
+                )}
+
+                <a
+                  href="/help"
+                  class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Learn how to use this tool"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="hidden sm:inline">Help</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Fixed Navigation Bar */}
+        <div class="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm z-40">
           <div class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
+
+            {/* Connection Status Indicator */}
+            {connectionStatus !== 'connected' && (
+              <div class={`px-4 py-2 text-sm text-center ${connectionStatus === 'connecting'
+                ? 'bg-blue-50 text-blue-800 border-b border-blue-200'
+                : 'bg-red-50 text-red-800 border-b border-red-200'
+                }`}>
+                <div class="flex items-center justify-center">
+                  {connectionStatus === 'connecting' ? (
+                    <>
+                      <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Connecting to server...
+                    </>
+                  ) : (
+                    <>
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Server connection failed
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             {/* Desktop Navigation */}
             <nav class="-mb-px hidden lg:flex space-x-8" aria-label="Tabs">
               <button
                 onClick={() => handleTabSwitch("configure")}
-                class={`${
-                  activeTab === "configure"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+                class={`${activeTab === "configure"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -273,11 +452,10 @@ export default function MainIsland() {
               </button>
               <button
                 onClick={() => handleTabSwitch("investments")}
-                class={`${
-                  activeTab === "investments"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+                class={`${activeTab === "investments"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -291,11 +469,10 @@ export default function MainIsland() {
               </button>
               <button
                 onClick={() => handleTabSwitch("results")}
-                class={`${
-                  activeTab === "results"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+                class={`${activeTab === "results"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -309,11 +486,10 @@ export default function MainIsland() {
               </button>
               <button
                 onClick={() => handleTabSwitch("milestones")}
-                class={`${
-                  activeTab === "milestones"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+                class={`${activeTab === "milestones"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -327,11 +503,10 @@ export default function MainIsland() {
               </button>
               <button
                 onClick={() => handleTabSwitch("advice")}
-                class={`${
-                  activeTab === "advice"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+                class={`${activeTab === "advice"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
               >
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -398,11 +573,10 @@ export default function MainIsland() {
                         handleTabSwitch("configure");
                         setMobileMenuOpen(false);
                       }}
-                      class={`${
-                        activeTab === "configure"
-                          ? "bg-blue-100 text-blue-700 border-blue-200"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
-                      } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
+                      class={`${activeTab === "configure"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                        } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -415,11 +589,10 @@ export default function MainIsland() {
                         handleTabSwitch("investments");
                         setMobileMenuOpen(false);
                       }}
-                      class={`${
-                        activeTab === "investments"
-                          ? "bg-blue-100 text-blue-700 border-blue-200"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
-                      } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
+                      class={`${activeTab === "investments"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                        } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -436,11 +609,10 @@ export default function MainIsland() {
                         handleTabSwitch("results");
                         setMobileMenuOpen(false);
                       }}
-                      class={`${
-                        activeTab === "results"
-                          ? "bg-blue-100 text-blue-700 border-blue-200"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
-                      } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
+                      class={`${activeTab === "results"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                        } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -457,11 +629,10 @@ export default function MainIsland() {
                         handleTabSwitch("milestones");
                         setMobileMenuOpen(false);
                       }}
-                      class={`${
-                        activeTab === "milestones"
-                          ? "bg-blue-100 text-blue-700 border-blue-200"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
-                      } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
+                      class={`${activeTab === "milestones"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                        } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -478,11 +649,10 @@ export default function MainIsland() {
                         handleTabSwitch("advice");
                         setMobileMenuOpen(false);
                       }}
-                      class={`${
-                        activeTab === "advice"
-                          ? "bg-blue-100 text-blue-700 border-blue-200"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
-                      } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 col-span-2`}
+                      class={`${activeTab === "advice"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                        } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 col-span-2`}
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -502,344 +672,364 @@ export default function MainIsland() {
         </div>
 
         {/* Scrollable Content Area */}
-        <div 
+        <div
           ref={contentRef}
           class="flex-1 overflow-y-auto"
         >
           <main class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
 
-        {/* Configure Tab */}
-        {activeTab === "configure" && (
-          <div class="space-y-4 sm:space-y-6 fade-in">
-            {/* Import/Export Controls */}
-            <div class="card p-4 bg-blue-50 border-blue-200">
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h3 class="text-lg font-medium text-gray-900 mb-1">Configuration Management</h3>
-                  <p class="text-sm text-gray-600">Save your configuration to a file or load from a previously saved file.</p>
+            {/* Configure Tab */}
+            {activeTab === "configure" && (
+              <div class="space-y-4 sm:space-y-6 fade-in">
+                {/* Import/Export Controls */}
+                <div class="card p-4 bg-blue-50 border-blue-200">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h3 class="text-lg font-medium text-gray-900 mb-1">Configuration Management</h3>
+                      <p class="text-sm text-gray-600">Save your configuration to a file or load from a previously saved file.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={handleExportConfig}
+                        class="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                      >
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export Config
+                      </button>
+                      <label class="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-700 bg-white hover:bg-green-50 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-green-500 transition-colors duration-200 cursor-pointer">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                        </svg>
+                        Import Config
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={handleImportConfig}
+                          class="sr-only"
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <div class="flex flex-col sm:flex-row gap-2">
-                  <button
-                    onClick={handleExportConfig}
-                    class="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                  >
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export Config
-                  </button>
-                  <label class="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-700 bg-white hover:bg-green-50 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-green-500 transition-colors duration-200 cursor-pointer">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                    </svg>
-                    Import Config
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={handleImportConfig}
-                      class="sr-only"
+                {/* Household Manager - Only show if config exists */}
+                {config && (
+                  <ErrorBoundary>
+                    <HouseholdManagerIsland
+                      config={config}
+                      onConfigChange={handleConfigurationChange}
                     />
-                  </label>
-                </div>
-              </div>
-            </div>
-            {/* Household Manager - Only show if config exists */}
-            {config && (
-              <ErrorBoundary>
-                <HouseholdManagerIsland
-                  config={config}
-                  onConfigChange={handleConfigurationChange}
-                />
-              </ErrorBoundary>
-            )}
+                  </ErrorBoundary>
+                )}
 
-            <ErrorBoundary>
-              <InputIsland 
-                config={config}
-                onConfigurationChange={handleConfigurationChange} 
-              />
-            </ErrorBoundary>
-
-            {/* Expense Manager - Only show if config exists */}
-            {config && (
-              <ErrorBoundary>
-                <ExpenseManagerIsland
-                  expenses={config.baseParameters.expenseItems || []}
-                  onExpensesChange={(expenses: ExpenseItem[]) => {
-                    const updatedConfig = {
-                      ...config,
-                      baseParameters: {
-                        ...config.baseParameters,
-                        expenseItems: expenses,
-                      },
-                    };
-                    handleConfigurationChange(updatedConfig);
-                  }}
-                />
-              </ErrorBoundary>
-            )}
-
-            {/* Transition Manager - Only show if config exists */}
-            {config && (
-              <ErrorBoundary>
-                <TransitionManagerIsland
-                  config={config}
-                  onConfigChange={handleConfigurationChange}
-                />
-              </ErrorBoundary>
-            )}
-
-            {/* Initial State Message */}
-            {!config && (
-              <div class="card p-8 text-center fade-in">
-                <svg
-                  class="mx-auto h-16 w-16 text-blue-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                <ErrorBoundary>
+                  <InputIsland
+                    config={config}
+                    onConfigurationChange={handleConfigurationChange}
                   />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-                <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  Welcome to Finance Simulation Tool
-                </h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Enter your financial parameters to begin your simulation.
-                </p>
-                <div class="inline-flex items-center px-4 py-2 bg-blue-50 rounded-lg">
-                  <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span class="text-sm text-blue-700 font-medium">
-                    Your data is stored locally and never leaves your device
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+                </ErrorBoundary>
 
-        {/* Investments Tab */}
-        {activeTab === "investments" && (
-          <div class="space-y-4 sm:space-y-6 fade-in">
-            {config && (
-              <ErrorBoundary>
-                <InvestmentManagerIsland
-                  config={config}
-                  onConfigChange={handleConfigurationChange}
-                />
-              </ErrorBoundary>
-            )}
-            {!config && (
-              <div class="card p-8 text-center fade-in">
-                <svg
-                  class="mx-auto h-16 w-16 text-blue-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-                <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  Investment Portfolio
-                </h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Configure your financial parameters first to start tracking investments.
-                </p>
-                <button
-                  onClick={() => handleTabSwitch("configure")}
-                  class="btn-primary inline-flex items-center"
-                >
-                  Go to Configure
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+                {/* Expense Manager - Only show if config exists */}
+                {config && (
+                  <ErrorBoundary>
+                    <ExpenseManagerIsland
+                      expenses={config.baseParameters.expenseItems || []}
+                      onExpensesChange={(expenses: ExpenseItem[]) => {
+                        const updatedConfig = {
+                          ...config,
+                          baseParameters: {
+                            ...config.baseParameters,
+                            expenseItems: expenses,
+                          },
+                        };
+                        handleConfigurationChange(updatedConfig);
+                      }}
+                    />
+                  </ErrorBoundary>
+                )}
 
-        {/* Results Tab */}
-        {activeTab === "results" && (
-          <div class="space-y-4 sm:space-y-6 fade-in">
-            {/* Comparison Island - Only show if config has transitions */}
-            {config && config.transitions.length > 0 && (
-              <ErrorBoundary>
-                <ComparisonIsland config={config} />
-              </ErrorBoundary>
-            )}
+                {/* Transition Manager - Only show if config exists */}
+                {config && (
+                  <ErrorBoundary>
+                    <TransitionManagerIsland
+                      config={config}
+                      onConfigChange={handleConfigurationChange}
+                    />
+                  </ErrorBoundary>
+                )}
 
-            {/* Visualization Island */}
-            {simulationResult && (
-              <ErrorBoundary>
-                <VisualizationIsland 
-                  result={simulationResult}
-                  transitionPoints={simulationResult.transitionPoints}
-                  desiredRetirementAge={config?.baseParameters.retirementAge}
-                  userParameters={config?.baseParameters}
-                />
-              </ErrorBoundary>
-            )}
-
-            {/* No Results Message */}
-            {!simulationResult && (
-              <div class="card p-8 text-center fade-in">
-                <svg
-                  class="mx-auto h-16 w-16 text-gray-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-                <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  No Results Yet
-                </h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  Configure your financial parameters in the Configure tab to see results.
-                </p>
-                <button
-                  onClick={() => handleTabSwitch("configure")}
-                  class="btn-primary inline-flex items-center"
-                >
-                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Go to Configure
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Milestones Tab */}
-        {activeTab === "milestones" && (
-          <div class="space-y-4 sm:space-y-6 fade-in">
-            {simulationResult?.milestones && simulationResult.milestones.length > 0 ? (
-              <ErrorBoundary>
-                <MilestoneTimeline
-                  milestones={simulationResult.milestones}
-                  simulationStates={simulationResult.states}
-                  onMilestoneClick={(milestone) => {
-                    console.log('Milestone clicked:', milestone);
-                    // Could implement detailed milestone view here
-                  }}
-                />
-              </ErrorBoundary>
-            ) : (
-              <div class="card p-8 text-center fade-in">
-                <svg
-                  class="mx-auto h-16 w-16 text-gray-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                  />
-                </svg>
-                <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  No Milestones Found
-                </h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  {!simulationResult 
-                    ? "Run a simulation to see your financial milestones."
-                    : "No significant financial milestones were detected in your simulation."
-                  }
-                </p>
-                {!simulationResult && (
-                  <button
-                    onClick={() => handleTabSwitch("configure")}
-                    class="btn-primary inline-flex items-center"
-                  >
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                {/* Initial State Message */}
+                {!config && (
+                  <div class="card p-8 text-center fade-in">
+                    <svg
+                      class="mx-auto h-16 w-16 text-blue-400 mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
                     </svg>
-                    Go to Configure
-                  </button>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">
+                      Welcome to Finance Simulation Tool
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                      Enter your financial parameters to begin your simulation.
+                    </p>
+                    <div class="inline-flex items-center px-4 py-2 bg-blue-50 rounded-lg">
+                      <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span class="text-sm text-blue-700 font-medium">
+                        Your data is stored locally and never leaves your device
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Advice Tab */}
-        {activeTab === "advice" && (
-          <div class="space-y-4 sm:space-y-6 fade-in">
-            {retirementAdvice && simulationResult ? (
-              <ErrorBoundary>
-                <RetirementAdvicePanel
-                  advice={retirementAdvice}
-                  currentScenario={simulationResult}
-                  onImplementStrategy={(strategy) => {
-                    console.log('Strategy to implement:', strategy);
-                    // Could implement strategy implementation here
-                  }}
-                />
-              </ErrorBoundary>
-            ) : (
-              <div class="card p-8 text-center fade-in">
-                <svg
-                  class="mx-auto h-16 w-16 text-gray-400 mb-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                  />
-                </svg>
-                <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  No Advice Available
-                </h3>
-                <p class="text-sm text-gray-600 mb-4">
-                  {!simulationResult 
-                    ? "Run a simulation to get personalized retirement advice."
-                    : !retirementAdvice
-                      ? "No retirement advice was generated for your current scenario."
-                      : "Retirement advice is being generated..."
-                  }
-                </p>
-                {!simulationResult && (
-                  <button
-                    onClick={() => handleTabSwitch("configure")}
-                    class="btn-primary inline-flex items-center"
-                  >
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            {/* Investments Tab */}
+            {activeTab === "investments" && (
+              <div class="space-y-4 sm:space-y-6 fade-in">
+                {config && (
+                  <ErrorBoundary>
+                    <InvestmentManagerIsland
+                      config={config}
+                      onConfigChange={handleConfigurationChange}
+                    />
+                  </ErrorBoundary>
+                )}
+                {!config && (
+                  <div class="card p-8 text-center fade-in">
+                    <svg
+                      class="mx-auto h-16 w-16 text-blue-400 mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
-                    Go to Configure
-                  </button>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">
+                      Investment Portfolio
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                      Configure your financial parameters first to start tracking investments.
+                    </p>
+                    <button
+                      onClick={() => handleTabSwitch("configure")}
+                      class="btn-primary inline-flex items-center"
+                    >
+                      Go to Configure
+                    </button>
+                  </div>
                 )}
               </div>
             )}
-          </div>
-        )}
+
+            {/* Results Tab */}
+            {activeTab === "results" && (
+              <div class="space-y-4 sm:space-y-6 fade-in">
+                {/* Loading Indicator */}
+                {isSimulating && (
+                  <div class="card p-8 fade-in">
+                    <div class="flex flex-col items-center justify-center space-y-4">
+                      <div class="spinner-lg"></div>
+                      <div class="text-center">
+                        <p class="text-lg font-medium text-gray-700">
+                          {isOffline ? 'Running simulation locally...' : 'Running server-side simulation...'}
+                        </p>
+                        <p class="text-sm text-gray-500 mt-1">
+                          {isOffline ? 'Calculating your financial future on your device' : 'Processing events and building projections'}
+                        </p>
+                      </div>
+                      <div class="w-full max-w-xs bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 100%"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Comparison Island - Only show if config has transitions */}
+                {!isSimulating && config && config.transitions.length > 0 && (
+                  <ErrorBoundary>
+                    <ComparisonIsland config={config} />
+                  </ErrorBoundary>
+                )}
+
+                {/* Visualization Island */}
+                {!isSimulating && simulationResult && (
+                  <ErrorBoundary>
+                    <VisualizationIsland
+                      result={simulationResult}
+                      transitionPoints={simulationResult.transitionPoints}
+                      desiredRetirementAge={config?.baseParameters.retirementAge}
+                      userParameters={config?.baseParameters}
+                    />
+                  </ErrorBoundary>
+                )}
+
+                {/* No Results Message */}
+                {!isSimulating && !simulationResult && (
+                  <div class="card p-8 text-center fade-in">
+                    <svg
+                      class="mx-auto h-16 w-16 text-gray-400 mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      />
+                    </svg>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">
+                      No Results Yet
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                      Configure your financial parameters in the Configure tab to see results.
+                    </p>
+                    <button
+                      onClick={() => handleTabSwitch("configure")}
+                      class="btn-primary inline-flex items-center"
+                    >
+                      <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Go to Configure
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Milestones Tab */}
+            {activeTab === "milestones" && (
+              <div class="space-y-4 sm:space-y-6 fade-in">
+                {simulationResult?.milestones && simulationResult.milestones.length > 0 ? (
+                  <ErrorBoundary>
+                    <MilestoneTimeline
+                      milestones={simulationResult.milestones}
+                      simulationStates={simulationResult.states}
+                      onMilestoneClick={(milestone) => {
+                        console.log('Milestone clicked:', milestone);
+                        // Could implement detailed milestone view here
+                      }}
+                    />
+                  </ErrorBoundary>
+                ) : (
+                  <div class="card p-8 text-center fade-in">
+                    <svg
+                      class="mx-auto h-16 w-16 text-gray-400 mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                      />
+                    </svg>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">
+                      No Milestones Found
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                      {!simulationResult
+                        ? "Run a simulation to see your financial milestones."
+                        : "No significant financial milestones were detected in your simulation."
+                      }
+                    </p>
+                    {!simulationResult && (
+                      <button
+                        onClick={() => handleTabSwitch("configure")}
+                        class="btn-primary inline-flex items-center"
+                      >
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Go to Configure
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Advice Tab */}
+            {activeTab === "advice" && (
+              <div class="space-y-4 sm:space-y-6 fade-in">
+                {retirementAdvice && simulationResult ? (
+                  <ErrorBoundary>
+                    <RetirementAdvicePanel
+                      advice={retirementAdvice}
+                      currentScenario={simulationResult}
+                      onImplementStrategy={(strategy) => {
+                        console.log('Strategy to implement:', strategy);
+                        // Could implement strategy implementation here
+                      }}
+                    />
+                  </ErrorBoundary>
+                ) : (
+                  <div class="card p-8 text-center fade-in">
+                    <svg
+                      class="mx-auto h-16 w-16 text-gray-400 mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                      />
+                    </svg>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">
+                      No Advice Available
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                      {!simulationResult
+                        ? "Run a simulation to get personalized retirement advice."
+                        : !retirementAdvice
+                          ? "No retirement advice was generated for your current scenario."
+                          : "Retirement advice is being generated..."
+                      }
+                    </p>
+                    {!simulationResult && (
+                      <button
+                        onClick={() => handleTabSwitch("configure")}
+                        class="btn-primary inline-flex items-center"
+                      >
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Go to Configure
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </main>
-          
+
           {/* Footer Disclaimer */}
           <footer class="bg-gray-100 border-t border-gray-200 mt-8">
             <div class="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -851,9 +1041,9 @@ export default function MainIsland() {
                   <h3 class="text-lg font-semibold text-gray-900">Important Disclaimer</h3>
                 </div>
                 <p class="text-sm text-gray-700 max-w-4xl mx-auto leading-relaxed">
-                  This tool is for simulation purposes only and is not financial advice. The calculations and projections 
-                  provided are estimates based on the information you enter and should not be relied upon for making 
-                  financial decisions. For personalized financial advice tailored to your specific circumstances, 
+                  This tool is for simulation purposes only and is not financial advice. The calculations and projections
+                  provided are estimates based on the information you enter and should not be relied upon for making
+                  financial decisions. For personalized financial advice tailored to your specific circumstances,
                   please consult with a qualified financial planner or advisor.
                 </p>
                 <p class="text-xs text-gray-500 mt-3">

@@ -166,9 +166,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
       case "currentAge":
         validationResult = validateRetirementAge(value, parameters.retirementAge);
         break;
-      case "simulationYears":
-        validationResult = validateSimulationYears(value);
-        break;
+
       default:
         return undefined;
     }
@@ -181,7 +179,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
    */
   const handleNumberChange = (fieldName: keyof UserParameters, value: string) => {
     const numValue = parseFloat(value);
-    
+
     // Allow empty string for user to clear field
     if (value === "") {
       setParameters((prev) => ({ ...prev, [fieldName]: 0 }));
@@ -529,9 +527,8 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
             value={value as number}
             onInput={(e) => handleNumberChange(fieldName, (e.target as HTMLInputElement).value)}
             step={step}
-            class={`${error ? "input-field-error" : "input-field"} ${
-              prefix ? "pl-8" : ""
-            }`}
+            class={`${error ? "input-field-error" : "input-field"} ${prefix ? "pl-8" : ""
+              }`}
           />
         </div>
         {error && (
@@ -607,9 +604,9 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
 
       {/* Grid Layout for Cards */}
       <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-        
+
         {/* Tax configuration removed - see Help page for tax bracket information */}
-        
+
         {/* Loans & Mortgages Card */}
         <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
           <div class="flex items-center justify-between mb-4">
@@ -629,7 +626,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
               </button>
             )}
           </div>
-          
+
           {/* Info about offset strategy */}
           {!isAddingLoan && !editingLoanId && parameters.loans && parameters.loans.length > 1 && parameters.loans.some(l => l.hasOffset) && (
             <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded">
@@ -643,7 +640,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
               </div>
             </div>
           )}
-          
+
           {/* Loan Form (Add/Edit) */}
           {(isAddingLoan || editingLoanId) && (
             <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 mb-4 fade-in">
@@ -889,7 +886,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                 </button>
               )}
             </div>
-            
+
             {/* Super Form (Add/Edit) */}
             {(isAddingSuper || editingSuperId) && (
               <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 mb-4 fade-in">
@@ -1027,15 +1024,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
         </div>
 
         {/* Simulation Section */}
-        <div class="card p-6">
-          <h3 class="text-lg font-semibold mb-4 text-gray-700 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Simulation
-          </h3>
-          {renderNumberInput("Simulation Years", "simulationYears", "1")}
-        </div>
+
       </div>
     </div>
   );

@@ -38,7 +38,8 @@
       "medicareLevy": {
         "rate": 2.0,
         "description": "Medicare levy (not included in brackets above)"
-      }
+      },
+      "preservationAge": 60
     },
     "2025-26": {
       "brackets": [
@@ -76,7 +77,8 @@
       "medicareLevy": {
         "rate": 2.0,
         "description": "Medicare levy (not included in brackets above)"
-      }
+      },
+      "preservationAge": 60
     }
   },
   "defaultYear": "2024-25"

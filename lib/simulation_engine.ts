@@ -10,7 +10,8 @@ import type {
   FinancialState,
   IncomeSource,
   SimulationConfiguration,
-  SimulationResult, SuperAccount,
+  SimulationResult,
+  SuperAccount,
   TimeInterval,
   TransitionPoint,
   UserParameters,
@@ -28,6 +29,11 @@ import {
   resolveParametersForDate,
 } from "./transition_manager.ts";
 import { detectMilestonesFromSimulation } from "./milestone_detector.ts";
+import {
+  EventCollector,
+  SimulationEventType,
+  SimulationPhase,
+} from "./simulation_events.ts";
 
 /**
  * Converts a time interval to number of periods per year
@@ -100,6 +106,9 @@ function advanceDate(date: Date, interval: TimeInterval): Date {
     case "week":
       newDate.setDate(newDate.getDate() + 7);
       break;
+    case "fortnight":
+      newDate.setDate(newDate.getDate() + 14);
+      break;
     case "month":
       newDate.setMonth(newDate.getMonth() + 1);
       break;
@@ -123,6 +132,7 @@ export const SimulationEngine = {
     const interval: TimeInterval = "month"; // Default to monthly intervals
     const states: FinancialState[] = [];
     const warnings: string[] = [];
+    const eventCollector = new EventCollector();
 
     // Initialize starting state
     // If loans array exists (even if empty), use it; otherwise fall back to legacy
@@ -142,8 +152,11 @@ export const SimulationEngine = {
 
     // Collect all super accounts from all people (household mode) or top-level superAccounts
     const allSuperAccounts: SuperAccount[] = [];
-    
-    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
       // Collect super accounts from all people
       for (const person of params.people) {
         allSuperAccounts.push(...person.superAccounts);
@@ -159,9 +172,9 @@ export const SimulationEngine = {
 
     const initialSuperBalances = allSuperAccounts.length > 0
       ? allSuperAccounts.reduce(
-          (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
-          {} as { [superId: string]: number },
-        )
+        (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
+        {} as { [superId: string]: number },
+      )
       : undefined;
 
     const initialOffsetBalance = params.loans !== undefined
@@ -210,7 +223,12 @@ export const SimulationEngine = {
     let currentDate = new Date(params.startDate);
     while (currentDate < endDate) {
       currentDate = advanceDate(currentDate, interval);
-      currentState = this.calculateTimeStep(currentState, params, interval);
+      currentState = this.calculateTimeStep(
+        currentState,
+        params,
+        interval,
+        eventCollector,
+      );
       currentState.date = new Date(currentDate);
       states.push(currentState);
     }
@@ -273,6 +291,7 @@ export const SimulationEngine = {
       isSustainable,
       warnings: allWarnings,
       milestones: milestoneResult.milestones,
+      events: eventCollector.getAll(),
     };
   },
 
@@ -289,12 +308,14 @@ export const SimulationEngine = {
    * 4. Investment Phase: Add contributions and apply growth
    * 5. Super Phase: Add contributions and apply growth
    * 6. Offset Phase: Move leftover cash to offset account
+   * 6b. Deficit Resolution: Sell assets if cash is negative (Pre-retirement or shortfall)
    * 7. State Update: Calculate net worth and cash flow
    */
   calculateTimeStep(
     currentState: FinancialState,
     params: UserParameters,
     interval: TimeInterval,
+    eventCollector: EventCollector,
   ): FinancialState {
     // Start with current state values
     let cash = currentState.cash;
@@ -308,6 +329,14 @@ export const SimulationEngine = {
     let netIncome = 0;
 
     // Phase 1: Income - Add salary income (tax will be calculated later after we know deductible interest)
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.INCOME,
+      description: `Starting income phase`,
+      data: { phase: SimulationPhase.INCOME },
+    });
+
     // Calculate current age and retirement status
     const yearsElapsed =
       (currentState.date.getTime() - params.startDate.getTime()) /
@@ -367,7 +396,23 @@ export const SimulationEngine = {
 
     cash += grossIncome;
 
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.INCOME,
+      description: `Completed income phase`,
+      data: { phase: SimulationPhase.INCOME },
+    });
+
     // Phase 2: Expenses - Deduct living expenses only
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.EXPENSES,
+      description: `Starting expenses phase`,
+      data: { phase: SimulationPhase.EXPENSES },
+    });
+
     // Note: Mortgage payments are handled in the loan phase
     const expenses = ExpenseProcessor.calculateExpenses(
       params,
@@ -376,9 +421,26 @@ export const SimulationEngine = {
     );
     cash -= expenses;
 
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.EXPENSES,
+      description: `Completed expenses phase`,
+      data: { phase: SimulationPhase.EXPENSES },
+    });
+
     // Phase 2b: Retirement Income - Withdraw from investments if retired
     // Determine if we need retirement income (when no one is working)
     const needsRetirementIncome = !anyPersonStillWorking;
+
+    // Emit phase start event
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.RETIREMENT_INCOME,
+      description: `Starting retirement income phase`,
+      data: { phase: SimulationPhase.RETIREMENT_INCOME },
+    });
 
     if (needsRetirementIncome) {
       const annualRetirementIncome = params.desiredAnnualRetirementIncome;
@@ -387,11 +449,50 @@ export const SimulationEngine = {
 
       // First try to use cash if available
       if (cash >= periodRetirementIncome) {
-        // We have enough cash, no need to withdraw from investments
-        // The retirement income is already covered by other income sources
+        // We have enough cash - deduct the retirement income from cash
+        cash -= periodRetirementIncome;
+
+        eventCollector.emit({
+          type: SimulationEventType.DECISION,
+          timestamp: new Date(currentState.date),
+          phase: SimulationPhase.RETIREMENT_INCOME,
+          description: `Retirement income paid from cash`,
+          data: {
+            decision: "paid_from_cash",
+            reason: `Cash was sufficient to cover retirement income of $${
+              periodRetirementIncome.toFixed(2)
+            }`,
+            context: {
+              cashBefore: cash + periodRetirementIncome,
+              cashAfter: cash,
+              periodRetirementIncome,
+            },
+          },
+        });
       } else {
         // Need to withdraw from investments to fund retirement
         const shortfall = periodRetirementIncome - Math.max(0, cash);
+
+        // Emit withdrawal strategy selection
+        const ages = this.calculateCurrentAges(params, yearsElapsed);
+        const preservationAge = params.preservationAge ?? 60;
+        const anyoneOverPreservationAge = ages.some((age) =>
+          age >= preservationAge
+        );
+        const strategy = params.drawdownStrategy || "investments_first";
+
+        eventCollector.emit({
+          type: SimulationEventType.WITHDRAWAL_STRATEGY_SELECTED,
+          timestamp: new Date(currentState.date),
+          phase: SimulationPhase.RETIREMENT_INCOME,
+          description: `Selected withdrawal strategy: ${strategy}`,
+          data: {
+            strategy,
+            eligibleForSuper: anyoneOverPreservationAge,
+            ages,
+            preservationAge,
+          },
+        });
 
         // Enhanced withdrawal strategy
         const withdrawalResult = this.processRetirementWithdrawals(
@@ -403,16 +504,63 @@ export const SimulationEngine = {
           currentState,
         );
 
+        // Emit withdrawal event
+        eventCollector.emit({
+          type: SimulationEventType.RETIREMENT_WITHDRAWAL,
+          timestamp: new Date(currentState.date),
+          phase: SimulationPhase.RETIREMENT_INCOME,
+          description: `Withdrew $${
+            withdrawalResult.withdrawnAmount.toFixed(2)
+          } for retirement income`,
+          data: {
+            shortfall,
+            fromInvestments: investments - withdrawalResult.newInvestments,
+            fromSuper: superannuation - withdrawalResult.newSuperannuation,
+            totalWithdrawn: withdrawalResult.withdrawnAmount,
+            remainingShortfall: shortfall - withdrawalResult.withdrawnAmount,
+            reason: `Needed $${shortfall.toFixed(2)} for retirement income`,
+          },
+        });
+
         investments = withdrawalResult.newInvestments;
         superannuation = withdrawalResult.newSuperannuation;
         cash += withdrawalResult.withdrawnAmount;
       }
+    } else {
+      eventCollector.emit({
+        type: SimulationEventType.DECISION,
+        timestamp: new Date(currentState.date),
+        phase: SimulationPhase.RETIREMENT_INCOME,
+        description: `Still working - no retirement withdrawals needed`,
+        data: {
+          decision: "no_retirement_income_needed",
+          reason: "At least one person is still working",
+          context: { anyPersonStillWorking },
+        },
+      });
     }
+
+    // Emit phase end event
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.RETIREMENT_INCOME,
+      description: `Completed retirement income phase`,
+      data: { phase: SimulationPhase.RETIREMENT_INCOME },
+    });
 
     // Requirements 7.1: Handle negative cash flow by reducing available cash
     // Cash can go negative, representing debt or overdraft
 
     // Phase 3: Loan - Process loan payments with offset account
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.LOAN_PAYMENT,
+      description: `Starting loan payment phase`,
+      data: { phase: SimulationPhase.LOAN_PAYMENT },
+    });
+
     // Track deductible interest for debt recycling loans
     // If loans array exists (even if empty), use it; otherwise use legacy single loan
     let loanBalances: { [loanId: string]: number } = {};
@@ -556,7 +704,23 @@ export const SimulationEngine = {
     cash -= taxPaid;
     netIncome = grossIncome - taxPaid;
 
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.LOAN_PAYMENT,
+      description: `Completed loan payment phase`,
+      data: { phase: SimulationPhase.LOAN_PAYMENT },
+    });
+
     // Phase 4: Investment - Add contributions and apply growth
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.INVESTMENT,
+      description: `Starting investment phase`,
+      data: { phase: SimulationPhase.INVESTMENT },
+    });
+
     // Handle individual investment holdings if provided
     let investmentBalances: { [holdingId: string]: number } = {};
     let actualInvestmentContribution = 0;
@@ -624,14 +788,33 @@ export const SimulationEngine = {
       }
     }
 
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.INVESTMENT,
+      description: `Completed investment phase`,
+      data: { phase: SimulationPhase.INVESTMENT },
+    });
+
     // Phase 5: Superannuation - Add contributions and apply growth
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.SUPERANNUATION,
+      description: `Starting superannuation phase`,
+      data: { phase: SimulationPhase.SUPERANNUATION },
+    });
+
     // Handle multiple super accounts if provided, otherwise use legacy single super
     let superBalances: { [superId: string]: number } = {};
 
     // Collect all super accounts from all people (household mode) or top-level superAccounts
     const allSuperAccounts: SuperAccount[] = [];
-    
-    if (params.householdMode === "couple" && params.people && params.people.length > 0) {
+
+    if (
+      params.householdMode === "couple" && params.people &&
+      params.people.length > 0
+    ) {
       // Collect super accounts from all people
       for (const person of params.people) {
         allSuperAccounts.push(...person.superAccounts);
@@ -685,10 +868,8 @@ export const SimulationEngine = {
 
         // Apply growth to existing balance
         const superAfterGrowth = currentBalance * (1 + intervalSuperRate);
-        // Add contribution (which also grows for this period)
-        const contributionAfterGrowth = superContribution *
-          (1 + intervalSuperRate);
-        const newBalance = superAfterGrowth + contributionAfterGrowth;
+        // Add contribution without growth (contributions arrive throughout the period)
+        const newBalance = superAfterGrowth + superContribution;
 
         superBalances[superAcc.id] = newBalance;
         superannuation += newBalance;
@@ -707,13 +888,27 @@ export const SimulationEngine = {
 
       // Apply growth to existing balance
       const superAfterGrowth = superannuation * (1 + intervalSuperRate);
-      // Add contribution (which also grows for this period)
-      const contributionAfterGrowth = superContribution *
-        (1 + intervalSuperRate);
-      superannuation = superAfterGrowth + contributionAfterGrowth;
+      // Add contribution without growth (contributions arrive throughout the period)
+      superannuation = superAfterGrowth + superContribution;
     }
 
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.SUPERANNUATION,
+      description: `Completed superannuation phase`,
+      data: { phase: SimulationPhase.SUPERANNUATION },
+    });
+
     // Phase 6: Offset Account - Move leftover cash to offset account
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.OFFSET,
+      description: `Starting offset phase`,
+      data: { phase: SimulationPhase.OFFSET },
+    });
+
     // For multiple loans, add to the biggest loan with offset enabled
     // Handle excess offset (when offset > loan balance) as cash
     if (cash > 0 && loanBalance > 0) {
@@ -809,11 +1004,115 @@ export const SimulationEngine = {
       }
     }
 
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.OFFSET,
+      description: `Completed offset phase`,
+      data: { phase: SimulationPhase.OFFSET },
+    });
+
+    // Phase 6b: Deficit Resolution - Sell assets if cash is negative
+    // This happens if expenses > income + cash
+    if (cash < 0) {
+      const shortfall = -cash;
+
+      eventCollector.emit({
+        type: SimulationEventType.PHASE_START,
+        timestamp: new Date(currentState.date),
+        phase: SimulationPhase.DEFICIT,
+        description: `Starting deficit resolution phase (Shortfall: $${
+          shortfall.toFixed(2)
+        })`,
+        data: { phase: SimulationPhase.DEFICIT },
+      });
+
+      // Confirm strategy selection for deficit
+      const ages = this.calculateCurrentAges(params, yearsElapsed);
+      const preservationAge = params.preservationAge ?? 60;
+      const anyoneOverPreservationAge = ages.some((age) =>
+        age >= preservationAge
+      );
+      const strategy = params.drawdownStrategy || "investments_first";
+
+      eventCollector.emit({
+        type: SimulationEventType.WITHDRAWAL_STRATEGY_SELECTED,
+        timestamp: new Date(currentState.date),
+        phase: SimulationPhase.DEFICIT,
+        description: `Selected deficit resolution strategy: ${strategy}`,
+        data: {
+          strategy,
+          eligibleForSuper: anyoneOverPreservationAge,
+          ages,
+          preservationAge,
+        },
+      });
+
+      const withdrawalResult = this.processRetirementWithdrawals(
+        shortfall,
+        investments,
+        superannuation,
+        params,
+        yearsElapsed,
+        currentState,
+      );
+
+      // Apply results
+      const fromInvestments = investments - withdrawalResult.newInvestments;
+      const fromSuper = superannuation - withdrawalResult.newSuperannuation;
+
+      investments = withdrawalResult.newInvestments;
+      superannuation = withdrawalResult.newSuperannuation;
+      const totalWithdrawn = withdrawalResult.withdrawnAmount;
+
+      // Add withdrawn funds to cash to cover deficit
+      cash += totalWithdrawn;
+
+      eventCollector.emit({
+        type: SimulationEventType.RETIREMENT_WITHDRAWAL,
+        timestamp: new Date(currentState.date),
+        phase: SimulationPhase.DEFICIT,
+        description: `Withdrew $${totalWithdrawn.toFixed(2)} to cover deficit`,
+        data: {
+          shortfall,
+          fromInvestments,
+          fromSuper,
+          totalWithdrawn,
+          remainingShortfall: shortfall - totalWithdrawn,
+          reason: "Cash deficit resolution",
+        },
+      });
+
+      eventCollector.emit({
+        type: SimulationEventType.PHASE_END,
+        timestamp: new Date(currentState.date),
+        phase: SimulationPhase.DEFICIT,
+        description: `Completed deficit resolution phase`,
+        data: { phase: SimulationPhase.DEFICIT },
+      });
+    }
+
     // Phase 7: Calculate net worth and cash flow
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.STATE_UPDATE,
+      description: `Starting state update phase`,
+      data: { phase: SimulationPhase.STATE_UPDATE },
+    });
+
     const netWorth = cash + investments + superannuation + offsetBalance -
       loanBalance;
     const cashFlow = netIncome - expenses - totalLoanPayment -
       actualInvestmentContribution;
+
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.STATE_UPDATE,
+      description: `Completed state update phase`,
+      data: { phase: SimulationPhase.STATE_UPDATE },
+    });
 
     return {
       date: currentState.date, // Will be updated by caller
@@ -831,9 +1130,7 @@ export const SimulationEngine = {
       loanBalances: params.loans && params.loans.length > 0
         ? loanBalances
         : undefined,
-      superBalances: allSuperAccounts.length > 0
-        ? superBalances
-        : undefined,
+      superBalances: allSuperAccounts.length > 0 ? superBalances : undefined,
       offsetBalances: params.loans && params.loans.length > 0
         ? offsetBalances
         : undefined,
@@ -902,6 +1199,7 @@ export const SimulationEngine = {
     const states: FinancialState[] = [];
     const warnings: string[] = [];
     const transitionPoints: TransitionPoint[] = [];
+    const eventCollector = new EventCollector();
 
     // Build parameter periods for the result
     const periods = buildParameterPeriods(config);
@@ -930,26 +1228,34 @@ export const SimulationEngine = {
 
     // Collect all super accounts from all people (household mode) or top-level superAccounts
     const allSuperAccountsTransitions: SuperAccount[] = [];
-    
-    if (currentParams.householdMode === "couple" && currentParams.people && currentParams.people.length > 0) {
+
+    if (
+      currentParams.householdMode === "couple" && currentParams.people &&
+      currentParams.people.length > 0
+    ) {
       // Collect super accounts from all people
       for (const person of currentParams.people) {
         allSuperAccountsTransitions.push(...person.superAccounts);
       }
-    } else if (currentParams.superAccounts && currentParams.superAccounts.length > 0) {
+    } else if (
+      currentParams.superAccounts && currentParams.superAccounts.length > 0
+    ) {
       // Use top-level super accounts (legacy or single mode)
       allSuperAccountsTransitions.push(...currentParams.superAccounts);
     }
 
     const initialSuperBalance = allSuperAccountsTransitions.length > 0
-      ? allSuperAccountsTransitions.reduce((sum, superAcc) => sum + superAcc.balance, 0)
+      ? allSuperAccountsTransitions.reduce(
+        (sum, superAcc) => sum + superAcc.balance,
+        0,
+      )
       : currentParams.currentSuperBalance;
 
     const initialSuperBalances = allSuperAccountsTransitions.length > 0
       ? allSuperAccountsTransitions.reduce(
-          (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
-          {} as { [superId: string]: number },
-        )
+        (acc, superAcc) => ({ ...acc, [superAcc.id]: superAcc.balance }),
+        {} as { [superId: string]: number },
+      )
       : undefined;
 
     const initialOffsetBalance = currentParams.loans !== undefined
@@ -1044,6 +1350,7 @@ export const SimulationEngine = {
         currentState,
         currentParams,
         interval,
+        eventCollector,
       );
       currentState.date = new Date(currentDate);
       states.push(currentState);
@@ -1115,6 +1422,7 @@ export const SimulationEngine = {
       milestones: milestoneResult.milestones,
       transitionPoints,
       periods,
+      events: eventCollector.getAll(),
     };
   },
 
@@ -1234,7 +1542,7 @@ export const SimulationEngine = {
     currentSuperannuation: number,
     params: UserParameters,
     yearsElapsed: number,
-    currentState: FinancialState,
+    _currentState: FinancialState,
   ): {
     newInvestments: number;
     newSuperannuation: number;
@@ -1247,32 +1555,86 @@ export const SimulationEngine = {
 
     // Determine ages for withdrawal eligibility
     const ages = this.calculateCurrentAges(params, yearsElapsed);
-    const oldestAge = Math.max(...ages);
-    const anyoneOverPreservationAge = ages.some((age) => age >= 60);
+    const preservationAge = params.preservationAge ?? 60;
+    const anyoneOverPreservationAge = ages.some((age) =>
+      age >= preservationAge
+    );
     const anyoneOverPensionAge = ages.some((age) => age >= 67);
 
-    // Strategy 1: Use available cash first (already handled in caller)
+    // Default strategy is investments_first
+    const strategy = params.drawdownStrategy || "investments_first";
 
-    // Strategy 2: Withdraw from investments (always accessible)
-    if (remainingShortfall > 0 && investments > 0) {
-      const investmentWithdrawal = Math.min(remainingShortfall, investments);
-      investments -= investmentWithdrawal;
-      withdrawnAmount += investmentWithdrawal;
-      remainingShortfall -= investmentWithdrawal;
+    if (strategy === "super_first" && anyoneOverPreservationAge) {
+      // STRATEGY: Super First
+      // 1. Withdraw from super first if eligible
+      if (remainingShortfall > 0 && superannuation > 0) {
+        const superWithdrawal = Math.min(remainingShortfall, superannuation);
+        superannuation -= superWithdrawal;
+        withdrawnAmount += superWithdrawal;
+        remainingShortfall -= superWithdrawal;
+      }
+
+      // 2. Withdraw from investments if still short
+      if (remainingShortfall > 0 && investments > 0) {
+        const investmentWithdrawal = Math.min(remainingShortfall, investments);
+        investments -= investmentWithdrawal;
+        withdrawnAmount += investmentWithdrawal;
+        remainingShortfall -= investmentWithdrawal;
+      }
+    } else if (strategy === "proportional" && anyoneOverPreservationAge) {
+      // STRATEGY: Proportional
+      // Withdraw proportionally from available liquid assets
+      const availableSuper = superannuation;
+      const availableInvestments = investments;
+      const totalAvailable = availableSuper + availableInvestments;
+
+      if (totalAvailable > 0 && remainingShortfall > 0) {
+        // Calculate proportions
+        const superShare = availableSuper / totalAvailable;
+        const investmentShare = availableInvestments / totalAvailable;
+
+        // Calculate withdrawals
+        const totalWithdrawalNeeded = Math.min(
+          remainingShortfall,
+          totalAvailable,
+        );
+
+        const superWithdrawal = totalWithdrawalNeeded * superShare;
+        const investmentWithdrawal = totalWithdrawalNeeded * investmentShare;
+
+        // Apply withdrawals
+        superannuation -= superWithdrawal;
+        investments -= investmentWithdrawal;
+        withdrawnAmount += superWithdrawal + investmentWithdrawal;
+        remainingShortfall -= superWithdrawal + investmentWithdrawal;
+      }
+    } else {
+      // STRATEGY: Investments First (Default)
+      // Also used as fallback if not eligible for super yet in other strategies
+
+      // 1. Withdraw from investments (always accessible)
+      if (remainingShortfall > 0 && investments > 0) {
+        const investmentWithdrawal = Math.min(remainingShortfall, investments);
+        investments -= investmentWithdrawal;
+        withdrawnAmount += investmentWithdrawal;
+        remainingShortfall -= investmentWithdrawal;
+      }
+
+      // 2. Withdraw from superannuation if eligible
+      if (
+        remainingShortfall > 0 && superannuation > 0 &&
+        anyoneOverPreservationAge
+      ) {
+        // Can access super at preservation age
+        const superWithdrawal = Math.min(remainingShortfall, superannuation);
+        superannuation -= superWithdrawal;
+        withdrawnAmount += superWithdrawal;
+        remainingShortfall -= superWithdrawal;
+      }
     }
 
-    // Strategy 3: Withdraw from superannuation if eligible
-    if (
-      remainingShortfall > 0 && superannuation > 0 && anyoneOverPreservationAge
-    ) {
-      // Can access super at preservation age (60)
-      const superWithdrawal = Math.min(remainingShortfall, superannuation);
-      superannuation -= superWithdrawal;
-      withdrawnAmount += superWithdrawal;
-      remainingShortfall -= superWithdrawal;
-    }
-
-    // Strategy 4: Emergency withdrawal from super if over pension age (more flexible access)
+    // Emergency withdrawal from super if over pension age (more flexible access)
+    // This applies to all strategies if there's still a shortfall and funds remaining
     if (remainingShortfall > 0 && superannuation > 0 && anyoneOverPensionAge) {
       // At pension age, can access remaining super more freely
       const emergencyWithdrawal = Math.min(remainingShortfall, superannuation);
