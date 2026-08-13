@@ -36,6 +36,7 @@ import {
   SimulationEventType,
   SimulationPhase,
 } from "./simulation_events.ts";
+import { resolveHousePurchaseEffects } from "./property_resolver.ts";
 
 /**
  * Converts a time interval to number of periods per year
@@ -131,23 +132,32 @@ export const SimulationEngine = {
    * Validates: Requirements 2.1, 2.2
    */
   runSimulation(params: UserParameters): SimulationResult {
+    params = resolveHousePurchaseEffects(params);
     const interval: TimeInterval = "month"; // Default to monthly intervals
     const states: FinancialState[] = [];
     const warnings: string[] = [];
     const eventCollector = new EventCollector();
 
     // Initialize starting state
-    // If loans array exists (even if empty), use it; otherwise fall back to legacy
+    // If loans array exists (even if empty), use it; otherwise fall back to legacy.
+    // A loan with a startDate after the simulation start (e.g. a house-purchase
+    // mortgage that doesn't exist yet) contributes 0 until it activates.
     const initialLoanBalance = params.loans !== undefined
       ? (params.loans.length > 0
-        ? params.loans.reduce((sum, loan) => sum + loan.principal, 0)
+        ? params.loans.reduce(
+          (sum, loan) => sum + this.loanInitialBalance(loan, params.startDate),
+          0,
+        )
         : 0)
       : params.loanPrincipal;
 
     const initialLoanBalances =
       params.loans !== undefined && params.loans.length > 0
         ? params.loans.reduce(
-          (acc, loan) => ({ ...acc, [loan.id]: loan.principal }),
+          (acc, loan) => ({
+            ...acc,
+            [loan.id]: this.loanInitialBalance(loan, params.startDate),
+          }),
           {} as { [loanId: string]: number },
         )
         : undefined;
@@ -205,12 +215,13 @@ export const SimulationEngine = {
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
+      propertyValue: 0,
     };
 
     // Calculate initial net worth
     currentState.netWorth = currentState.cash + currentState.investments +
-      currentState.superannuation + currentState.offsetBalance -
-      currentState.loanBalance;
+      currentState.superannuation + currentState.offsetBalance +
+      currentState.propertyValue - currentState.loanBalance;
 
     states.push(currentState);
 
@@ -292,6 +303,21 @@ export const SimulationEngine = {
       milestones: milestoneResult.milestones,
       events: eventCollector.getAll(),
     };
+  },
+
+  /**
+   * Starting balance for a loan as of the simulation start date - 0 if the
+   * loan has a startDate that hasn't been reached yet (e.g. a house-purchase
+   * mortgage that doesn't exist until settlement), otherwise its principal.
+   */
+  loanInitialBalance(
+    loan: { principal: number; startDate?: Date },
+    simulationStartDate: Date,
+  ): number {
+    if (loan.startDate && loan.startDate > simulationStartDate) {
+      return 0;
+    }
+    return loan.principal;
   },
 
   /**
@@ -531,6 +557,77 @@ export const SimulationEngine = {
       data: { phase: SimulationPhase.RETIREMENT_INCOME },
     });
 
+    // Phase 2c: Property - Apply any house purchases due this period, and
+    // grow the value of houses already purchased. Runs before the loan phase
+    // so a purchase's deposit/costs are already reflected in cash when that
+    // period's (possibly newly-activated) mortgage payment is computed.
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_START,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.PROPERTY,
+      description: `Starting property phase`,
+      data: { phase: SimulationPhase.PROPERTY },
+    });
+
+    let propertyValue = currentState.propertyValue;
+    let houseValues: { [houseId: string]: number } = {
+      ...currentState.houseValues,
+    };
+
+    if (params.housePurchases && params.housePurchases.length > 0) {
+      const periodEnd = advanceDate(currentState.date, interval);
+
+      for (const house of params.housePurchases) {
+        const alreadyPurchased = houseValues[house.id] !== undefined &&
+          houseValues[house.id] > 0;
+        const purchasesThisPeriod = !alreadyPurchased &&
+          house.purchaseDate > currentState.date &&
+          house.purchaseDate <= periodEnd;
+
+        if (purchasesThisPeriod) {
+          const loanPrincipal = Math.max(0, house.price - house.depositAmount);
+          cash -= house.depositAmount + house.buyingCosts;
+          houseValues[house.id] = house.price;
+
+          eventCollector.emit({
+            type: SimulationEventType.HOUSE_PURCHASED,
+            timestamp: new Date(currentState.date),
+            phase: SimulationPhase.PROPERTY,
+            description: `Purchased ${house.name} for $${house.price.toFixed(2)}`,
+            data: {
+              houseId: house.id,
+              houseName: house.name,
+              price: house.price,
+              depositAmount: house.depositAmount,
+              buyingCosts: house.buyingCosts,
+              loanPrincipal,
+            },
+          });
+        } else if (alreadyPurchased || house.purchaseDate <= currentState.date) {
+          // Already owned - grow the value for this period
+          houseValues[house.id] = InvestmentProcessor.calculateInvestmentGrowth(
+            houseValues[house.id] ?? house.price,
+            0,
+            house.appreciationRate / 100,
+            interval,
+          );
+        }
+      }
+
+      propertyValue = Object.values(houseValues).reduce(
+        (sum, value) => sum + value,
+        0,
+      );
+    }
+
+    eventCollector.emit({
+      type: SimulationEventType.PHASE_END,
+      timestamp: new Date(currentState.date),
+      phase: SimulationPhase.PROPERTY,
+      description: `Completed property phase`,
+      data: { phase: SimulationPhase.PROPERTY },
+    });
+
     // Requirements 7.1: Handle negative cash flow by reducing available cash
     // Cash can go negative, representing debt or overdraft
 
@@ -551,7 +648,23 @@ export const SimulationEngine = {
 
     if (params.loans !== undefined && params.loans.length > 0) {
       // Multiple loans - process each loan with its own offset
+      const loanPhasePeriodEnd = advanceDate(currentState.date, interval);
+
       for (const loan of params.loans) {
+        // A loan with a startDate (e.g. a house-purchase mortgage) doesn't
+        // exist yet if that date is still in the future - skip it entirely
+        // and keep its balance at 0 until the period its startDate falls in.
+        if (loan.startDate && loan.startDate > loanPhasePeriodEnd) {
+          loanBalances[loan.id] = 0;
+          offsetBalances[loan.id] = currentState.offsetBalances?.[loan.id] ??
+            (loan.offsetBalance || 0);
+          continue;
+        }
+
+        const activatesThisPeriod = loan.startDate &&
+          loan.startDate > currentState.date &&
+          loan.startDate <= loanPhasePeriodEnd;
+
         const loanPayment = convertPaymentToInterval(
           loan.paymentAmount,
           loan.paymentFrequency,
@@ -559,9 +672,12 @@ export const SimulationEngine = {
         );
         totalLoanPayment += loanPayment;
 
-        // Get current balance for this loan
-        const currentLoanBalance = currentState.loanBalances?.[loan.id] ??
-          loan.principal;
+        // Get current balance for this loan. A loan activating this period
+        // seeds from its principal, ignoring any carried-forward 0 from
+        // periods before it existed.
+        const currentLoanBalance = activatesThisPeriod
+          ? loan.principal
+          : (currentState.loanBalances?.[loan.id] ?? loan.principal);
 
         // Get current offset balance for this loan
         const currentOffsetBalance = currentState.offsetBalances?.[loan.id] ??
@@ -1131,8 +1247,8 @@ export const SimulationEngine = {
       data: { phase: SimulationPhase.STATE_UPDATE },
     });
 
-    const netWorth = cash + investments + superannuation + offsetBalance -
-      loanBalance;
+    const netWorth = cash + investments + superannuation + offsetBalance +
+      propertyValue - loanBalance;
     const cashFlow = netIncome - expenses - totalLoanPayment -
       actualInvestmentContribution;
 
@@ -1168,6 +1284,10 @@ export const SimulationEngine = {
         params.investmentHoldings && params.investmentHoldings.length > 0
           ? investmentBalances
           : undefined,
+      propertyValue,
+      houseValues: params.housePurchases && params.housePurchases.length > 0
+        ? houseValues
+        : undefined,
     };
   },
 
@@ -1225,6 +1345,10 @@ export const SimulationEngine = {
   runSimulationWithTransitions(
     config: SimulationConfiguration,
   ): EnhancedSimulationResult {
+    config = {
+      ...config,
+      baseParameters: resolveHousePurchaseEffects(config.baseParameters),
+    };
     const interval: TimeInterval = "month"; // Default to monthly intervals
     const states: FinancialState[] = [];
     const warnings: string[] = [];
@@ -1241,17 +1365,29 @@ export const SimulationEngine = {
     );
 
     // Initialize starting state
-    // If loans array exists (even if empty), use it; otherwise fall back to legacy
+    // If loans array exists (even if empty), use it; otherwise fall back to legacy.
+    // A loan with a startDate after the simulation start contributes 0 until
+    // it activates (see loanInitialBalance).
     const initialLoanBalance = currentParams.loans !== undefined
       ? (currentParams.loans.length > 0
-        ? currentParams.loans.reduce((sum, loan) => sum + loan.principal, 0)
+        ? currentParams.loans.reduce(
+          (sum, loan) =>
+            sum + this.loanInitialBalance(loan, config.baseParameters.startDate),
+          0,
+        )
         : 0)
       : currentParams.loanPrincipal;
 
     const initialLoanBalances =
       currentParams.loans !== undefined && currentParams.loans.length > 0
         ? currentParams.loans.reduce(
-          (acc, loan) => ({ ...acc, [loan.id]: loan.principal }),
+          (acc, loan) => ({
+            ...acc,
+            [loan.id]: this.loanInitialBalance(
+              loan,
+              config.baseParameters.startDate,
+            ),
+          }),
           {} as { [loanId: string]: number },
         )
         : undefined;
@@ -1318,12 +1454,13 @@ export const SimulationEngine = {
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
+      propertyValue: 0,
     };
 
     // Calculate initial net worth
     currentState.netWorth = currentState.cash + currentState.investments +
-      currentState.superannuation + currentState.offsetBalance -
-      currentState.loanBalance;
+      currentState.superannuation + currentState.offsetBalance +
+      currentState.propertyValue - currentState.loanBalance;
 
     states.push(currentState);
 

@@ -10,6 +10,7 @@ export enum SimulationPhase {
   INCOME = "income",
   EXPENSES = "expenses",
   RETIREMENT_INCOME = "retirement_income",
+  PROPERTY = "property",
   LOAN_PAYMENT = "loan_payment",
   INVESTMENT = "investment",
   SUPERANNUATION = "superannuation",
@@ -36,6 +37,9 @@ export enum SimulationEventType {
   // Retirement phase
   RETIREMENT_WITHDRAWAL = "retirement_withdrawal",
   WITHDRAWAL_STRATEGY_SELECTED = "withdrawal_strategy_selected",
+
+  // Property phase
+  HOUSE_PURCHASED = "house_purchased",
 
   // Loan phase
   LOAN_PAYMENT = "loan_payment",
@@ -205,6 +209,22 @@ export interface InvestmentTransactionEvent extends SimulationEvent {
 }
 
 /**
+ * House purchase event
+ */
+export interface HousePurchaseEvent extends SimulationEvent {
+  type: SimulationEventType.HOUSE_PURCHASED;
+  phase: SimulationPhase.PROPERTY;
+  data: {
+    houseId: string;
+    houseName: string;
+    price: number;
+    depositAmount: number;
+    buyingCosts: number;
+    loanPrincipal: number;
+  };
+}
+
+/**
  * Super transaction event
  */
 export interface SuperTransactionEvent extends SimulationEvent {
@@ -308,6 +328,7 @@ export type AnySimulationEvent =
   | RetirementWithdrawalEvent
   | WithdrawalStrategyEvent
   | LoanPaymentEvent
+  | HousePurchaseEvent
   | InvestmentTransactionEvent
   | SuperTransactionEvent
   | OffsetTransferEvent
@@ -435,6 +456,8 @@ export class EventCollector {
         return "🏦";
       case SimulationEventType.LOAN_PAYMENT:
         return "🏠";
+      case SimulationEventType.HOUSE_PURCHASED:
+        return "🏡";
       case SimulationEventType.INVESTMENT_CONTRIBUTION:
       case SimulationEventType.INVESTMENT_GROWTH:
         return "📈";
@@ -476,6 +499,13 @@ export class EventCollector {
         return `Principal: $${event.data.principalBefore.toFixed(2)} → $${
           event.data.principalAfter.toFixed(2)
         }`;
+
+      case SimulationEventType.HOUSE_PURCHASED:
+        return `${event.data.houseName}: $${
+          event.data.price.toFixed(2)
+        } (deposit $${event.data.depositAmount.toFixed(2)} + costs $${
+          event.data.buyingCosts.toFixed(2)
+        }, loan $${event.data.loanPrincipal.toFixed(2)})`;
 
       case SimulationEventType.STATE_SNAPSHOT:
         return `Net Worth: $${event.data.netWorth.toFixed(2)}, Cash Flow: $${

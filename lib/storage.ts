@@ -137,6 +137,7 @@ interface SerializableUserParameters {
   expenseItems?: any[];
   loans?: any[];
   superAccounts?: any[];
+  housePurchases?: any[];
 }
 
 /**
@@ -242,7 +243,15 @@ function fromSerializable(
   if (result.people) {
     result.people = convertNestedDates(result.people);
   }
-  
+
+  if (result.loans) {
+    result.loans = convertNestedDates(result.loans);
+  }
+
+  if (result.housePurchases) {
+    result.housePurchases = convertNestedDates(result.housePurchases);
+  }
+
   return result as UserParameters;
 }
 

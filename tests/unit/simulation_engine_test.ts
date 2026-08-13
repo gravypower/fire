@@ -564,3 +564,118 @@ Deno.test("SimulationEngine.runSimulation - recurring yearly percent drawdown ta
   assert(finalBalance < 90000);
   assert(finalBalance > 30000);
 });
+
+Deno.test("SimulationEngine.runSimulation - house purchase draws down cash, creates a mortgage, and grows in value", () => {
+  const params = getTestParameters();
+  params.simulationYears = 5;
+  params.loans = undefined;
+  params.loanPrincipal = 0;
+  params.currentInvestmentBalance = 500000; // Enough cash flow to fund the deposit
+  params.expenseItems = [{
+    id: "rent-1",
+    name: "Rent",
+    amount: 2000,
+    frequency: "monthly",
+    category: "housing",
+    enabled: true,
+  }];
+  params.housePurchases = [{
+    id: "house-1",
+    name: "Primary Home",
+    purchaseDate: new Date("2026-06-01"),
+    price: 600000,
+    depositAmount: 120000,
+    buyingCosts: 25000,
+    appreciationRate: 4,
+    movingIn: true,
+    linkedRentExpenseId: "rent-1",
+    mortgageInterestRate: 5,
+    mortgagePaymentAmount: 2800,
+    mortgagePaymentFrequency: "monthly",
+    monthlyHoldingCosts: 400,
+  }];
+
+  const result = SimulationEngine.runSimulation(params);
+  const steppedStates = result.states.slice(1);
+
+  const beforePurchase = steppedStates.find((s) =>
+    s.date < new Date("2026-06-01")
+  )!;
+  const afterPurchase = steppedStates.find((s) =>
+    s.date >= new Date("2026-06-01") && s.date < new Date("2026-07-01")
+  )!;
+  const wellAfterPurchase = result.states[result.states.length - 1];
+
+  // No mortgage/house value before the purchase date
+  assertEquals(beforePurchase.houseValues?.["house-1"] ?? 0, 0);
+  assertEquals(beforePurchase.loanBalances?.["mortgage-house-1"] ?? 0, 0);
+
+  // House value seeded to price, mortgage seeded to price - deposit, on the
+  // purchase period
+  assertEquals(afterPurchase.houseValues!["house-1"], 600000);
+  const expectedPrincipal = 600000 - 120000;
+  assert(
+    Math.abs(
+      afterPurchase.loanBalances!["mortgage-house-1"] - expectedPrincipal,
+    ) < expectedPrincipal * 0.05, // within one payment's worth of amortization
+  );
+
+  // House value appreciates over time
+  const finalHouseValue = wellAfterPurchase.houseValues!["house-1"];
+  assert(finalHouseValue > 600000);
+
+  // Net worth includes propertyValue
+  assertEquals(
+    Math.round(wellAfterPurchase.netWorth),
+    Math.round(
+      wellAfterPurchase.cash + wellAfterPurchase.investments +
+        wellAfterPurchase.superannuation + wellAfterPurchase.offsetBalance +
+        wellAfterPurchase.propertyValue - wellAfterPurchase.loanBalance,
+    ),
+  );
+});
+
+Deno.test("SimulationEngine.runSimulation - house purchase stops linked rent when movingIn", () => {
+  const params = getTestParameters();
+  params.simulationYears = 3;
+  params.loans = undefined;
+  params.loanPrincipal = 0;
+  params.currentInvestmentBalance = 500000;
+  params.expenseItems = [{
+    id: "rent-1",
+    name: "Rent",
+    amount: 2000,
+    frequency: "monthly",
+    category: "housing",
+    enabled: true,
+  }];
+  params.housePurchases = [{
+    id: "house-1",
+    name: "Primary Home",
+    purchaseDate: new Date("2025-06-01"),
+    price: 600000,
+    depositAmount: 120000,
+    buyingCosts: 25000,
+    appreciationRate: 4,
+    movingIn: true,
+    linkedRentExpenseId: "rent-1",
+    mortgageInterestRate: 5,
+    mortgagePaymentAmount: 2800,
+    mortgagePaymentFrequency: "monthly",
+    monthlyHoldingCosts: 0,
+  }];
+
+  const result = SimulationEngine.runSimulation(params);
+  const steppedStates = result.states.slice(1);
+
+  const beforePurchase = steppedStates.find((s) =>
+    s.date < new Date("2025-06-01")
+  )!;
+  const wellAfterPurchase = result.states[result.states.length - 1];
+
+  // Rent (2000/month) is included in expenses before the purchase...
+  assert(beforePurchase.expenses >= 1900);
+  // ...but stops being charged well after moving in (only holding costs of 0
+  // remain, so expenses should be near zero absent other configured costs)
+  assert(wellAfterPurchase.expenses < 100);
+});

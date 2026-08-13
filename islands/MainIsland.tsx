@@ -18,6 +18,7 @@ import TransitionManagerIsland from "./TransitionManagerIsland.tsx";
 import ExpenseManagerIsland from "./ExpenseManagerIsland.tsx";
 import HouseholdManagerIsland from "./HouseholdManagerIsland.tsx";
 import InvestmentManagerIsland from "./InvestmentManagerIsland.tsx";
+import HousePurchaseIsland from "./HousePurchaseIsland.tsx";
 import ScenarioManagerIsland from "./ScenarioManagerIsland.tsx";
 import ErrorBoundary from "../components/ErrorBoundary.tsx";
 import MilestoneTimeline from "../components/MilestoneTimeline.tsx";
@@ -32,7 +33,7 @@ export default function MainIsland() {
   const [config, setConfig] = useState<SimulationConfiguration | null>(null);
   const [simulationResult, setSimulationResult] = useState<EnhancedSimulationResult | null>(null);
   const [retirementAdvice, setRetirementAdvice] = useState<RetirementAdvice | null>(null);
-  const [activeTab, setActiveTab] = useState<"configure" | "results" | "investments" | "milestones" | "advice" | "scenarios">("configure");
+  const [activeTab, setActiveTab] = useState<"configure" | "results" | "investments" | "property" | "milestones" | "advice" | "scenarios">("configure");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
 
@@ -269,7 +270,7 @@ export default function MainIsland() {
   };
 
   // Handle tab switching with scroll position management
-  const handleTabSwitch = (tab: "configure" | "results" | "investments" | "milestones" | "advice" | "scenarios") => {
+  const handleTabSwitch = (tab: "configure" | "results" | "investments" | "property" | "milestones" | "advice" | "scenarios") => {
     saveScrollPosition();
     setActiveTab(tab);
     restoreScrollPosition(tab);
@@ -469,6 +470,23 @@ export default function MainIsland() {
                 )}
               </button>
               <button
+                onClick={() => handleTabSwitch("property")}
+                class={`${activeTab === "property"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center`}
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Property
+                {config && config.baseParameters.housePurchases && config.baseParameters.housePurchases.length > 0 && (
+                  <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {config.baseParameters.housePurchases.length}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => handleTabSwitch("results")}
                 class={`${activeTab === "results"
                   ? "border-blue-500 text-blue-600"
@@ -543,6 +561,11 @@ export default function MainIsland() {
                       {config.baseParameters.investmentHoldings.length}
                     </span>
                   )}
+                  {activeTab === "property" && config?.baseParameters.housePurchases?.length > 0 && (
+                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {config.baseParameters.housePurchases.length}
+                    </span>
+                  )}
                   {activeTab === "results" && simulationResult && (
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       Ready
@@ -614,6 +637,26 @@ export default function MainIsland() {
                       {config?.baseParameters.investmentHoldings?.length > 0 && (
                         <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {config.baseParameters.investmentHoldings.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleTabSwitch("property");
+                        setMobileMenuOpen(false);
+                      }}
+                      class={`${activeTab === "property"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                        } flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200`}
+                    >
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                      </svg>
+                      Property
+                      {config?.baseParameters.housePurchases?.length > 0 && (
+                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {config.baseParameters.housePurchases.length}
                         </span>
                       )}
                     </button>
@@ -854,6 +897,44 @@ export default function MainIsland() {
                     </h3>
                     <p class="text-sm text-gray-600 mb-4">
                       Configure your financial parameters first to start tracking investments.
+                    </p>
+                    <button
+                      onClick={() => handleTabSwitch("configure")}
+                      class="btn-primary inline-flex items-center"
+                    >
+                      Go to Configure
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Property Tab */}
+            {activeTab === "property" && (
+              <div class="space-y-4 sm:space-y-6 fade-in">
+                {config && (
+                  <ErrorBoundary>
+                    <HousePurchaseIsland
+                      config={config}
+                      onConfigChange={handleConfigurationChange}
+                    />
+                  </ErrorBoundary>
+                )}
+                {!config && (
+                  <div class="card p-8 text-center fade-in">
+                    <svg
+                      class="mx-auto h-16 w-16 text-blue-400 mb-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">
+                      Property
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                      Configure your financial parameters first to plan a house purchase.
                     </p>
                     <button
                       onClick={() => handleTabSwitch("configure")}

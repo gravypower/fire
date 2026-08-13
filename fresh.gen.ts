@@ -20,6 +20,7 @@ import * as $test_visualization from "./routes/test-visualization.tsx";
 import * as $ComparisonIsland from "./islands/ComparisonIsland.tsx";
 import * as $Counter from "./islands/Counter.tsx";
 import * as $ExpenseManagerIsland from "./islands/ExpenseManagerIsland.tsx";
+import * as $HousePurchaseIsland from "./islands/HousePurchaseIsland.tsx";
 import * as $HouseholdManagerIsland from "./islands/HouseholdManagerIsland.tsx";
 import * as $InputIsland from "./islands/InputIsland.tsx";
 import * as $InvestmentManagerIsland from "./islands/InvestmentManagerIsland.tsx";
@@ -52,6 +53,7 @@ const manifest = {
     "./islands/ComparisonIsland.tsx": $ComparisonIsland,
     "./islands/Counter.tsx": $Counter,
     "./islands/ExpenseManagerIsland.tsx": $ExpenseManagerIsland,
+    "./islands/HousePurchaseIsland.tsx": $HousePurchaseIsland,
     "./islands/HouseholdManagerIsland.tsx": $HouseholdManagerIsland,
     "./islands/InputIsland.tsx": $InputIsland,
     "./islands/InvestmentManagerIsland.tsx": $InvestmentManagerIsland,

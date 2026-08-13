@@ -4,6 +4,7 @@
 
 import type { ExpenseItem } from "./expenses.ts";
 import type { InvestmentHolding } from "./investments.ts";
+import type { HousePurchase } from "./property.ts";
 import {
   AdviceCategory,
   AdviceItem,
@@ -121,6 +122,9 @@ export interface Loan {
   autoPayoutWhenOffsetFull?: boolean;
   /** Whether this loan is used for debt recycling (interest is tax deductible) */
   isDebtRecycling?: boolean;
+  /** Optional date this loan becomes active (if not set, active from simulation start).
+   *  Used for loans created by a future house purchase, but works for any loan. */
+  startDate?: Date;
 }
 
 /**
@@ -160,6 +164,10 @@ export interface FinancialState {
   offsetBalances?: { [loanId: string]: number };
   /** Individual investment balances by holding ID (optional, falls back to investments) */
   investmentBalances?: { [holdingId: string]: number };
+  /** Total market value of purchased houses (0 if none purchased yet) */
+  propertyValue: number;
+  /** Individual house values by house purchase ID */
+  houseValues?: { [houseId: string]: number };
 }
 
 /**
@@ -208,6 +216,11 @@ export interface UserParameters {
   currentOffsetBalance: number;
   /** Multiple loans (optional, falls back to loanPrincipal if not provided) */
   loans?: Loan[];
+
+  // Property
+  /** Planned house purchases - deposit/costs draw down cash, resulting mortgage
+   *  and ongoing holding costs feed into the simulation from the purchase date */
+  housePurchases?: HousePurchase[];
 
   // Investments
   /** Monthly contribution to investments - DEPRECATED: Use investmentHoldings instead */
