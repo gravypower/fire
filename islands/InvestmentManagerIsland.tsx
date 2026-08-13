@@ -5,8 +5,9 @@
 
 import { useState } from "preact/hooks";
 import type { SimulationConfiguration } from "../types/financial.ts";
-import type { InvestmentHolding, InvestmentPurchase, InvestmentType } from "../types/investments.ts";
+import type { InvestmentHolding, InvestmentPurchase, InvestmentSale, InvestmentType } from "../types/investments.ts";
 import { INVESTMENT_TYPE_INFO, INVESTMENT_TEMPLATES } from "../types/investments.ts";
+import { sellFromPurchases, totalRealizedGainLoss } from "../lib/investment_ledger_utils.ts";
 
 interface InvestmentManagerIslandProps {
   config: SimulationConfiguration;
@@ -22,6 +23,14 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
   const [isAddingPurchase, setIsAddingPurchase] = useState<string | null>(null);
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
   const [purchaseFormData, setPurchaseFormData] = useState<Partial<InvestmentPurchase>>({});
+  const [isSellingUnits, setIsSellingUnits] = useState<string | null>(null);
+  const [sellFormData, setSellFormData] = useState<{
+    date: string;
+    units?: number;
+    pricePerUnit?: number;
+    fees?: number;
+  }>({ date: new Date().toISOString().split("T")[0] });
+  const [sellError, setSellError] = useState<string | null>(null);
 
   const investments = config.baseParameters.investmentHoldings || [];
 
@@ -235,57 +244,65 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
     });
   };
 
-  const sellUnits = (investmentId: string, unitsToSell: number, salePrice: number) => {
-    const investment = investments.find(inv => inv.id === investmentId);
+  const startSellUnits = (investmentId: string) => {
+    setIsSellingUnits(investmentId);
+    setSellFormData({ date: new Date().toISOString().split("T")[0] });
+    setSellError(null);
+  };
+
+  const cancelSellForm = () => {
+    setIsSellingUnits(null);
+    setSellFormData({ date: new Date().toISOString().split("T")[0] });
+    setSellError(null);
+  };
+
+  const confirmSellUnits = (investmentId: string) => {
+    const investment = investments.find((inv) => inv.id === investmentId);
     if (!investment || !investment.purchases || investment.purchases.length === 0) return;
 
-    const totalUnits = investment.purchases.reduce((sum, p) => sum + p.units, 0);
-    if (unitsToSell > totalUnits) {
-      alert(`Cannot sell ${unitsToSell} units. You only have ${totalUnits} units.`);
+    const { units, pricePerUnit, fees, date } = sellFormData;
+
+    if (!units || units <= 0) {
+      setSellError("Please enter a valid number of units");
+      return;
+    }
+    if (!pricePerUnit || pricePerUnit <= 0) {
+      setSellError("Please enter a valid sale price");
+      return;
+    }
+    if (!date) {
+      setSellError("Please enter a sale date");
       return;
     }
 
-    // Use FIFO (First In, First Out) method for selling
-    let remainingToSell = unitsToSell;
-    const updatedPurchases = [...investment.purchases].sort((a, b) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    const newPurchases: InvestmentPurchase[] = [];
-    
-    for (const purchase of updatedPurchases) {
-      if (remainingToSell <= 0) {
-        newPurchases.push(purchase);
-      } else if (purchase.units <= remainingToSell) {
-        // Sell entire purchase
-        remainingToSell -= purchase.units;
-        // Don't add to newPurchases (it's fully sold)
-      } else {
-        // Partial sale
-        const remainingUnits = purchase.units - remainingToSell;
-        const costPerUnit = purchase.totalCost / purchase.units;
-        newPurchases.push({
-          ...purchase,
-          units: remainingUnits,
-          totalCost: remainingUnits * costPerUnit,
-        });
-        remainingToSell = 0;
-      }
+    let remainingPurchases, sale;
+    try {
+      ({ remainingPurchases, sale } = sellFromPurchases(
+        investment.purchases,
+        units,
+        pricePerUnit,
+        date,
+        fees,
+      ));
+    } catch (err) {
+      setSellError(err instanceof Error ? err.message : "Failed to sell units");
+      return;
     }
 
-    const totalUnitsAfter = newPurchases.reduce((sum, p) => sum + p.units, 0);
-    const totalCostAfter = newPurchases.reduce((sum, p) => sum + p.totalCost, 0);
+    const totalUnitsAfter = remainingPurchases.reduce((sum, p) => sum + p.units, 0);
+    const totalCostAfter = remainingPurchases.reduce((sum, p) => sum + p.totalCost, 0);
     const avgCost = totalUnitsAfter > 0 ? totalCostAfter / totalUnitsAfter : 0;
 
-    const updatedInvestments = investments.map(inv => {
+    const updatedInvestments = investments.map((inv) => {
       if (inv.id === investmentId) {
         return {
           ...inv,
-          purchases: newPurchases,
+          purchases: remainingPurchases,
+          sales: [...(inv.sales || []), sale],
           units: totalUnitsAfter,
           purchasePrice: avgCost,
           currentValue: inv.currentPrice ? totalUnitsAfter * inv.currentPrice : totalCostAfter,
-          currentPrice: salePrice || inv.currentPrice,
+          currentPrice: pricePerUnit,
         };
       }
       return inv;
@@ -298,45 +315,8 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
         investmentHoldings: updatedInvestments,
       },
     });
-  };
 
-  const startSellUnits = (investmentId: string) => {
-    const investment = investments.find(inv => inv.id === investmentId);
-    if (!investment) return;
-
-    const totalUnits = (investment.purchases || []).reduce((sum, p) => sum + p.units, 0);
-    const unitsToSell = prompt(`How many units do you want to sell? (Available: ${totalUnits})`);
-    
-    if (!unitsToSell || isNaN(parseFloat(unitsToSell))) return;
-    
-    const units = parseFloat(unitsToSell);
-    if (units <= 0 || units > totalUnits) {
-      alert("Invalid number of units");
-      return;
-    }
-
-    const salePriceInput = prompt(`What is the sale price per unit? (Current: $${investment.currentPrice?.toFixed(2) || 'Not set'})`);
-    if (!salePriceInput || isNaN(parseFloat(salePriceInput))) return;
-    
-    const salePrice = parseFloat(salePriceInput);
-    if (salePrice <= 0) {
-      alert("Invalid sale price");
-      return;
-    }
-
-    const totalSaleValue = units * salePrice;
-    const avgCost = investment.purchasePrice || 0;
-    const costBasis = units * avgCost;
-    const profit = totalSaleValue - costBasis;
-
-    if (confirm(
-      `Sell ${units} units at $${salePrice.toFixed(2)} each?\n\n` +
-      `Sale Value: $${totalSaleValue.toFixed(2)}\n` +
-      `Cost Basis: $${costBasis.toFixed(2)}\n` +
-      `Profit/Loss: $${profit.toFixed(2)} (${((profit / costBasis) * 100).toFixed(2)}%)`
-    )) {
-      sellUnits(investmentId, units, salePrice);
-    }
+    cancelSellForm();
   };
 
   // Update current price manually
@@ -400,8 +380,9 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
       : investment.currentValue;
     const gainLoss = currentValue - totalCost;
     const gainLossPercent = totalCost > 0 ? (gainLoss / totalCost) * 100 : 0;
+    const realizedGainLoss = totalRealizedGainLoss(investment.sales);
 
-    return { totalUnits, totalCost, avgCost, currentValue, gainLoss, gainLossPercent };
+    return { totalUnits, totalCost, avgCost, currentValue, gainLoss, gainLossPercent, realizedGainLoss };
   };
 
   return (
@@ -631,6 +612,14 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                 const metrics = calculateInvestmentMetrics(investment);
                 const isExpanded = expandedInvestmentId === investment.id;
                 const purchases = investment.purchases || [];
+                const sales = investment.sales || [];
+                const transactions: Array<
+                  { kind: "buy"; date: string; data: InvestmentPurchase }
+                  | { kind: "sell"; date: string; data: InvestmentSale }
+                > = [
+                  ...purchases.map((p) => ({ kind: "buy" as const, date: p.date, data: p })),
+                  ...sales.map((s) => ({ kind: "sell" as const, date: s.date, data: s })),
+                ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
                 return (
                   <div
@@ -726,7 +715,7 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                       <div class="border-t border-blue-200 bg-white p-4">
                         <div class="mb-4">
                           <h5 class="text-sm font-semibold text-gray-700 mb-2">Investment Details</h5>
-                          <div class="grid grid-cols-3 gap-4 text-sm">
+                          <div class="grid grid-cols-4 gap-4 text-sm">
                             <div>
                               <p class="text-gray-600">Total Cost Basis</p>
                               <p class="font-medium">${metrics.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -738,9 +727,15 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                             <div>
                               <p class="text-gray-600">Current Price</p>
                               <p class="font-medium">
-                                {investment.currentPrice 
+                                {investment.currentPrice
                                   ? `$${investment.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                   : "Not set"}
+                              </p>
+                            </div>
+                            <div>
+                              <p class="text-gray-600">Realized Gain/Loss</p>
+                              <p class={`font-medium ${metrics.realizedGainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {metrics.realizedGainLoss >= 0 ? "↑" : "↓"} ${Math.abs(metrics.realizedGainLoss).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
                           </div>
@@ -751,11 +746,11 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                           )}
                         </div>
 
-                        {/* Purchase History */}
+                        {/* Transaction History */}
                         <div class="mb-4">
                           <div class="flex items-center justify-between mb-2">
-                            <h5 class="text-sm font-semibold text-gray-700">Purchase History</h5>
-                            {isAddingPurchase !== investment.id && (
+                            <h5 class="text-sm font-semibold text-gray-700">Transaction History</h5>
+                            {isAddingPurchase !== investment.id && isSellingUnits !== investment.id && (
                               <div class="flex gap-2">
                                 {metrics.totalUnits > 0 && (
                                   <button
@@ -774,6 +769,83 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                               </div>
                             )}
                           </div>
+
+                          {/* Sell Units Form */}
+                          {isSellingUnits === investment.id && (
+                            <div class="mb-3 p-3 bg-orange-50 border border-orange-200 rounded">
+                              <h6 class="text-xs font-semibold text-gray-700 mb-2">
+                                Sell Units (Available: {metrics.totalUnits.toLocaleString()})
+                              </h6>
+                              <div class="grid grid-cols-3 gap-2 mb-2">
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Date</label>
+                                  <input
+                                    type="date"
+                                    value={sellFormData.date}
+                                    onInput={(e) => setSellFormData({ ...sellFormData, date: (e.target as HTMLInputElement).value })}
+                                    class="input-field text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Units *</label>
+                                  <input
+                                    type="number"
+                                    value={sellFormData.units ?? ""}
+                                    onInput={(e) => setSellFormData({ ...sellFormData, units: parseFloat((e.target as HTMLInputElement).value) || undefined })}
+                                    class="input-field text-xs"
+                                    step="0.01"
+                                    max={metrics.totalUnits}
+                                  />
+                                </div>
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Sale Price/Unit *</label>
+                                  <input
+                                    type="number"
+                                    value={sellFormData.pricePerUnit ?? (investment.currentPrice ?? "")}
+                                    onInput={(e) => setSellFormData({ ...sellFormData, pricePerUnit: parseFloat((e.target as HTMLInputElement).value) || undefined })}
+                                    class="input-field text-xs"
+                                    step="0.01"
+                                  />
+                                </div>
+                              </div>
+                              <div class="grid grid-cols-3 gap-2 mb-2">
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Fees/Brokerage</label>
+                                  <input
+                                    type="number"
+                                    value={sellFormData.fees ?? ""}
+                                    onInput={(e) => setSellFormData({ ...sellFormData, fees: parseFloat((e.target as HTMLInputElement).value) || undefined })}
+                                    class="input-field text-xs"
+                                    step="0.01"
+                                  />
+                                </div>
+                                <div class="col-span-2 flex items-end">
+                                  {sellFormData.units && sellFormData.pricePerUnit && (
+                                    <p class="text-xs text-gray-600">
+                                      Proceeds: ${(sellFormData.units * sellFormData.pricePerUnit - (sellFormData.fees || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              {sellError && (
+                                <p class="text-xs text-red-600 mb-2">{sellError}</p>
+                              )}
+                              <div class="flex gap-2">
+                                <button
+                                  onClick={() => confirmSellUnits(investment.id)}
+                                  class="px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
+                                >
+                                  Confirm Sale
+                                </button>
+                                <button
+                                  onClick={cancelSellForm}
+                                  class="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           {/* Add/Edit Purchase Form */}
                           {isAddingPurchase === investment.id && (
@@ -887,54 +959,89 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                             </div>
                           )}
 
-                          {/* Purchase List */}
-                          {purchases.length > 0 ? (
+                          {/* Transaction List (buys and sells, chronological) */}
+                          {transactions.length > 0 ? (
                             <div class="space-y-2">
-                              {purchases.map((purchase) => (
-                                <div key={purchase.id} class="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
-                                  <div class="flex-1 grid grid-cols-5 gap-2">
-                                    <div>
-                                      <p class="text-gray-600">Date</p>
-                                      <p class="font-medium">{new Date(purchase.date).toLocaleDateString()}</p>
+                              {transactions.map((txn) =>
+                                txn.kind === "buy" ? (
+                                  <div key={`buy-${txn.data.id}`} class="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                                    <div class="flex-1 grid grid-cols-6 gap-2">
+                                      <div>
+                                        <span class="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">BUY</span>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Date</p>
+                                        <p class="font-medium">{new Date(txn.data.date).toLocaleDateString()}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Units</p>
+                                        <p class="font-medium">{txn.data.units.toLocaleString()}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Price/Unit</p>
+                                        <p class="font-medium">${txn.data.pricePerUnit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Total Cost</p>
+                                        <p class="font-medium">${txn.data.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Notes</p>
+                                        <p class="font-medium">{txn.data.notes || "-"}</p>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <p class="text-gray-600">Units</p>
-                                      <p class="font-medium">{purchase.units.toLocaleString()}</p>
-                                    </div>
-                                    <div>
-                                      <p class="text-gray-600">Price/Unit</p>
-                                      <p class="font-medium">${purchase.pricePerUnit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    </div>
-                                    <div>
-                                      <p class="text-gray-600">Total Cost</p>
-                                      <p class="font-medium">${purchase.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    </div>
-                                    <div>
-                                      <p class="text-gray-600">Notes</p>
-                                      <p class="font-medium">{purchase.notes || "-"}</p>
+                                    <div class="flex gap-1 ml-2">
+                                      <button
+                                        onClick={() => startEditPurchase(investment.id, txn.data)}
+                                        class="px-2 py-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded"
+                                        title="Edit purchase"
+                                      >
+                                        ✎
+                                      </button>
+                                      <button
+                                        onClick={() => removePurchase(investment.id, txn.data.id)}
+                                        class="px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-100 rounded"
+                                        title="Delete purchase"
+                                      >
+                                        ✕
+                                      </button>
                                     </div>
                                   </div>
-                                  <div class="flex gap-1 ml-2">
-                                    <button
-                                      onClick={() => startEditPurchase(investment.id, purchase)}
-                                      class="px-2 py-1 text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded"
-                                      title="Edit purchase"
-                                    >
-                                      ✎
-                                    </button>
-                                    <button
-                                      onClick={() => removePurchase(investment.id, purchase.id)}
-                                      class="px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-100 rounded"
-                                      title="Delete purchase"
-                                    >
-                                      ✕
-                                    </button>
+                                ) : (
+                                  <div key={`sell-${txn.data.id}`} class="flex items-center justify-between p-2 bg-orange-50 rounded text-xs">
+                                    <div class="flex-1 grid grid-cols-6 gap-2">
+                                      <div>
+                                        <span class="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">SELL</span>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Date</p>
+                                        <p class="font-medium">{new Date(txn.data.date).toLocaleDateString()}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Units</p>
+                                        <p class="font-medium">{txn.data.units.toLocaleString()}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Price/Unit</p>
+                                        <p class="font-medium">${txn.data.pricePerUnit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Proceeds</p>
+                                        <p class="font-medium">${txn.data.totalProceeds.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                      <div>
+                                        <p class="text-gray-600">Realized</p>
+                                        <p class={`font-medium ${txn.data.realizedGainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                          {txn.data.realizedGainLoss >= 0 ? "↑" : "↓"} ${Math.abs(txn.data.realizedGainLoss).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                )
+                              )}
                             </div>
                           ) : (
-                            <p class="text-xs text-gray-500 text-center py-3">No purchases recorded yet</p>
+                            <p class="text-xs text-gray-500 text-center py-3">No transactions recorded yet</p>
                           )}
                         </div>
 

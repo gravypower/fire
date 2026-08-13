@@ -53,6 +53,38 @@ export interface InvestmentPurchase {
 }
 
 /**
+ * Individual sale/disposal of units from an investment
+ */
+export interface InvestmentSale {
+  /** Unique identifier for this sale */
+  id: string;
+
+  /** Date of sale */
+  date: string;
+
+  /** Number of units sold */
+  units: number;
+
+  /** Price per unit at sale */
+  pricePerUnit: number;
+
+  /** Total proceeds (units * pricePerUnit - fees) */
+  totalProceeds: number;
+
+  /** Any fees or brokerage paid */
+  fees?: number;
+
+  /** FIFO cost basis of the units sold */
+  costBasis: number;
+
+  /** Realized gain or loss (totalProceeds - costBasis) */
+  realizedGainLoss: number;
+
+  /** Notes about this sale */
+  notes?: string;
+}
+
+/**
  * Individual investment holding
  */
 export interface InvestmentHolding {
@@ -110,7 +142,10 @@ export interface InvestmentHolding {
   
   /** Array of purchases/parcels for this investment */
   purchases?: InvestmentPurchase[];
-  
+
+  /** Array of sales/disposals for this investment */
+  sales?: InvestmentSale[];
+
   /** Last time price was fetched from API */
   lastPriceFetch?: string;
 }
