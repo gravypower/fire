@@ -61,13 +61,28 @@ export interface CompareScenariosCommand extends Command {
 }
 
 /**
+ * Command to compare 2-4 named, independently configured scenarios side by side
+ */
+export interface CompareNamedScenariosCommand extends Command {
+  type: "CompareNamedScenarios";
+  data: {
+    scenarios: Array<{
+      id: string;
+      name: string;
+      configuration: SimulationConfiguration;
+    }>;
+  };
+}
+
+/**
  * Union type of all possible commands
  */
 export type AnyCommand =
   | RunSimulationCommand
   | UpdateParametersCommand
   | ClearCacheCommand
-  | CompareScenariosCommand;
+  | CompareScenariosCommand
+  | CompareNamedScenariosCommand;
 
 /**
  * Command result interface
@@ -91,4 +106,5 @@ export const COMMAND_TYPES = {
   UPDATE_PARAMETERS: "UpdateParameters",
   CLEAR_CACHE: "ClearCache",
   COMPARE_SCENARIOS: "CompareScenarios",
+  COMPARE_NAMED_SCENARIOS: "CompareNamedScenarios",
 } as const;

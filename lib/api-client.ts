@@ -7,6 +7,7 @@
 import type {
   ComparisonSimulationResult,
   EnhancedSimulationResult,
+  ScenarioComparisonResult,
   SimulationConfiguration,
   UserParameters,
 } from "../types/financial.ts";
@@ -429,6 +430,47 @@ export class ApiClient {
       }
 
       return commandResult.data.data as ComparisonSimulationResult;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Run a side-by-side comparison of 2-4 independently configured scenarios
+   */
+  async runNamedScenarioComparison(
+    scenarios: Array<{ id: string; name: string; configuration: SimulationConfiguration }>,
+    sessionId?: string,
+  ): Promise<ScenarioComparisonResult> {
+    const id = sessionId || this.currentSessionId;
+    if (!id) {
+      throw new Error("No active session");
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/commands`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: `compare-named-scenarios-${Date.now()}`,
+          type: "CompareNamedScenarios",
+          sessionId: id,
+          data: { scenarios },
+        }),
+      });
+
+      const commandResult: ApiResponse<CommandResult> =
+        deserializeDatesRecursively(
+          await response.json(),
+        );
+
+      if (!commandResult.success || !commandResult.data) {
+        throw new Error(commandResult.error || "Failed to run scenario comparison");
+      }
+
+      return commandResult.data.data as ScenarioComparisonResult;
     } catch (error) {
       throw error;
     }

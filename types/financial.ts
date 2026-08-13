@@ -336,6 +336,39 @@ export interface SimulationConfiguration {
 }
 
 /**
+ * A named, saved simulation configuration - lets a user keep more than one
+ * scenario around (e.g. "Retire at 60" vs "Retire at 65") to compare later.
+ */
+export interface SavedScenario {
+  /** Unique identifier */
+  id: string;
+  /** User-provided name for this scenario */
+  name: string;
+  /** When this scenario was first saved */
+  createdAt: Date;
+  /** When this scenario was last updated */
+  updatedAt: Date;
+  /** The saved configuration */
+  configuration: SimulationConfiguration;
+}
+
+/**
+ * Result of comparing 2-4 named scenarios side by side
+ */
+export interface ScenarioComparisonResult {
+  scenarios: Array<{
+    /** Scenario identifier (matches SavedScenario.id) */
+    id: string;
+    /** Scenario name */
+    name: string;
+    /** Simulation result for this scenario */
+    result: SimulationResult;
+    /** Milestones detected for this scenario */
+    milestones: Milestone[];
+  }>;
+}
+
+/**
  * Transition point - marks where a transition occurred during simulation
  */
 export interface TransitionPoint {

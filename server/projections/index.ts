@@ -4,6 +4,7 @@
 
 // Builders
 export {
+  assessSustainability,
   buildFinancialProjection,
   buildMilestoneProjection,
   buildTimelineProjection,

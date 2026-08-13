@@ -24,6 +24,7 @@ import * as $HouseholdManagerIsland from "./islands/HouseholdManagerIsland.tsx";
 import * as $InputIsland from "./islands/InputIsland.tsx";
 import * as $InvestmentManagerIsland from "./islands/InvestmentManagerIsland.tsx";
 import * as $MainIsland from "./islands/MainIsland.tsx";
+import * as $ScenarioManagerIsland from "./islands/ScenarioManagerIsland.tsx";
 import * as $SimulationIsland from "./islands/SimulationIsland.tsx";
 import * as $TransitionManagerIsland from "./islands/TransitionManagerIsland.tsx";
 import * as $VisualizationIsland from "./islands/VisualizationIsland.tsx";
@@ -55,6 +56,7 @@ const manifest = {
     "./islands/InputIsland.tsx": $InputIsland,
     "./islands/InvestmentManagerIsland.tsx": $InvestmentManagerIsland,
     "./islands/MainIsland.tsx": $MainIsland,
+    "./islands/ScenarioManagerIsland.tsx": $ScenarioManagerIsland,
     "./islands/SimulationIsland.tsx": $SimulationIsland,
     "./islands/TransitionManagerIsland.tsx": $TransitionManagerIsland,
     "./islands/VisualizationIsland.tsx": $VisualizationIsland,

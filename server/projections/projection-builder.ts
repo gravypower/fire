@@ -132,17 +132,25 @@ function extractKeyMilestones(
  * Determines whether the projected trajectory is financially sustainable.
  *
  * SimulationEngine.checkSustainability (used for result.isSustainable) flags
- * any 3+ consecutive periods of negative cash flow, which is the right
- * signal while still working (income not covering expenses) but fires on
- * every retiree, since cashFlow only tracks income minus expenses and
- * retirement income is drawn from investments/super rather than "income".
- * So cash-flow checks apply only to the pre-retirement window, and the
- * post-retirement window is judged by whether the portfolio actually
- * depletes.
+ * any 3+ consecutive periods of negative cash flow, which fires on every
+ * retiree since cashFlow only tracks income minus expenses and retirement
+ * income is drawn from investments/super rather than "income". A boundary
+ * of "before the achieved retirement date" doesn't fix this either: when a
+ * target retirement age isn't affordable, the engine keeps searching for
+ * the earliest affordable age, so there can be a real gap where income has
+ * already stopped (age hits the configured retirement age) before the
+ * model confirms retirement is "safely achieved" - cashFlow is negative
+ * throughout that gap even though assets are growing fine.
+ *
+ * So instead of counting negative-cashFlow streaks, judge sustainability
+ * by whether the portfolio (investments + super) actually runs out: it's
+ * fine to start the simulation at zero (someone just beginning to save),
+ * but once it's built up, hitting zero again means the plan ran out of
+ * money.
  */
-function assessSustainability(
+export function assessSustainability(
   states: FinancialState[],
-  retirementDate: Date | null,
+  _retirementDate: Date | null,
 ): boolean {
   if (states.length === 0) {
     return false;
@@ -161,33 +169,15 @@ function assessSustainability(
     return false;
   }
 
-  // Sustained negative cash flow only signals trouble while still earning;
-  // post-retirement income is expected to come from portfolio drawdown.
-  const preRetirementStates = retirementDate
-    ? states.filter((state) => state.date < retirementDate)
-    : states;
-
-  let consecutiveNegative = 0;
-  for (const state of preRetirementStates) {
-    if (state.cashFlow < 0) {
-      consecutiveNegative++;
-      if (consecutiveNegative >= 3) {
-        return false;
-      }
-    } else {
-      consecutiveNegative = 0;
-    }
-  }
-
-  // After retirement, the portfolio itself must not be depleted
-  if (retirementDate) {
-    const postRetirementStates = states.filter((state) =>
-      state.date >= retirementDate
-    );
-    const depleted = postRetirementStates.some((state) =>
-      state.investments + state.superannuation <= 0
-    );
-    if (depleted) {
+  // Once the portfolio has built up meaningfully, it shouldn't hit zero -
+  // that's the plan running out of money, as opposed to just starting from
+  // zero savings.
+  let everHadMeaningfulPortfolio = false;
+  for (const state of states) {
+    const portfolio = state.investments + state.superannuation;
+    if (portfolio > 1000) {
+      everHadMeaningfulPortfolio = true;
+    } else if (everHadMeaningfulPortfolio && portfolio <= 0) {
       return false;
     }
   }

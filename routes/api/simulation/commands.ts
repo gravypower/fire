@@ -9,6 +9,7 @@ import { broadcastProjectionUpdate } from "./websocket.ts";
 import type {
   ClearCacheCommand,
   Command,
+  CompareNamedScenariosCommand,
   CompareScenariosCommand,
   RunSimulationCommand,
   UpdateParametersCommand,
@@ -16,6 +17,7 @@ import type {
 import { detectMilestonesFromSimulation } from "../../../lib/milestone_detector.ts";
 import { ScenarioComparisonEngine } from "../../../lib/scenario_comparison_engine.ts";
 import { SimulationEngine } from "../../../lib/simulation_engine.ts";
+import { assessSustainability } from "../../../server/projections/projection-builder.ts";
 import type { SimulationConfiguration } from "../../../types/financial.ts";
 
 interface CommandResponse {
@@ -116,11 +118,24 @@ async function handleCompareScenarios(
     configuration.baseParameters,
   );
 
+  // SimulationEngine's own isSustainable flags any 3+ consecutive periods of
+  // negative cash flow, which fires on every retiree since retirement income
+  // is drawn from investments/super rather than tracked as "cashFlow" -
+  // recompute with retirement-aware logic instead.
   const withTransitions = {
     ...withTransitionsResult,
+    isSustainable: assessSustainability(
+      withTransitionsResult.states,
+      withTransitionsResult.retirementDate,
+    ),
     transitionPoints: withTransitionsResult.transitionPoints ?? [],
     periods: withTransitionsResult.periods ?? [],
   };
+  const withoutTransitionsIsSustainable = assessSustainability(
+    withoutTransitionsResult.states,
+    withoutTransitionsResult.retirementDate,
+  );
+  withoutTransitionsResult.isSustainable = withoutTransitionsIsSustainable;
 
   let retirementDateDifference: number | null = null;
   if (withTransitions.retirementDate && withoutTransitionsResult.retirementDate) {
@@ -164,6 +179,37 @@ async function handleCompareScenarios(
   };
 }
 
+async function handleCompareNamedScenarios(
+  command: CompareNamedScenariosCommand,
+): Promise<CommandResponse> {
+  const { scenarios } = command.data;
+
+  const results = scenarios.map(({ id, name, configuration }) => {
+    const hasTransitions = configuration.transitions &&
+      configuration.transitions.length > 0;
+
+    const result = hasTransitions
+      ? SimulationEngine.runSimulationWithTransitions(configuration)
+      : SimulationEngine.runSimulation(configuration.baseParameters);
+
+    // See note in handleCompareScenarios: recompute with retirement-aware logic
+    result.isSustainable = assessSustainability(result.states, result.retirementDate);
+
+    const milestoneResult = detectMilestonesFromSimulation(
+      result.states,
+      configuration.baseParameters,
+    );
+
+    return { id, name, result, milestones: milestoneResult.milestones };
+  });
+
+  return {
+    success: true,
+    commandId: command.id,
+    data: { scenarios: results },
+  };
+}
+
 async function dispatch(command: Command): Promise<CommandResponse> {
   switch (command.type) {
     case "RunSimulation":
@@ -174,6 +220,8 @@ async function dispatch(command: Command): Promise<CommandResponse> {
       return handleClearCache(command as ClearCacheCommand);
     case "CompareScenarios":
       return handleCompareScenarios(command as CompareScenariosCommand);
+    case "CompareNamedScenarios":
+      return handleCompareNamedScenarios(command as CompareNamedScenariosCommand);
     default:
       return {
         success: false,
@@ -281,6 +329,7 @@ export const handler: Handlers = {
             "UpdateParameters",
             "ClearCache",
             "CompareScenarios",
+            "CompareNamedScenarios",
           ],
           description: "Available command types that can be processed",
         },

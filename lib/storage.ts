@@ -3,7 +3,7 @@
  * Validates: Requirements 9.1, 9.2, 9.3, 9.4, 6.1, 6.2, 6.4, 6.5
  */
 
-import type { UserParameters, SimulationConfiguration, ParameterTransition } from "../types/financial.ts";
+import type { UserParameters, SimulationConfiguration, ParameterTransition, SavedScenario } from "../types/financial.ts";
 
 /**
  * Storage service interface for persisting user parameters
@@ -57,6 +57,32 @@ export interface StorageService {
    * @returns true if import was successful, false otherwise
    */
   importConfiguration(jsonData: string): boolean;
+
+  /**
+   * Saves a named scenario (a snapshot of a SimulationConfiguration)
+   * @throws Error if storage is unavailable or quota exceeded
+   */
+  saveScenario(name: string, configuration: SimulationConfiguration): SavedScenario;
+
+  /**
+   * Returns all saved scenarios
+   */
+  getScenarios(): SavedScenario[];
+
+  /**
+   * Overwrites the configuration for an existing saved scenario
+   */
+  updateScenario(id: string, configuration: SimulationConfiguration): void;
+
+  /**
+   * Renames an existing saved scenario
+   */
+  renameScenario(id: string, name: string): void;
+
+  /**
+   * Deletes a saved scenario
+   */
+  deleteScenario(id: string): void;
 }
 
 /**
@@ -68,6 +94,11 @@ const STORAGE_KEY = "finance-simulation-parameters";
  * Key used for storing configuration with transitions
  */
 const CONFIG_STORAGE_KEY = "finance-simulation-config";
+
+/**
+ * Key used for storing the list of named saved scenarios
+ */
+const SCENARIOS_STORAGE_KEY = "finance-simulation-scenarios";
 
 /**
  * Serializable version of UserParameters (Date converted to string)
@@ -126,6 +157,17 @@ interface SerializableSimulationConfiguration {
   baseParameters: SerializableUserParameters;
   transitions: SerializableParameterTransition[];
   savedAt: string; // ISO timestamp
+}
+
+/**
+ * Serializable version of SavedScenario
+ */
+interface SerializableSavedScenario {
+  id: string;
+  name: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  configuration: SerializableSimulationConfiguration;
 }
 
 /**
@@ -293,6 +335,36 @@ function configFromSerializable(
   return {
     baseParameters: fromSerializable(serializable.baseParameters),
     transitions: serializable.transitions.map(transitionFromSerializable),
+  };
+}
+
+/**
+ * Converts a SavedScenario to a serializable format
+ */
+function scenarioToSerializable(
+  scenario: SavedScenario,
+): SerializableSavedScenario {
+  return {
+    id: scenario.id,
+    name: scenario.name,
+    createdAt: scenario.createdAt.toISOString(),
+    updatedAt: scenario.updatedAt.toISOString(),
+    configuration: configToSerializable(scenario.configuration),
+  };
+}
+
+/**
+ * Converts a serializable scenario back to SavedScenario
+ */
+function scenarioFromSerializable(
+  serializable: SerializableSavedScenario,
+): SavedScenario {
+  return {
+    id: serializable.id,
+    name: serializable.name,
+    createdAt: new Date(serializable.createdAt),
+    updatedAt: new Date(serializable.updatedAt),
+    configuration: configFromSerializable(serializable.configuration),
   };
 }
 
@@ -764,12 +836,126 @@ export class LocalStorageService implements StorageService {
       // Convert and save
       const config = configFromSerializable(configData);
       this.saveConfiguration(config);
-      
+
       return true;
     } catch (error) {
       console.error("Failed to import configuration:", error);
       return false;
     }
+  }
+
+  /**
+   * Saves a named scenario (a snapshot of a SimulationConfiguration)
+   */
+  saveScenario(name: string, configuration: SimulationConfiguration): SavedScenario {
+    if (!this.isStorageAvailable()) {
+      throw new Error("Local storage is not available");
+    }
+
+    const now = new Date();
+    const scenario: SavedScenario = {
+      id: `scenario_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      createdAt: now,
+      updatedAt: now,
+      configuration,
+    };
+
+    try {
+      const scenarios = this.getScenarios();
+      scenarios.push(scenario);
+      this.writeScenarios(scenarios);
+      return scenario;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.name === "QuotaExceededError" ||
+          error.message.includes("quota"))
+      ) {
+        throw new Error("Storage quota exceeded. Please clear some data.");
+      }
+      throw new Error(`Failed to save scenario: ${error}`);
+    }
+  }
+
+  /**
+   * Returns all saved scenarios
+   */
+  getScenarios(): SavedScenario[] {
+    if (!this.isStorageAvailable()) {
+      console.warn("Local storage is not available");
+      return [];
+    }
+
+    try {
+      const json = this.storage.getItem(SCENARIOS_STORAGE_KEY);
+      if (json === null) {
+        return [];
+      }
+
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed)) {
+        console.error("Stored scenarios have invalid structure");
+        return [];
+      }
+
+      return (parsed as SerializableSavedScenario[]).map(scenarioFromSerializable);
+    } catch (error) {
+      console.error("Failed to load scenarios, data may be corrupted:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Overwrites the configuration for an existing saved scenario
+   */
+  updateScenario(id: string, configuration: SimulationConfiguration): void {
+    const scenarios = this.getScenarios();
+    const index = scenarios.findIndex((s) => s.id === id);
+    if (index === -1) {
+      throw new Error(`Scenario not found: ${id}`);
+    }
+
+    scenarios[index] = {
+      ...scenarios[index],
+      configuration,
+      updatedAt: new Date(),
+    };
+    this.writeScenarios(scenarios);
+  }
+
+  /**
+   * Renames an existing saved scenario
+   */
+  renameScenario(id: string, name: string): void {
+    const scenarios = this.getScenarios();
+    const index = scenarios.findIndex((s) => s.id === id);
+    if (index === -1) {
+      throw new Error(`Scenario not found: ${id}`);
+    }
+
+    scenarios[index] = { ...scenarios[index], name, updatedAt: new Date() };
+    this.writeScenarios(scenarios);
+  }
+
+  /**
+   * Deletes a saved scenario
+   */
+  deleteScenario(id: string): void {
+    const scenarios = this.getScenarios().filter((s) => s.id !== id);
+    this.writeScenarios(scenarios);
+  }
+
+  /**
+   * Serializes and writes the full scenario list to storage
+   */
+  private writeScenarios(scenarios: SavedScenario[]): void {
+    if (!this.isStorageAvailable()) {
+      throw new Error("Local storage is not available");
+    }
+
+    const serializable = scenarios.map(scenarioToSerializable);
+    this.storage.setItem(SCENARIOS_STORAGE_KEY, JSON.stringify(serializable));
   }
 
   /**
