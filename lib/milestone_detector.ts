@@ -179,14 +179,14 @@ export class MilestoneDetector {
     // Handle multiple loans if available
     if (params.loans && params.loans.length > 0) {
       for (const loan of params.loans) {
-        const milestone = this.detectSingleLoanPayoffOptimized(states, loan.id, loan.label, loan.principal);
+        const milestone = this.detectSingleLoanPayoffOptimized(states, loan.id, loan.label, loan.principal, loan.interestRate);
         if (milestone) {
           milestones.push(milestone);
         }
       }
     } else {
       // Handle legacy single loan
-      const milestone = this.detectSingleLoanPayoffOptimized(states, 'legacy-loan', 'Primary Loan', params.loanPrincipal);
+      const milestone = this.detectSingleLoanPayoffOptimized(states, 'legacy-loan', 'Primary Loan', params.loanPrincipal, params.loanInterestRate);
       if (milestone) {
         milestones.push(milestone);
       }
@@ -226,7 +226,8 @@ export class MilestoneDetector {
     states: FinancialState[],
     loanId: string,
     loanName: string,
-    originalPrincipal: number
+    originalPrincipal: number,
+    interestRate: number
   ): LoanPayoffMilestone | null {
     // Early exit optimization: check if loan is already paid off in first state
     const firstState = states[0];
@@ -236,7 +237,7 @@ export class MilestoneDetector {
     } else {
       firstBalance = firstState.loanBalances?.[loanId] ?? originalPrincipal;
     }
-    
+
     if (firstBalance === 0) {
       return null; // Already paid off
     }
@@ -249,18 +250,49 @@ export class MilestoneDetector {
     } else {
       lastBalance = lastState.loanBalances?.[loanId] ?? originalPrincipal;
     }
-    
+
     if (lastBalance > 0) {
       return null; // Never paid off during simulation
     }
 
     // Binary search to find payoff point more efficiently for large datasets
     if (states.length > 50) {
-      return this.binarySearchLoanPayoff(states, loanId, loanName, originalPrincipal);
+      return this.binarySearchLoanPayoff(states, loanId, loanName, originalPrincipal, interestRate);
     }
 
     // Use original linear search for smaller datasets
-    return this.detectSingleLoanPayoff(states, loanId, loanName, originalPrincipal);
+    return this.detectSingleLoanPayoff(states, loanId, loanName, originalPrincipal, interestRate);
+  }
+
+  /**
+   * Estimates total interest paid up to (and including) payoffIndex by summing
+   * balance * monthlyRate each period. Uses the loan's actual interest rate so
+   * this agrees with the linear-search path instead of a different hardcoded
+   * guess - both previously used unrelated flat estimates that didn't reflect
+   * the loan's rate and disagreed with each other by an order of magnitude.
+   */
+  private estimateInterestPaidToPayoff(
+    states: FinancialState[],
+    loanId: string,
+    originalPrincipal: number,
+    interestRate: number,
+    payoffIndex: number
+  ): number {
+    const monthlyRate = interestRate / 100 / 12;
+    let previousBalance = originalPrincipal;
+    let totalInterestPaid = 0;
+
+    for (let i = 1; i <= payoffIndex; i++) {
+      const state = states[i];
+      const balance = loanId === 'legacy-loan'
+        ? state.loanBalance
+        : state.loanBalances?.[loanId] ?? 0;
+
+      totalInterestPaid += previousBalance * monthlyRate;
+      previousBalance = balance;
+    }
+
+    return Math.max(0, totalInterestPaid);
   }
 
   /**
@@ -270,7 +302,8 @@ export class MilestoneDetector {
     states: FinancialState[],
     loanId: string,
     loanName: string,
-    originalPrincipal: number
+    originalPrincipal: number,
+    interestRate: number
   ): LoanPayoffMilestone | null {
     let left = 0;
     let right = states.length - 1;
@@ -313,9 +346,15 @@ export class MilestoneDetector {
 
     const finalPaymentAmount = previousBalance;
     const monthsToPayoff = payoffIndex;
-    
-    // Estimate total interest paid (simplified calculation for performance)
-    const totalInterestPaid = Math.max(0, (originalPrincipal * 0.05 * monthsToPayoff) / 12);
+
+    // Estimate total interest paid using the loan's actual rate
+    const totalInterestPaid = this.estimateInterestPaidToPayoff(
+      states,
+      loanId,
+      originalPrincipal,
+      interestRate,
+      payoffIndex,
+    );
 
     return {
       id: `loan-payoff-${loanId}-${payoffState.date.getTime()}`,
@@ -340,9 +379,11 @@ export class MilestoneDetector {
     states: FinancialState[],
     loanId: string,
     loanName: string,
-    originalPrincipal: number
+    originalPrincipal: number,
+    interestRate: number
   ): LoanPayoffMilestone | null {
     try {
+    const monthlyRate = interestRate / 100 / 12;
     let previousBalance = originalPrincipal;
     let totalInterestPaid = 0;
     let monthsToPayoff = 0;
@@ -363,16 +404,9 @@ export class MilestoneDetector {
 
       monthsToPayoff++;
 
-      // Calculate interest paid this period (approximation)
-      // Interest paid = payment - principal reduction
-      const principalReduction = previousBalance - currentBalance;
-      if (principalReduction > 0) {
-        // Estimate interest as the difference between payment and principal reduction
-        // This is an approximation since we don't have exact payment breakdown here
-        const estimatedPayment = principalReduction * 1.1; // Rough estimate
-        const estimatedInterest = Math.max(0, estimatedPayment - principalReduction);
-        totalInterestPaid += estimatedInterest;
-      }
+      // Estimate interest paid this period from the loan's actual rate,
+      // rather than an arbitrary markup unrelated to it.
+      totalInterestPaid += Math.max(0, previousBalance * monthlyRate);
 
       // Check if loan was paid off (balance went from positive to zero)
       if (previousBalance > 0 && currentBalance === 0) {
