@@ -485,6 +485,7 @@ export class RetirementAdviceEngine {
               loan,
               currentBalance,
               states,
+              params,
             ),
           );
         }
@@ -508,17 +509,46 @@ export class RetirementAdviceEngine {
   }
 
   /**
+   * Compares a loan's interest rate to the expected investment return rate.
+   * Extra debt repayment is a guaranteed, risk-free return equal to the loan's
+   * rate; when the expected investment return is meaningfully higher, investing
+   * the same money is expected to build more wealth, even though paying down
+   * debt is safer. Used to avoid recommending extra repayment as if it were
+   * always the better move.
+   */
+  private evaluateDebtVsInvestmentTradeoff(
+    loanRate: number,
+    investmentReturnRate: number,
+  ): { investingLikelyBetter: boolean; note: string } {
+    const rateGap = investmentReturnRate - loanRate;
+    const investingLikelyBetter = rateGap > 1; // >1 percentage point gap
+
+    const note = investingLikelyBetter
+      ? `Note: this loan's ${loanRate}% rate is lower than your ${investmentReturnRate}% expected investment return, so investing this money instead is expected to grow your net worth faster over time. Extra repayment here mainly buys a guaranteed, risk-free return and the peace of mind of being debt-free sooner — weigh that against the higher expected (but not guaranteed) return from investing.`
+      : "";
+
+    return { investingLikelyBetter, note };
+  }
+
+  /**
    * Generates loan acceleration advice for individual loans
    */
   private generateLoanAccelerationAdvice(
     loan: any,
     currentBalance: number,
     states: FinancialState[],
+    params: UserParameters,
   ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
     // Calculate potential extra payment amounts
     const extraPaymentOptions = [100, 250, 500, 1000];
+
+    const { investingLikelyBetter, note } = this
+      .evaluateDebtVsInvestmentTradeoff(
+        loan.interestRate,
+        params.investmentReturnRate,
+      );
 
     for (const extraPayment of extraPaymentOptions) {
       // Estimate time savings (simplified calculation)
@@ -544,10 +574,18 @@ export class RetirementAdviceEngine {
         currentPayment * monthlyRate;
 
       if (timeSavings > 0.5) { // Only suggest if saves at least 6 months
+        const priority: AdvicePriority = investingLikelyBetter
+          ? "low"
+          : extraPayment <= 250
+          ? "high"
+          : "medium";
+        const effectivenessScore = Math.min(95, (timeSavings / 5) * 100) *
+          (investingLikelyBetter ? 0.5 : 1); // Scale based on years saved
+
         advice.push({
           id: `debt-acceleration-${loan.id}-${extraPayment}`,
           category: "debt",
-          priority: extraPayment <= 250 ? "high" : "medium",
+          priority,
           title: `Accelerate ${loan.label} Payments (+${
             formatCurrency(extraPayment)
           }/month)`,
@@ -555,7 +593,9 @@ export class RetirementAdviceEngine {
             formatCurrency(extraPayment)
           } to your monthly ${loan.label} payment to save ${
             timeSavings.toFixed(1)
-          } years and ${formatCurrency(interestSavings)} in interest.`,
+          } years and ${
+            formatCurrency(interestSavings)
+          } in interest.${note ? ` ${note}` : ""}`,
           specificActions: [
             `Increase monthly payment from ${
               formatCurrency(currentPayment)
@@ -564,6 +604,11 @@ export class RetirementAdviceEngine {
             `Review budget to identify where extra ${
               formatCurrency(extraPayment)
             } can come from`,
+            ...(investingLikelyBetter
+              ? [
+                `Compare against investing the same amount instead, given the rate gap`,
+              ]
+              : []),
           ],
           projectedImpact: {
             timelineSavings: timeSavings,
@@ -573,7 +618,7 @@ export class RetirementAdviceEngine {
             extraPayment,
             states,
           ),
-          effectivenessScore: Math.min(95, (timeSavings / 5) * 100), // Scale based on years saved
+          effectivenessScore,
         });
       }
     }
@@ -595,6 +640,12 @@ export class RetirementAdviceEngine {
     const monthlyRate = params.loanInterestRate / 100 / 12;
     const currentPayment = params.loanPaymentAmount;
 
+    const { investingLikelyBetter, note } = this
+      .evaluateDebtVsInvestmentTradeoff(
+        params.loanInterestRate,
+        params.investmentReturnRate,
+      );
+
     for (const extraPayment of extraPaymentOptions) {
       const currentMonths = this.calculateLoanPayoffTime(
         currentBalance,
@@ -612,10 +663,18 @@ export class RetirementAdviceEngine {
         currentPayment * monthlyRate;
 
       if (timeSavings > 0.5) {
+        const priority: AdvicePriority = investingLikelyBetter
+          ? "low"
+          : extraPayment <= 250
+          ? "high"
+          : "medium";
+        const effectivenessScore = Math.min(95, (timeSavings / 5) * 100) *
+          (investingLikelyBetter ? 0.5 : 1);
+
         advice.push({
           id: `debt-acceleration-legacy-${extraPayment}`,
           category: "debt",
-          priority: extraPayment <= 250 ? "high" : "medium",
+          priority,
           title: `Accelerate Loan Payments (+${
             formatCurrency(extraPayment)
           }/month)`,
@@ -623,13 +682,20 @@ export class RetirementAdviceEngine {
             formatCurrency(extraPayment)
           } to your monthly loan payment to save ${
             timeSavings.toFixed(1)
-          } years and ${formatCurrency(interestSavings)} in interest.`,
+          } years and ${
+            formatCurrency(interestSavings)
+          } in interest.${note ? ` ${note}` : ""}`,
           specificActions: [
             `Increase monthly payment from ${
               formatCurrency(currentPayment)
             } to ${formatCurrency(currentPayment + extraPayment)}`,
             `Set up automatic extra payment`,
             `Review budget for extra ${formatCurrency(extraPayment)}`,
+            ...(investingLikelyBetter
+              ? [
+                `Compare against investing the same amount instead, given the rate gap`,
+              ]
+              : []),
           ],
           projectedImpact: {
             timelineSavings: timeSavings,
@@ -639,7 +705,7 @@ export class RetirementAdviceEngine {
             extraPayment,
             states,
           ),
-          effectivenessScore: Math.min(95, (timeSavings / 5) * 100),
+          effectivenessScore,
         });
       }
     }
@@ -683,15 +749,24 @@ export class RetirementAdviceEngine {
       currentStateIndex,
     );
 
-    // If there's cash sitting around that could be in offset
-    if (currentState.cash > 1000) {
+    // Reserve an emergency-fund buffer (3 months of living costs, minimum
+    // $2,000) rather than sweeping every dollar of cash into the offset -
+    // the offset still earns the loan's rate risk-free, but zeroing out
+    // cash entirely leaves no buffer for unexpected expenses.
+    const monthlyEssentialCosts = params.monthlyLivingExpenses +
+      params.monthlyRentOrMortgage;
+    const emergencyBuffer = Math.max(2000, monthlyEssentialCosts * 3);
+    const sweepableCash = currentState.cash - emergencyBuffer;
+
+    // If there's cash sitting around above the buffer that could be in offset
+    if (sweepableCash > 1000) {
       const interestRate = params.loans && params.loans.length > 0
         ? Math.max(...params.loans.map((loan) => loan.interestRate))
         : params.loanInterestRate;
 
       // Calculate savings only for the period when loans are active
       const yearsOfSavings = Math.min(loanPayoffTimeframe, 10); // Cap at 10 years for calculation
-      const annualSavings = currentState.cash * (interestRate / 100);
+      const annualSavings = sweepableCash * (interestRate / 100);
       const totalSavings = annualSavings * yearsOfSavings;
 
       // Only suggest if there's meaningful time left on the loans
@@ -708,14 +783,20 @@ export class RetirementAdviceEngine {
           priority: "high",
           title: "Optimize Offset Account Usage",
           description: `Move ${
-            formatCurrency(currentState.cash)
+            formatCurrency(sweepableCash)
           } from cash to offset account to save ${
             formatCurrency(annualSavings)
-          } annually in interest${timeframeText}.`,
+          } annually in interest${timeframeText}, while keeping ${
+            formatCurrency(emergencyBuffer)
+          } in cash as an emergency buffer.`,
           specificActions: [
-            "Transfer excess cash to offset account",
-            "Set up automatic sweep from transaction account to offset",
-            "Review cash flow needs to maintain appropriate buffer",
+            `Transfer ${
+              formatCurrency(sweepableCash)
+            } to offset account, keeping ${
+              formatCurrency(emergencyBuffer)
+            } (about 3 months of essential costs) in cash`,
+            "Set up automatic sweep from transaction account to offset once the buffer is met",
+            "Revisit the buffer size if your income or expenses change materially",
             yearsOfSavings < 10
               ? `Note: Loan will be paid off in approximately ${
                 yearsOfSavings.toFixed(1)

@@ -544,6 +544,16 @@ function RetirementAdvicePanelCore({
         </div>
       </div>
 
+      {/* Disclaimer */}
+      <div class="rounded-lg p-3 mb-6 bg-gray-50 border border-gray-200 flex items-start gap-2">
+        <span class="text-base leading-none" role="img" aria-label="info">ℹ️</span>
+        <p class="text-xs text-gray-600">
+          These recommendations are automatically generated from your simulation inputs for general
+          educational purposes only. They are not personalized financial advice. Consider your full
+          financial picture and consult a licensed financial advisor before acting on them.
+        </p>
+      </div>
+
       {/* Overall Assessment */}
       <div class={`rounded-lg p-4 mb-6 ${assessmentColors.bg} border ${assessmentColors.badge.includes('green') ? 'border-green-200' : assessmentColors.badge.includes('yellow') ? 'border-yellow-200' : 'border-red-200'}`}>
         <div class="flex items-center gap-3 mb-3">

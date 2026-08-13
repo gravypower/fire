@@ -204,6 +204,125 @@ Deno.test("RetirementAdviceEngine - handles household mode correctly", () => {
   assertEquals(advice.errors.length, 0);
 });
 
+Deno.test("RetirementAdviceEngine - downgrades debt payoff advice when investing beats the loan rate", () => {
+  const engine = new RetirementAdviceEngine();
+  const params = getTestParameters({
+    loanInterestRate: 3, // cheap mortgage
+    loanPaymentAmount: 1200,
+    investmentReturnRate: 7, // meaningfully higher expected return
+    monthlyLivingExpenses: 3000,
+    monthlyRentOrMortgage: 0,
+  });
+
+  // Cash stays below the offset buffer threshold so only debt-acceleration
+  // advice is exercised, not the offset-account advice.
+  const states: FinancialState[] = Array.from({ length: 15 }, (_, i) => ({
+    date: new Date(2024, i, 1),
+    cash: 5000,
+    investments: 10000,
+    superannuation: 50000,
+    loanBalance: 200000,
+    offsetBalance: 0,
+    netWorth: -140000,
+    cashFlow: 2000,
+    taxPaid: 1000,
+    expenses: 3000,
+    interestSaved: 0,
+    deductibleInterest: 0,
+  }));
+
+  const debtAdvice = engine.analyzeDebtStrategy(states, params);
+  const accelerationAdvice = debtAdvice.filter((a) =>
+    a.id.startsWith("debt-acceleration-legacy-")
+  );
+
+  assert(accelerationAdvice.length > 0, "Should generate debt advice");
+  for (const item of accelerationAdvice) {
+    assertEquals(item.priority, "low");
+    assert(
+      item.description.includes("expected"),
+      `Expected a debt-vs-invest note in: ${item.description}`,
+    );
+  }
+});
+
+Deno.test("RetirementAdviceEngine - keeps debt payoff advice at full priority when the loan rate beats investing", () => {
+  const engine = new RetirementAdviceEngine();
+  const params = getTestParameters({
+    loanInterestRate: 9, // expensive debt
+    loanPaymentAmount: 1200,
+    investmentReturnRate: 7,
+    monthlyLivingExpenses: 3000,
+    monthlyRentOrMortgage: 0,
+  });
+
+  const states: FinancialState[] = Array.from({ length: 15 }, (_, i) => ({
+    date: new Date(2024, i, 1),
+    cash: 5000,
+    investments: 10000,
+    superannuation: 50000,
+    loanBalance: 200000,
+    offsetBalance: 0,
+    netWorth: -140000,
+    cashFlow: 2000,
+    taxPaid: 1000,
+    expenses: 3000,
+    interestSaved: 0,
+    deductibleInterest: 0,
+  }));
+
+  const debtAdvice = engine.analyzeDebtStrategy(states, params);
+  const accelerationAdvice = debtAdvice.filter((a) =>
+    a.id.startsWith("debt-acceleration-legacy-")
+  );
+
+  assert(accelerationAdvice.length > 0, "Should generate debt advice");
+  for (const item of accelerationAdvice) {
+    assert(
+      !item.description.includes("expected"),
+      `Should not include a debt-vs-invest note in: ${item.description}`,
+    );
+  }
+  // At least the smallest extra-payment option should stay high priority
+  assert(accelerationAdvice.some((a) => a.priority === "high"));
+});
+
+Deno.test("RetirementAdviceEngine - offset advice reserves an emergency buffer instead of sweeping all cash", () => {
+  const engine = new RetirementAdviceEngine();
+  const params = getTestParameters({
+    useOffsetAccount: true,
+    loanInterestRate: 5,
+    loanPaymentAmount: 1200,
+    monthlyLivingExpenses: 3000,
+    monthlyRentOrMortgage: 1000, // buffer = (3000+1000) * 3 = 12000
+  });
+
+  const cash = 50000;
+  const states: FinancialState[] = Array.from({ length: 15 }, (_, i) => ({
+    date: new Date(2024, i, 1),
+    cash,
+    investments: 10000,
+    superannuation: 50000,
+    loanBalance: 200000,
+    offsetBalance: 0,
+    netWorth: -140000,
+    cashFlow: 2000,
+    taxPaid: 1000,
+    expenses: 3000,
+    interestSaved: 0,
+    deductibleInterest: 0,
+  }));
+
+  const debtAdvice = engine.analyzeDebtStrategy(states, params);
+  const offsetAdvice = debtAdvice.find((a) => a.id === "offset-optimization-cash");
+
+  assertExists(offsetAdvice, "Should generate offset advice");
+  // Should recommend sweeping cash minus the buffer ($38,000), not all $50,000
+  assert(offsetAdvice!.description.includes("$38,000.00"));
+  assert(!offsetAdvice!.description.includes("$50,000.00"));
+  assert(offsetAdvice!.description.includes("$12,000.00"));
+});
+
 Deno.test("RetirementAdviceEngine - handles errors gracefully", () => {
   const engine = new RetirementAdviceEngine();
   const params = getTestParameters();
