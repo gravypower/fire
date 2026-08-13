@@ -44,6 +44,7 @@ export enum SimulationEventType {
   // Investment phase
   INVESTMENT_CONTRIBUTION = "investment_contribution",
   INVESTMENT_GROWTH = "investment_growth",
+  PLANNED_SALE_EXECUTED = "planned_sale_executed",
 
   // Super phase
   SUPER_CONTRIBUTION = "super_contribution",
@@ -188,7 +189,8 @@ export interface LoanPaymentEvent extends SimulationEvent {
 export interface InvestmentTransactionEvent extends SimulationEvent {
   type:
     | SimulationEventType.INVESTMENT_CONTRIBUTION
-    | SimulationEventType.INVESTMENT_GROWTH;
+    | SimulationEventType.INVESTMENT_GROWTH
+    | SimulationEventType.PLANNED_SALE_EXECUTED;
   phase: SimulationPhase.INVESTMENT;
   data: {
     holdingId?: string;
@@ -198,6 +200,7 @@ export interface InvestmentTransactionEvent extends SimulationEvent {
     contribution?: number;
     growth?: number;
     returnRate?: number;
+    amountSold?: number;
   };
 }
 

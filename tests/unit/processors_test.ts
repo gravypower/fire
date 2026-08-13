@@ -3,7 +3,7 @@
  * Tests income, expense, loan, investment, and retirement calculations
  */
 
-import { assertEquals, assertExists } from "$std/assert/mod.ts";
+import { assert, assertEquals, assertExists } from "$std/assert/mod.ts";
 import {
   IncomeProcessor,
   ExpenseProcessor,
@@ -14,6 +14,7 @@ import {
   DEFAULT_AU_TAX_BRACKETS,
 } from "../../lib/processors.ts";
 import type { UserParameters, FinancialState, TaxBracket } from "../../types/financial.ts";
+import type { PlannedSale } from "../../types/investments.ts";
 
 /**
  * Helper to create test parameters
@@ -385,7 +386,160 @@ Deno.test("RetirementCalculator.findRetirementDate - not achievable", () => {
     30,
     35
   );
-  
+
   assertEquals(result.date, null);
   assertEquals(result.age, null);
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - once fires exactly once, not before or after", () => {
+  const sale: PlannedSale = {
+    id: "s1",
+    startDate: "2025-06-15",
+    frequency: "once",
+    mode: "fixed-amount",
+    amount: 5000,
+  };
+
+  // Before the sale date
+  assertEquals(
+    InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-01-01"), new Date("2025-02-01")),
+    0,
+  );
+
+  // Period containing the sale date
+  assertEquals(
+    InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-06-01"), new Date("2025-07-01")),
+    5000,
+  );
+
+  // After - should not fire again
+  assertEquals(
+    InvestmentProcessor.calculatePlannedSaleAmount(sale, 95000, new Date("2025-07-01"), new Date("2025-08-01")),
+    0,
+  );
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - clamps a fixed amount to the available balance", () => {
+  const sale: PlannedSale = {
+    id: "s1",
+    startDate: "2025-06-15",
+    frequency: "once",
+    mode: "fixed-amount",
+    amount: 50000,
+  };
+
+  assertEquals(
+    InvestmentProcessor.calculatePlannedSaleAmount(sale, 10000, new Date("2025-06-01"), new Date("2025-07-01")),
+    10000,
+  );
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - yearly percent-of-balance tapers year over year", () => {
+  const sale: PlannedSale = {
+    id: "s1",
+    startDate: "2025-01-01",
+    frequency: "yearly",
+    mode: "percent-of-balance",
+    amount: 20,
+  };
+
+  let balance = 100000;
+
+  // Each window is deliberately wider than one year so it comfortably
+  // straddles the occurrence boundary regardless of leap-year noise, and
+  // tiles into the next window with no gap or overlap.
+  const y1 = InvestmentProcessor.calculatePlannedSaleAmount(sale, balance, new Date("2025-01-01"), new Date("2026-02-01"));
+  assertEquals(y1, 20000); // 20% of 100,000
+  balance -= y1;
+
+  const y2 = InvestmentProcessor.calculatePlannedSaleAmount(sale, balance, new Date("2026-02-01"), new Date("2027-02-01"));
+  assertEquals(y2, 16000); // 20% of the remaining 80,000
+  balance -= y2;
+
+  const y3 = InvestmentProcessor.calculatePlannedSaleAmount(sale, balance, new Date("2027-02-01"), new Date("2028-02-01"));
+  assertEquals(y3, 12800); // 20% of the remaining 64,000
+  balance -= y3;
+
+  assertEquals(balance, 51200);
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - half-yearly fixed amount fires twice a year", () => {
+  const sale: PlannedSale = {
+    id: "s1",
+    startDate: "2025-01-01",
+    frequency: "half-yearly",
+    mode: "fixed-amount",
+    amount: 5000,
+  };
+
+  const first = InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-01-01"), new Date("2025-08-01"));
+  assertEquals(first, 5000);
+
+  const second = InvestmentProcessor.calculatePlannedSaleAmount(sale, 95000, new Date("2025-08-01"), new Date("2026-02-01"));
+  assertEquals(second, 5000);
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - respects endDate", () => {
+  const sale: PlannedSale = {
+    id: "s1",
+    startDate: "2025-01-01",
+    endDate: "2026-06-01",
+    frequency: "yearly",
+    mode: "fixed-amount",
+    amount: 1000,
+  };
+
+  // First occurrence, before endDate, should fire
+  const beforeEnd = InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-01-01"), new Date("2026-02-01"));
+  assertEquals(beforeEnd, 1000);
+
+  // Occurrence that would be well after endDate should not fire
+  const afterEnd = InvestmentProcessor.calculatePlannedSaleAmount(sale, 99000, new Date("2027-01-01"), new Date("2028-01-01"));
+  assertEquals(afterEnd, 0);
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - a depleted holding never fires", () => {
+  const sale: PlannedSale = {
+    id: "s1",
+    startDate: "2025-06-15",
+    frequency: "once",
+    mode: "fixed-amount",
+    amount: 5000,
+  };
+
+  assertEquals(
+    InvestmentProcessor.calculatePlannedSaleAmount(sale, 0, new Date("2025-06-01"), new Date("2025-07-01")),
+    0,
+  );
+});
+
+Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - multiple rules on the same holding are independent", () => {
+  const lumpSum: PlannedSale = {
+    id: "s1",
+    startDate: "2025-06-15",
+    frequency: "once",
+    mode: "fixed-amount",
+    amount: 20000,
+  };
+  const drawdown: PlannedSale = {
+    id: "s2",
+    startDate: "2025-01-01",
+    frequency: "yearly",
+    mode: "percent-of-balance",
+    amount: 10,
+  };
+
+  let balance = 100000;
+  const periodStart = new Date("2025-01-01");
+  const periodEnd = new Date("2026-02-01");
+
+  const lumpSumAmount = InvestmentProcessor.calculatePlannedSaleAmount(lumpSum, balance, periodStart, periodEnd);
+  balance -= lumpSumAmount;
+  const drawdownAmount = InvestmentProcessor.calculatePlannedSaleAmount(drawdown, balance, periodStart, periodEnd);
+  balance -= drawdownAmount;
+
+  assertEquals(lumpSumAmount, 20000);
+  assertEquals(drawdownAmount, 8000); // 10% of the remaining 80,000 after the lump sum
+  assertEquals(balance, 72000);
+  assert(lumpSumAmount + drawdownAmount < 100000); // never oversold the holding
 });

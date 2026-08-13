@@ -5,9 +5,24 @@
 
 import { useState } from "preact/hooks";
 import type { SimulationConfiguration } from "../types/financial.ts";
-import type { InvestmentHolding, InvestmentPurchase, InvestmentSale, InvestmentType } from "../types/investments.ts";
+import type {
+  InvestmentHolding,
+  InvestmentPurchase,
+  InvestmentSale,
+  InvestmentType,
+  PlannedSale,
+  PlannedSaleFrequency,
+} from "../types/investments.ts";
 import { INVESTMENT_TYPE_INFO, INVESTMENT_TEMPLATES } from "../types/investments.ts";
 import { sellFromPurchases, totalRealizedGainLoss } from "../lib/investment_ledger_utils.ts";
+
+const PLANNED_SALE_FREQUENCY_LABELS: Record<PlannedSaleFrequency, string> = {
+  once: "Once",
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  "half-yearly": "Every 6 Months",
+  yearly: "Yearly",
+};
 
 interface InvestmentManagerIslandProps {
   config: SimulationConfiguration;
@@ -31,6 +46,9 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
     fees?: number;
   }>({ date: new Date().toISOString().split("T")[0] });
   const [sellError, setSellError] = useState<string | null>(null);
+  const [isAddingPlannedSale, setIsAddingPlannedSale] = useState<string | null>(null);
+  const [plannedSaleFormData, setPlannedSaleFormData] = useState<Partial<PlannedSale>>({});
+  const [plannedSaleError, setPlannedSaleError] = useState<string | null>(null);
 
   const investments = config.baseParameters.investmentHoldings || [];
 
@@ -317,6 +335,107 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
     });
 
     cancelSellForm();
+  };
+
+  // Planned sale (forward-looking drawdown rule) management
+  const startAddPlannedSale = (investmentId: string) => {
+    setIsAddingPlannedSale(investmentId);
+    setPlannedSaleFormData({
+      startDate: new Date().toISOString().split("T")[0],
+      frequency: "once",
+      mode: "fixed-amount",
+    });
+    setPlannedSaleError(null);
+  };
+
+  const cancelPlannedSaleForm = () => {
+    setIsAddingPlannedSale(null);
+    setPlannedSaleFormData({});
+    setPlannedSaleError(null);
+  };
+
+  const savePlannedSale = (investmentId: string) => {
+    const { startDate, endDate, frequency, mode, amount, notes } = plannedSaleFormData;
+
+    if (!startDate) {
+      setPlannedSaleError("Please enter a start date");
+      return;
+    }
+    if (!frequency) {
+      setPlannedSaleError("Please select a frequency");
+      return;
+    }
+    if (!mode) {
+      setPlannedSaleError("Please select fixed amount or percent of balance");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      setPlannedSaleError("Please enter a valid amount");
+      return;
+    }
+    if (mode === "percent-of-balance" && amount > 100) {
+      setPlannedSaleError("Percent of balance must be 100 or less");
+      return;
+    }
+
+    const newPlannedSale: PlannedSale = {
+      id: `planned-sale-${Date.now()}`,
+      startDate,
+      endDate: endDate || undefined,
+      frequency,
+      mode,
+      amount,
+      notes: notes || undefined,
+    };
+
+    const updatedInvestments = investments.map((inv) =>
+      inv.id === investmentId
+        ? { ...inv, plannedSales: [...(inv.plannedSales || []), newPlannedSale] }
+        : inv
+    );
+
+    onConfigChange({
+      ...config,
+      baseParameters: {
+        ...config.baseParameters,
+        investmentHoldings: updatedInvestments,
+      },
+    });
+
+    cancelPlannedSaleForm();
+  };
+
+  const removePlannedSale = (investmentId: string, plannedSaleId: string) => {
+    if (!confirm("Remove this planned sale rule?")) return;
+
+    const updatedInvestments = investments.map((inv) =>
+      inv.id === investmentId
+        ? { ...inv, plannedSales: (inv.plannedSales || []).filter((s) => s.id !== plannedSaleId) }
+        : inv
+    );
+
+    onConfigChange({
+      ...config,
+      baseParameters: {
+        ...config.baseParameters,
+        investmentHoldings: updatedInvestments,
+      },
+    });
+  };
+
+  const describePlannedSale = (sale: PlannedSale): string => {
+    const amountLabel = sale.mode === "fixed-amount"
+      ? `$${sale.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+      : `${sale.amount}% of balance`;
+    const startLabel = new Date(sale.startDate).toLocaleDateString();
+
+    if (sale.frequency === "once") {
+      return `${amountLabel}, once on ${startLabel}`;
+    }
+
+    const freqLabel = PLANNED_SALE_FREQUENCY_LABELS[sale.frequency].toLowerCase();
+    const endLabel = sale.endDate ? ` until ${new Date(sale.endDate).toLocaleDateString()}` : "";
+    return `${amountLabel}, ${freqLabel} from ${startLabel}${endLabel}`;
   };
 
   // Update current price manually
@@ -1042,6 +1161,140 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                             </div>
                           ) : (
                             <p class="text-xs text-gray-500 text-center py-3">No transactions recorded yet</p>
+                          )}
+                        </div>
+
+                        {/* Planned Sales - forward-looking rules the simulation applies */}
+                        <div class="mb-4">
+                          <div class="flex items-center justify-between mb-2">
+                            <h5 class="text-sm font-semibold text-gray-700">Planned Sales (Simulation)</h5>
+                            {isAddingPlannedSale !== investment.id && (
+                              <button
+                                onClick={() => startAddPlannedSale(investment.id)}
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+                              >
+                                + Add Planned Sale
+                              </button>
+                            )}
+                          </div>
+                          <p class="text-xs text-gray-500 mb-2">
+                            One-off or recurring drawdowns the simulation will apply to this holding as it projects forward.
+                          </p>
+
+                          {isAddingPlannedSale === investment.id && (
+                            <div class="mb-3 p-3 bg-purple-50 border border-purple-200 rounded">
+                              <h6 class="text-xs font-semibold text-gray-700 mb-2">New Planned Sale</h6>
+                              <div class="grid grid-cols-3 gap-2 mb-2">
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Start Date</label>
+                                  <input
+                                    type="date"
+                                    value={plannedSaleFormData.startDate || ""}
+                                    onInput={(e) => setPlannedSaleFormData({ ...plannedSaleFormData, startDate: (e.target as HTMLInputElement).value })}
+                                    class="input-field text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Frequency</label>
+                                  <select
+                                    value={plannedSaleFormData.frequency || "once"}
+                                    onChange={(e) => setPlannedSaleFormData({ ...plannedSaleFormData, frequency: (e.target as HTMLSelectElement).value as PlannedSaleFrequency })}
+                                    class="input-field text-xs"
+                                  >
+                                    {Object.entries(PLANNED_SALE_FREQUENCY_LABELS).map(([value, label]) => (
+                                      <option key={value} value={value}>{label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">End Date (optional)</label>
+                                  <input
+                                    type="date"
+                                    value={plannedSaleFormData.endDate || ""}
+                                    onInput={(e) => setPlannedSaleFormData({ ...plannedSaleFormData, endDate: (e.target as HTMLInputElement).value || undefined })}
+                                    disabled={plannedSaleFormData.frequency === "once"}
+                                    class="input-field text-xs disabled:bg-gray-100 disabled:text-gray-400"
+                                  />
+                                </div>
+                              </div>
+                              <div class="grid grid-cols-3 gap-2 mb-2">
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Type</label>
+                                  <select
+                                    value={plannedSaleFormData.mode || "fixed-amount"}
+                                    onChange={(e) => setPlannedSaleFormData({ ...plannedSaleFormData, mode: (e.target as HTMLSelectElement).value as "fixed-amount" | "percent-of-balance" })}
+                                    class="input-field text-xs"
+                                  >
+                                    <option value="fixed-amount">Fixed $ Amount</option>
+                                    <option value="percent-of-balance">% of Balance</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">
+                                    {plannedSaleFormData.mode === "percent-of-balance" ? "Percent (%)" : "Amount ($)"}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={plannedSaleFormData.amount ?? ""}
+                                    onInput={(e) => setPlannedSaleFormData({ ...plannedSaleFormData, amount: parseFloat((e.target as HTMLInputElement).value) || undefined })}
+                                    class="input-field text-xs"
+                                    step={plannedSaleFormData.mode === "percent-of-balance" ? "1" : "100"}
+                                    max={plannedSaleFormData.mode === "percent-of-balance" ? 100 : undefined}
+                                  />
+                                </div>
+                                <div>
+                                  <label class="block text-xs text-gray-600 mb-1">Notes</label>
+                                  <input
+                                    type="text"
+                                    value={plannedSaleFormData.notes || ""}
+                                    onInput={(e) => setPlannedSaleFormData({ ...plannedSaleFormData, notes: (e.target as HTMLInputElement).value })}
+                                    class="input-field text-xs"
+                                    placeholder="Optional"
+                                  />
+                                </div>
+                              </div>
+                              {plannedSaleError && (
+                                <p class="text-xs text-red-600 mb-2">{plannedSaleError}</p>
+                              )}
+                              <div class="flex gap-2">
+                                <button
+                                  onClick={() => savePlannedSale(investment.id)}
+                                  class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+                                >
+                                  Save Planned Sale
+                                </button>
+                                <button
+                                  onClick={cancelPlannedSaleForm}
+                                  class="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {(investment.plannedSales || []).length > 0 ? (
+                            <div class="space-y-2">
+                              {(investment.plannedSales || []).map((plannedSale) => (
+                                <div key={plannedSale.id} class="flex items-center justify-between p-2 bg-purple-50 rounded text-xs">
+                                  <div>
+                                    <p class="font-medium text-gray-800">{describePlannedSale(plannedSale)}</p>
+                                    {plannedSale.notes && <p class="text-gray-500 mt-0.5">{plannedSale.notes}</p>}
+                                  </div>
+                                  <button
+                                    onClick={() => removePlannedSale(investment.id, plannedSale.id)}
+                                    class="px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-100 rounded"
+                                    title="Remove planned sale"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            isAddingPlannedSale !== investment.id && (
+                              <p class="text-xs text-gray-500 text-center py-3">No planned sales configured</p>
+                            )
                           )}
                         </div>
 

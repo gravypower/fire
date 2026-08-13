@@ -85,6 +85,42 @@ export interface InvestmentSale {
 }
 
 /**
+ * How often a planned sale recurs. "once" fires a single time on startDate;
+ * the others fire repeatedly on that cadence from startDate until endDate
+ * (or the simulation ends / the holding is depleted).
+ */
+export type PlannedSaleFrequency = "once" | "monthly" | "quarterly" | "half-yearly" | "yearly";
+
+/**
+ * A forward-looking rule telling the simulation to sell down part of a
+ * holding at a given date or on a recurring cadence - unlike InvestmentSale
+ * (a record of a sale that already happened), this is applied by the
+ * simulation engine itself as it projects forward.
+ */
+export interface PlannedSale {
+  /** Unique identifier for this rule */
+  id: string;
+
+  /** First (or only, for frequency "once") occurrence */
+  startDate: string;
+
+  /** Optional cutoff for recurring rules; omit to continue until the simulation ends or the holding is depleted */
+  endDate?: string;
+
+  /** How often this rule fires */
+  frequency: PlannedSaleFrequency;
+
+  /** Whether amount is a dollar figure or a percentage of the holding's balance at the time */
+  mode: "fixed-amount" | "percent-of-balance";
+
+  /** Dollars (fixed-amount) or percent 0-100 (percent-of-balance), applied per occurrence */
+  amount: number;
+
+  /** Notes about this rule */
+  notes?: string;
+}
+
+/**
  * Individual investment holding
  */
 export interface InvestmentHolding {
@@ -145,6 +181,9 @@ export interface InvestmentHolding {
 
   /** Array of sales/disposals for this investment */
   sales?: InvestmentSale[];
+
+  /** Forward-looking rules for the simulation to apply (one-off or recurring drawdowns) */
+  plannedSales?: PlannedSale[];
 
   /** Last time price was fetched from API */
   lastPriceFetch?: string;

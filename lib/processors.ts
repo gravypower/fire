@@ -12,6 +12,7 @@ import type {
   UserParameters,
 } from "../types/financial.ts";
 import { ExpenseItem } from "../types/expenses.ts";
+import type { PlannedSale } from "../types/investments.ts";
 
 /**
  * Whether any person in the household has explicit income sources configured.
@@ -837,6 +838,72 @@ export const InvestmentProcessor = {
       default:
         return amount * 12;
     }
+  },
+
+  /**
+   * Calculates the dollar amount a planned sale rule withdraws from a holding
+   * during the period (periodStart, periodEnd].
+   *
+   * "once" rules fire a single time on startDate. Recurring rules fire on a
+   * fixed cadence from startDate - firing is detected by converting elapsed
+   * time since startDate into "occurrences" (using the same day-count
+   * convention as the rest of the engine: 30.4375 days/month, 365.25
+   * days/year) and checking whether an integer occurrence boundary falls
+   * within this period. This is independent of the simulation's own step
+   * size, so it's correct whether the engine advances weekly, monthly, etc.
+   *
+   * percent-of-balance is evaluated against currentBalance (the balance at
+   * the moment this occurrence fires), so a recurring "20%/year" rule
+   * naturally tapers rather than driving the balance negative.
+   */
+  calculatePlannedSaleAmount(
+    sale: PlannedSale,
+    currentBalance: number,
+    periodStart: Date,
+    periodEnd: Date,
+  ): number {
+    if (currentBalance <= 0) {
+      return 0;
+    }
+
+    const start = new Date(sale.startDate);
+    const end = sale.endDate ? new Date(sale.endDate) : null;
+
+    if (periodEnd <= start) {
+      return 0;
+    }
+    if (end && periodStart >= end) {
+      return 0;
+    }
+
+    let fires: boolean;
+
+    if (sale.frequency === "once") {
+      fires = start > periodStart && start <= periodEnd;
+    } else {
+      const daysPerOccurrence: Record<Exclude<PlannedSale["frequency"], "once">, number> = {
+        monthly: 30.4375,
+        quarterly: 91.3125,
+        "half-yearly": 182.625,
+        yearly: 365.25,
+      };
+      const msPerOccurrence = daysPerOccurrence[sale.frequency] * 24 * 60 * 60 * 1000;
+
+      const elapsedAtStart = (periodStart.getTime() - start.getTime()) / msPerOccurrence;
+      const elapsedAtEnd = (periodEnd.getTime() - start.getTime()) / msPerOccurrence;
+
+      fires = elapsedAtEnd >= 0 && Math.floor(elapsedAtEnd) > Math.floor(elapsedAtStart);
+    }
+
+    if (!fires) {
+      return 0;
+    }
+
+    const rawAmount = sale.mode === "fixed-amount"
+      ? sale.amount
+      : currentBalance * (sale.amount / 100);
+
+    return Math.max(0, Math.min(rawAmount, currentBalance));
   },
 };
 

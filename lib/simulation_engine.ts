@@ -770,6 +770,57 @@ export const SimulationEngine = {
       }
     }
 
+    // Apply any planned sale rules due this period (one-off or recurring
+    // drawdowns configured on an individual holding). Only meaningful for
+    // the individual-holdings model, since that's the only place a planned
+    // sale can be attached to a specific balance.
+    if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+      const periodEnd = advanceDate(currentState.date, interval);
+
+      for (const holding of params.investmentHoldings) {
+        if (!holding.plannedSales || holding.plannedSales.length === 0) {
+          continue;
+        }
+
+        let holdingBalance = investmentBalances[holding.id] ?? holding.currentValue;
+        const balanceBefore = holdingBalance;
+        let totalSold = 0;
+
+        for (const plannedSale of holding.plannedSales) {
+          const soldAmount = InvestmentProcessor.calculatePlannedSaleAmount(
+            plannedSale,
+            holdingBalance,
+            currentState.date,
+            periodEnd,
+          );
+          if (soldAmount > 0) {
+            holdingBalance -= soldAmount;
+            totalSold += soldAmount;
+          }
+        }
+
+        if (totalSold > 0) {
+          investmentBalances[holding.id] = holdingBalance;
+          investments -= totalSold;
+          cash += totalSold;
+
+          eventCollector.emit({
+            type: SimulationEventType.PLANNED_SALE_EXECUTED,
+            timestamp: new Date(currentState.date),
+            phase: SimulationPhase.INVESTMENT,
+            description: `Planned sale of $${totalSold.toFixed(2)} from ${holding.name}`,
+            data: {
+              holdingId: holding.id,
+              holdingLabel: holding.name,
+              balanceBefore,
+              balanceAfter: holdingBalance,
+              amountSold: totalSold,
+            },
+          });
+        }
+      }
+    }
+
     eventCollector.emit({
       type: SimulationEventType.PHASE_END,
       timestamp: new Date(currentState.date),

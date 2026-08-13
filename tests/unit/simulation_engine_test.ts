@@ -481,3 +481,86 @@ Deno.test("SimulationEngine.checkSustainability - detects sustainable scenarios"
   // Should be sustainable with good income
   assertEquals(result.isSustainable, true);
 });
+
+Deno.test("SimulationEngine.runSimulation - applies a one-off planned sale on the holding", () => {
+  const params = getTestParameters();
+  params.simulationYears = 3;
+  params.investmentHoldings = [{
+    id: "holding-1",
+    name: "Test ETF",
+    type: "etf",
+    currentValue: 100000,
+    returnRate: 0, // Isolate the sale's effect from growth
+    enabled: true,
+    plannedSales: [{
+      id: "sale-1",
+      startDate: "2025-06-01",
+      frequency: "once",
+      mode: "fixed-amount",
+      amount: 20000,
+    }],
+  }];
+
+  const result = SimulationEngine.runSimulation(params);
+
+  // Skip states[0] (the hand-constructed initial state, before any timestep
+  // has run) since it has no investmentBalances map populated yet
+  const steppedStates = result.states.slice(1);
+  const beforeSale = steppedStates.find((s) => s.date < new Date("2025-06-01"))!;
+  const afterSale = steppedStates.find((s) =>
+    s.date >= new Date("2025-06-01") && s.date < new Date("2025-07-01")
+  )!;
+  const wellAfterSale = result.states[result.states.length - 1];
+
+  const holdingBefore = beforeSale.investmentBalances!["holding-1"];
+  const holdingAfter = afterSale.investmentBalances!["holding-1"];
+
+  // The holding drops by (approximately) the sale amount, and never again
+  assert(holdingBefore - holdingAfter >= 19999 && holdingBefore - holdingAfter <= 20001);
+  const holdingFinal = wellAfterSale.investmentBalances!["holding-1"];
+  assert(Math.abs(holdingFinal - holdingAfter) < 1); // no further drawdown after the one-off fires
+
+  // Cash increases by the same amount the holding lost
+  assert(afterSale.cash - beforeSale.cash >= 19000); // net of normal monthly cash flow, still clearly reflects the ~$20k injection
+});
+
+Deno.test("SimulationEngine.runSimulation - recurring yearly percent drawdown tapers the holding", () => {
+  const params = getTestParameters();
+  params.simulationYears = 3;
+  params.annualSalary = 0; // Retired, no other cash flow complicating the check
+  params.monthlyLivingExpenses = 0;
+  params.loanPaymentAmount = 0;
+  params.monthlyInvestmentContribution = 0;
+  params.currentInvestmentBalance = 0;
+  params.currentSuperBalance = 0;
+  params.superContributionRate = 0;
+  params.investmentHoldings = [{
+    id: "holding-1",
+    name: "Drawdown Holding",
+    type: "etf",
+    currentValue: 100000,
+    returnRate: 0, // Isolate the drawdown's effect from growth
+    enabled: true,
+    plannedSales: [{
+      id: "drawdown-1",
+      startDate: "2024-01-01",
+      frequency: "yearly",
+      mode: "percent-of-balance",
+      amount: 20,
+    }],
+  }];
+
+  const result = SimulationEngine.runSimulation(params);
+
+  const finalBalance = result.states[result.states.length - 1]
+    .investmentBalances!["holding-1"];
+
+  // Never fully depletes - each occurrence only takes 20% of what's left
+  assert(finalBalance > 0);
+  // After ~3 years of 20%/year, well below the original 100,000 but not
+  // anywhere near zero (roughly 0.8^3 = 51.2% would remain with exact
+  // calendar-year firing; allow a wide band for the occurrence-timing
+  // approximation)
+  assert(finalBalance < 90000);
+  assert(finalBalance > 30000);
+});
