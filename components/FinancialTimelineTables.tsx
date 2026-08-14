@@ -4,7 +4,9 @@
 
 import type { FinancialState, TransitionPoint } from "../types/financial.ts";
 import type { Milestone } from "../types/milestones.ts";
+import type { CountryCode } from "../types/country_module.ts";
 import { formatCurrency } from "../lib/result_utils.ts";
+import { getCountryModule } from "../lib/tax_modules/index.ts";
 
 interface TableProps {
   states: Array<
@@ -20,6 +22,9 @@ interface TableProps {
   retirementDate?: Date;
   allStates: FinancialState[];
   milestones?: Milestone[];
+  /** Active country - determines the retirement-account column label
+   *  (e.g. "Superannuation" vs "401k / IRA"). Defaults to Australia. */
+  country?: CountryCode;
 }
 
 function getEventInfo(
@@ -375,12 +380,14 @@ export function LoansTable(
 }
 
 export function InvestmentsTable(
-  { states, transitionPoints, retirementDate, allStates, milestones = [] }:
+  { states, transitionPoints, retirementDate, allStates, milestones = [], country }:
     TableProps,
 ) {
   const finalState = states[states.length - 1];
   const finalCashAvailable = (finalState?.cash || 0) +
     (finalState?.offsetBalance || 0);
+  const retirementAccountLabel = getCountryModule(country)
+    .retirementAccountLabel;
 
   return (
     <div class="overflow-x-auto rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
@@ -400,7 +407,7 @@ export function InvestmentsTable(
               </div>
             </th>
             <th class="text-right sticky-header bg-gray-50">
-              <div>Superannuation</div>
+              <div>{retirementAccountLabel}</div>
               <div class="text-xs font-normal text-gray-500 mt-1">
                 {formatCurrency(finalState?.superannuation || 0)}
               </div>

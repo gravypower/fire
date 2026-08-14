@@ -7,7 +7,6 @@ import type {
   FinancialState,
   IncomeSource,
   PaymentFrequency,
-  TaxBracket,
   TimeInterval,
   UserParameters,
 } from "../types/financial.ts";
@@ -68,48 +67,14 @@ function convertAnnualRateToInterval(
   return Math.pow(1 + annualRate, 1 / periodsPerYear) - 1;
 }
 
-/**
- * Calculates tax using progressive tax brackets
- * @param income Annual income amount
- * @param brackets Tax brackets to apply
- * @returns Total tax amount
- */
-export function calculateTaxWithBrackets(
-  income: number,
-  brackets: TaxBracket[],
-): number {
-  let totalTax = 0;
-
-  for (const bracket of brackets) {
-    const bracketMin = bracket.min;
-    const bracketMax = bracket.max ?? Infinity;
-
-    if (income <= bracketMin) {
-      // Income doesn't reach this bracket
-      break;
-    }
-
-    // Calculate taxable amount in this bracket
-    const taxableInBracket = Math.min(income, bracketMax) - bracketMin;
-
-    if (taxableInBracket > 0) {
-      totalTax += taxableInBracket * (bracket.rate / 100);
-    }
-  }
-
-  return totalTax;
-}
-
-/**
- * Default Australian tax brackets for 2024-25
- */
-export const DEFAULT_AU_TAX_BRACKETS: TaxBracket[] = [
-  { min: 0, max: 18200, rate: 0 },
-  { min: 18200, max: 45000, rate: 19 },
-  { min: 45000, max: 120000, rate: 32.5 },
-  { min: 120000, max: 180000, rate: 37 },
-  { min: 180000, max: null, rate: 45 },
-];
+// calculateTaxWithBrackets/DEFAULT_AU_TAX_BRACKETS live in tax_bracket_utils.ts
+// (not here) so lib/tax_modules/*.ts can use them without an import cycle
+// back through this file. Re-exported for existing callers.
+export {
+  calculateTaxWithBrackets,
+  DEFAULT_AU_TAX_BRACKETS,
+} from "./tax_bracket_utils.ts";
+import { getCountryModule } from "./tax_modules/index.ts";
 
 /**
  * Income Processor
@@ -282,7 +247,14 @@ export const IncomeProcessor = {
   calculateAnnualTax(params: UserParameters, annualIncome: number): number {
     // Use tax brackets if provided, otherwise fall back to flat rate
     if (params.taxBrackets && params.taxBrackets.length > 0) {
-      return calculateTaxWithBrackets(annualIncome, params.taxBrackets);
+      return getCountryModule(params.country).calculateTax(
+        annualIncome,
+        params.taxBrackets,
+        {
+          medicareLevyRatePercent: params.medicareLevyRate,
+          standardDeduction: params.standardDeduction,
+        },
+      );
     } else {
       // Fallback to simple percentage
       return annualIncome * (params.incomeTaxRate / 100);
@@ -355,9 +327,13 @@ export const IncomeProcessor = {
       let personAnnualTax = 0;
       if (params.taxBrackets && params.taxBrackets.length > 0) {
         // Use household tax brackets
-        personAnnualTax = calculateTaxWithBrackets(
+        personAnnualTax = getCountryModule(params.country).calculateTax(
           personAnnualIncome,
           params.taxBrackets,
+          {
+            medicareLevyRatePercent: params.medicareLevyRate,
+            standardDeduction: params.standardDeduction,
+          },
         );
       } else {
         // Fall back to flat rate
@@ -925,6 +901,7 @@ export const RetirementCalculator = {
     desiredIncome: number,
     currentAge: number,
     retirementAge: number,
+    retirementAccountAccessAge = 60,
   ): { date: Date | null; age: number | null } {
     if (states.length === 0) {
       return { date: null, age: null };
@@ -962,6 +939,7 @@ export const RetirementCalculator = {
         stateAtDesiredAge.investments,
         stateAtDesiredAge.superannuation,
         ageAtDesiredRetirement,
+        retirementAccountAccessAge,
       );
 
       // If we can afford it at desired age, return that
@@ -992,6 +970,7 @@ export const RetirementCalculator = {
         state.investments,
         state.superannuation,
         ageAtState,
+        retirementAccountAccessAge,
       );
 
       // Check if safe withdrawal meets desired income
@@ -1018,15 +997,19 @@ export const RetirementCalculator = {
     investments: number,
     superannuation: number,
     age: number,
+    retirementAccountAccessAge = 60,
   ): number {
     const SAFE_WITHDRAWAL_RATE = 0.04; // 4% rule
-    const PRESERVATION_AGE = 60; // Australian superannuation preservation age
 
     // Total accessible assets
     let accessibleAssets = investments;
 
-    // Add superannuation if at preservation age
-    if (age >= PRESERVATION_AGE) {
+    // Add the retirement account (superannuation/401k/etc.) once it's
+    // accessible - defaults to the AU preservation age (60) for callers that
+    // don't know the active country module, but callers with access to
+    // UserParameters should pass getCountryModule(params.country)
+    // .retirementAccessRule.accessAge (or params.preservationAge override).
+    if (age >= retirementAccountAccessAge) {
       accessibleAssets += superannuation;
     }
 

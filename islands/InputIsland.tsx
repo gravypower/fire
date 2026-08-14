@@ -13,6 +13,7 @@ import type {
   SuperAccount
 } from "../types/financial.ts";
 import { DEFAULT_AU_TAX_BRACKETS } from "../lib/processors.ts";
+import { getCountryModule } from "../lib/tax_modules/index.ts";
 import {
   validatePositiveNumber,
   validatePercentage,
@@ -89,6 +90,8 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
   const [parameters, setParameters] = useState<UserParameters>(getDefaultParameters());
   const [errors, setErrors] = useState<FieldErrors>({});
   const [storageError, setStorageError] = useState<string | null>(null);
+
+  const retirementModule = getCountryModule(parameters.country);
 
   // Initialize parameters from config or defaults
   // Update when config prop changes (e.g., when loaded from storage)
@@ -874,7 +877,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                 <svg class="w-5 h-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
-                Superannuation
+                {retirementModule.retirementAccountLabel}
               </h3>
               {!isAddingSuper && !editingSuperId && (
                 <button
@@ -882,7 +885,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                   type="button"
                   class="text-sm px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
                 >
-                  + Add Super
+                  + Add {retirementModule.retirementAccountShortLabel}
                 </button>
               )}
             </div>
@@ -891,7 +894,9 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
             {(isAddingSuper || editingSuperId) && (
               <div class="border border-gray-300 rounded-lg p-4 bg-gray-50 mb-4 fade-in">
                 <h4 class="text-md font-semibold mb-3 text-gray-800">
-                  {editingSuperId ? "Edit Super Account" : "Add New Super Account"}
+                  {editingSuperId
+                    ? `Edit ${retirementModule.retirementAccountShortLabel} Account`
+                    : `Add New ${retirementModule.retirementAccountShortLabel} Account`}
                 </h4>
 
                 {/* Super Label */}
@@ -945,7 +950,7 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                 {/* Action Buttons */}
                 <div class="flex gap-3 mt-4">
                   <button onClick={saveSuper} class="btn-primary flex-1">
-                    {editingSuperId ? "Update" : "Add"} Super Account
+                    {editingSuperId ? "Update" : "Add"} {retirementModule.retirementAccountShortLabel} Account
                   </button>
                   <button onClick={cancelSuperForm} class="btn-secondary flex-1">
                     Cancel
@@ -1000,8 +1005,8 @@ export default function InputIsland({ config, onConfigurationChange }: InputIsla
                     <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    <p class="text-sm text-gray-600 mb-2">No super accounts added yet</p>
-                    <p class="text-xs text-gray-500">Click "+ Add Super" above to add a superannuation account</p>
+                    <p class="text-sm text-gray-600 mb-2">No {retirementModule.retirementAccountShortLabel} accounts added yet</p>
+                    <p class="text-xs text-gray-500">Click "+ Add {retirementModule.retirementAccountShortLabel}" above to add a {retirementModule.retirementAccountLabel} account</p>
                   </div>
                 )}
               </>

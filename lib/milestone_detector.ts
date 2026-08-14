@@ -25,10 +25,11 @@ import type {
   MilestoneDetectionConfig,
 } from "../types/milestones.ts";
 import { RetirementCalculator } from "./processors.ts";
-import { 
-  globalPerformanceMonitor, 
+import {
+  globalPerformanceMonitor,
   MemoizationCache
 } from "./performance_utils.ts";
+import { getCountryModule } from "./tax_modules/index.ts";
 
 /**
  * Default configuration for milestone detection
@@ -565,11 +566,14 @@ export class MilestoneDetector {
     }
 
     // Legacy single person retirement detection
+    const retirementAccessAge = params.preservationAge ??
+      getCountryModule(params.country).retirementAccessRule.accessAge;
     const retirement = RetirementCalculator.findRetirementDate(
       states,
       params.desiredAnnualRetirementIncome,
       params.currentAge,
-      params.retirementAge
+      params.retirementAge,
+      retirementAccessAge
     );
 
     if (retirement.date && retirement.age) {
@@ -589,7 +593,8 @@ export class MilestoneDetector {
       const safeWithdrawal = RetirementCalculator.calculateSafeWithdrawal(
         closestState.investments,
         closestState.superannuation,
-        retirement.age
+        retirement.age,
+        retirementAccessAge
       );
 
       // Calculate required assets for desired income (using 4% rule)
@@ -960,7 +965,9 @@ export class MilestoneDetector {
     const safeWithdrawal = RetirementCalculator.calculateSafeWithdrawal(
       closestState.investments,
       closestState.superannuation,
-      retirementAge
+      retirementAge,
+      params.preservationAge ??
+        getCountryModule(params.country).retirementAccessRule.accessAge
     );
 
     // Calculate required assets for desired income (using 4% rule)

@@ -619,11 +619,13 @@ export class ApiClient {
   /**
    * Get tax configuration from server
    */
-  async getTaxConfig(year?: string): Promise<any> {
+  async getTaxConfig(country?: string, year?: string): Promise<any> {
     try {
-      const url = year
-        ? `/api/tax-config?year=${encodeURIComponent(year)}`
-        : "/api/tax-config";
+      const params = new URLSearchParams();
+      if (country) params.set("country", country);
+      if (year) params.set("year", year);
+      const query = params.toString();
+      const url = query ? `/api/tax-config?${query}` : "/api/tax-config";
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch tax config: ${response.statusText}`);

@@ -37,6 +37,10 @@ import {
   SimulationPhase,
 } from "./simulation_events.ts";
 import { resolveHousePurchaseEffects } from "./property_resolver.ts";
+import {
+  evaluateRetirementAccountWithdrawal,
+  getCountryModule,
+} from "./tax_modules/index.ts";
 
 /**
  * Converts a time interval to number of periods per year
@@ -249,6 +253,8 @@ export const SimulationEngine = {
       params.desiredAnnualRetirementIncome,
       params.currentAge,
       params.retirementAge,
+      params.preservationAge ??
+        getCountryModule(params.country).retirementAccessRule.accessAge,
     );
 
     // Generate warnings and alerts for unsustainable scenarios
@@ -483,7 +489,10 @@ export const SimulationEngine = {
 
         // Emit withdrawal strategy selection
         const ages = this.calculateCurrentAges(params, yearsElapsed);
-        const preservationAge = params.preservationAge ?? 60;
+        const retirementAccessRule = getCountryModule(params.country)
+          .retirementAccessRule;
+        const preservationAge = params.preservationAge ??
+          retirementAccessRule.accessAge;
         const anyoneOverPreservationAge = ages.some((age) =>
           age >= preservationAge
         );
@@ -1175,7 +1184,8 @@ export const SimulationEngine = {
 
       // Confirm strategy selection for deficit
       const ages = this.calculateCurrentAges(params, yearsElapsed);
-      const preservationAge = params.preservationAge ?? 60;
+      const preservationAge = params.preservationAge ??
+        getCountryModule(params.country).retirementAccessRule.accessAge;
       const anyoneOverPreservationAge = ages.some((age) =>
         age >= preservationAge
       );
@@ -1526,6 +1536,9 @@ export const SimulationEngine = {
       currentParams.desiredAnnualRetirementIncome,
       currentParams.currentAge,
       currentParams.retirementAge,
+      currentParams.preservationAge ??
+        getCountryModule(currentParams.country).retirementAccessRule
+          .accessAge,
     );
 
     // Generate warnings
@@ -1717,25 +1730,37 @@ export const SimulationEngine = {
     let withdrawnAmount = 0;
     let remainingShortfall = shortfall;
 
-    // Determine ages for withdrawal eligibility
+    // Determine ages for withdrawal eligibility. The retirement account is
+    // treated as a single pooled fund (not per-person), so - consistent with
+    // the pre-module behavior - eligibility is "does anyone in the household
+    // meet the age", represented as the oldest person's age.
     const ages = this.calculateCurrentAges(params, yearsElapsed);
-    const preservationAge = params.preservationAge ?? 60;
-    const anyoneOverPreservationAge = ages.some((age) =>
-      age >= preservationAge
-    );
-    const anyoneOverPensionAge = ages.some((age) => age >= 67);
+    const representativeAge = ages.length > 0 ? Math.max(...ages) : 0;
+    const accessRule = getCountryModule(params.country).retirementAccessRule;
+    const preservationAge = params.preservationAge ?? accessRule.accessAge;
+    const anyoneOverPreservationAge = representativeAge >= preservationAge;
+    // Whether the super-touching branches should even be attempted: either
+    // fully accessible already, or the module allows penalized early access
+    // (hardGate: false, e.g. US 401k/IRA) - a hard-gated account (AU super)
+    // below preservationAge yields nothing, so there's no point attempting.
+    const superAttemptable = anyoneOverPreservationAge || !accessRule.hardGate;
 
     // Default strategy is investments_first
     const strategy = params.drawdownStrategy || "investments_first";
 
-    if (strategy === "super_first" && anyoneOverPreservationAge) {
+    if (strategy === "super_first" && superAttemptable) {
       // STRATEGY: Super First
-      // 1. Withdraw from super first if eligible
+      // 1. Withdraw from super first if eligible (possibly penalized)
       if (remainingShortfall > 0 && superannuation > 0) {
-        const superWithdrawal = Math.min(remainingShortfall, superannuation);
-        superannuation -= superWithdrawal;
-        withdrawnAmount += superWithdrawal;
-        remainingShortfall -= superWithdrawal;
+        const result = evaluateRetirementAccountWithdrawal(
+          { ...accessRule, accessAge: preservationAge },
+          representativeAge,
+          remainingShortfall,
+          superannuation,
+        );
+        superannuation -= result.amountReceived + result.penaltyPaid;
+        withdrawnAmount += result.amountReceived;
+        remainingShortfall -= result.amountReceived;
       }
 
       // 2. Withdraw from investments if still short
@@ -1745,7 +1770,7 @@ export const SimulationEngine = {
         withdrawnAmount += investmentWithdrawal;
         remainingShortfall -= investmentWithdrawal;
       }
-    } else if (strategy === "proportional" && anyoneOverPreservationAge) {
+    } else if (strategy === "proportional" && superAttemptable) {
       // STRATEGY: Proportional
       // Withdraw proportionally from available liquid assets
       const availableSuper = superannuation;
@@ -1757,20 +1782,26 @@ export const SimulationEngine = {
         const superShare = availableSuper / totalAvailable;
         const investmentShare = availableInvestments / totalAvailable;
 
-        // Calculate withdrawals
+        // Calculate target withdrawals
         const totalWithdrawalNeeded = Math.min(
           remainingShortfall,
           totalAvailable,
         );
 
-        const superWithdrawal = totalWithdrawalNeeded * superShare;
+        const superTarget = totalWithdrawalNeeded * superShare;
         const investmentWithdrawal = totalWithdrawalNeeded * investmentShare;
 
-        // Apply withdrawals
-        superannuation -= superWithdrawal;
+        // Apply withdrawals - super may be penalized below preservationAge
+        const superResult = evaluateRetirementAccountWithdrawal(
+          { ...accessRule, accessAge: preservationAge },
+          representativeAge,
+          superTarget,
+          superannuation,
+        );
+        superannuation -= superResult.amountReceived + superResult.penaltyPaid;
         investments -= investmentWithdrawal;
-        withdrawnAmount += superWithdrawal + investmentWithdrawal;
-        remainingShortfall -= superWithdrawal + investmentWithdrawal;
+        withdrawnAmount += superResult.amountReceived + investmentWithdrawal;
+        remainingShortfall -= superResult.amountReceived + investmentWithdrawal;
       }
     } else {
       // STRATEGY: Investments First (Default)
@@ -1784,23 +1815,27 @@ export const SimulationEngine = {
         remainingShortfall -= investmentWithdrawal;
       }
 
-      // 2. Withdraw from superannuation if eligible
-      if (
-        remainingShortfall > 0 && superannuation > 0 &&
-        anyoneOverPreservationAge
-      ) {
-        // Can access super at preservation age
-        const superWithdrawal = Math.min(remainingShortfall, superannuation);
-        superannuation -= superWithdrawal;
-        withdrawnAmount += superWithdrawal;
-        remainingShortfall -= superWithdrawal;
+      // 2. Withdraw from superannuation if eligible (possibly penalized)
+      if (remainingShortfall > 0 && superannuation > 0 && superAttemptable) {
+        const result = evaluateRetirementAccountWithdrawal(
+          { ...accessRule, accessAge: preservationAge },
+          representativeAge,
+          remainingShortfall,
+          superannuation,
+        );
+        superannuation -= result.amountReceived + result.penaltyPaid;
+        withdrawnAmount += result.amountReceived;
+        remainingShortfall -= result.amountReceived;
       }
     }
 
-    // Emergency withdrawal from super if over pension age (more flexible access)
-    // This applies to all strategies if there's still a shortfall and funds remaining
+    // Emergency withdrawal from super if over the module's pension age (more
+    // flexible access, e.g. AU Age Pension eligibility). Applies to all
+    // strategies if there's still a shortfall and funds remaining. For a
+    // module where the account isn't hard-gated (US), pensionAge equals
+    // accessAge, so this is a harmless no-op there - access was never denied.
+    const anyoneOverPensionAge = representativeAge >= accessRule.pensionAge;
     if (remainingShortfall > 0 && superannuation > 0 && anyoneOverPensionAge) {
-      // At pension age, can access remaining super more freely
       const emergencyWithdrawal = Math.min(remainingShortfall, superannuation);
       superannuation -= emergencyWithdrawal;
       withdrawnAmount += emergencyWithdrawal;

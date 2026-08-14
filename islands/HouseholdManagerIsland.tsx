@@ -11,6 +11,7 @@ import type {
   PaymentFrequency,
   SuperAccount, UserParameters
 } from "../types/financial.ts";
+import { getCountryModule } from "../lib/tax_modules/index.ts";
 
 interface HouseholdManagerIslandProps {
   config: SimulationConfiguration;
@@ -21,6 +22,8 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
   const [householdMode, setHouseholdMode] = useState<"single" | "couple">(
     config.baseParameters.householdMode || "single"
   );
+
+  const retirementModule = getCountryModule(config.baseParameters.country);
 
   // Income source management state
   const [isAddingIncome, setIsAddingIncome] = useState(false);
@@ -646,13 +649,13 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
               {/* Super Accounts */}
               <div class="mb-3">
                 <div class="flex items-center justify-between mb-2">
-                  <label class="text-sm font-medium text-gray-700">Super Accounts</label>
+                  <label class="text-sm font-medium text-gray-700">{retirementModule.retirementAccountLabel} Accounts</label>
                   {(!isAddingSuper || superPersonId !== person.id) && (!editingSuperId || superPersonId !== person.id) && (
                     <button
                       onClick={() => startAddSuper(person.id)}
                       class="text-xs px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
                     >
-                      + Add Super
+                      + Add {retirementModule.retirementAccountShortLabel}
                     </button>
                   )}
                 </div>
@@ -661,7 +664,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
                 {((isAddingSuper && superPersonId === person.id) || (editingSuperId && superPersonId === person.id)) && (
                   <div class="border border-yellow-300 rounded-lg p-3 bg-yellow-50 mb-2 fade-in">
                     <h5 class="text-sm font-semibold mb-2 text-gray-800">
-                      {editingSuperId ? "Edit Super Account" : "Add New Super Account"}
+                      {editingSuperId ? `Edit ${retirementModule.retirementAccountShortLabel} Account` : `Add New ${retirementModule.retirementAccountShortLabel} Account`}
                     </h5>
 
                     <div class="mb-2">
@@ -711,7 +714,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
 
                     <div class="flex gap-2 mt-3">
                       <button onClick={saveSuper} class="btn-primary flex-1 text-xs py-1">
-                        {editingSuperId ? "Update" : "Add"} Super Account
+                        {editingSuperId ? "Update" : "Add"} {retirementModule.retirementAccountShortLabel} Account
                       </button>
                       <button onClick={cancelSuperForm} class="btn-secondary flex-1 text-xs py-1">
                         Cancel
@@ -762,7 +765,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
                       </div>
                     ) : (
                       <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
-                        No super accounts yet. Click "+ Add Super" to add one.
+                        No {retirementModule.retirementAccountLabel.toLowerCase()} accounts yet. Click "+ Add {retirementModule.retirementAccountShortLabel}" to add one.
                       </p>
                     )}
                   </>
@@ -999,13 +1002,13 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
               {/* Super Accounts */}
               <div class="mb-3">
                 <div class="flex items-center justify-between mb-2">
-                  <label class="text-sm font-medium text-gray-700">Super Accounts</label>
+                  <label class="text-sm font-medium text-gray-700">{retirementModule.retirementAccountLabel} Accounts</label>
                   {(!isAddingSuper || superPersonId !== person.id) && (!editingSuperId || superPersonId !== person.id) && (
                     <button
                       onClick={() => startAddSuper(person.id)}
                       class="text-xs px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700"
                     >
-                      + Add Super
+                      + Add {retirementModule.retirementAccountShortLabel}
                     </button>
                   )}
                 </div>
@@ -1014,7 +1017,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
                 {((isAddingSuper && superPersonId === person.id) || (editingSuperId && superPersonId === person.id)) && (
                   <div class="border border-yellow-300 rounded-lg p-3 bg-yellow-50 mb-2 fade-in">
                     <h5 class="text-sm font-semibold mb-2 text-gray-800">
-                      {editingSuperId ? "Edit Super Account" : "Add New Super Account"}
+                      {editingSuperId ? `Edit ${retirementModule.retirementAccountShortLabel} Account` : `Add New ${retirementModule.retirementAccountShortLabel} Account`}
                     </h5>
 
                     <div class="mb-2">
@@ -1064,7 +1067,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
 
                     <div class="flex gap-2 mt-3">
                       <button onClick={saveSuper} class="btn-primary flex-1 text-xs py-1">
-                        {editingSuperId ? "Update" : "Add"} Super Account
+                        {editingSuperId ? "Update" : "Add"} {retirementModule.retirementAccountShortLabel} Account
                       </button>
                       <button onClick={cancelSuperForm} class="btn-secondary flex-1 text-xs py-1">
                         Cancel
@@ -1115,7 +1118,7 @@ export default function HouseholdManagerIsland({ config, onConfigChange }: House
                       </div>
                     ) : (
                       <p class="text-xs text-gray-500 italic p-3 bg-white rounded border border-gray-200">
-                        No super accounts yet. Click "+ Add Super" to add one.
+                        No {retirementModule.retirementAccountLabel.toLowerCase()} accounts yet. Click "+ Add {retirementModule.retirementAccountShortLabel}" to add one.
                       </p>
                     )}
                   </>

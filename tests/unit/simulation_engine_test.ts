@@ -679,3 +679,41 @@ Deno.test("SimulationEngine.runSimulation - house purchase stops linked rent whe
   // remain, so expenses should be near zero absent other configured costs)
   assert(wellAfterPurchase.expenses < 100);
 });
+
+Deno.test("SimulationEngine.runSimulation - AU hard-gates retirement account access before preservation age, US allows a penalized early withdrawal", () => {
+  const params = getTestParameters();
+  params.simulationYears = 2;
+  params.currentAge = 55; // Below both AU's 60 and US's 59.5 access age
+  params.retirementAge = 55; // Already "retired" from day one
+  params.annualSalary = 0;
+  params.monthlyLivingExpenses = 0;
+  params.loanPrincipal = 0;
+  params.loanPaymentAmount = 0;
+  params.monthlyInvestmentContribution = 0;
+  params.currentInvestmentBalance = 0; // Nothing else to draw from
+  params.superContributionRate = 0;
+  params.currentSuperBalance = 200000;
+  params.desiredAnnualRetirementIncome = 40000;
+
+  const auParams = { ...params, country: undefined }; // undefined = AU default
+  const usParams = { ...params, country: "US" as const };
+
+  const auResult = SimulationEngine.runSimulation(auParams);
+  const usResult = SimulationEngine.runSimulation(usParams);
+
+  const auFinal = auResult.states[auResult.states.length - 1];
+  const usFinal = usResult.states[usResult.states.length - 1];
+
+  // AU: hard-gated, no access before 60 - the retirement account is
+  // untouched (only grows from returns), and income needs go unmet (cash
+  // never accumulates from withdrawals).
+  assert(auFinal.superannuation >= 200000);
+  assert(auFinal.cash < 1000);
+
+  // US: penalized early access before 59.5 - the account is drawn down
+  // (partially offsetting its growth) and some income is actually received,
+  // unlike AU where nothing ever gets through.
+  assert(usFinal.superannuation < auFinal.superannuation);
+  assert(usFinal.cash > auFinal.cash);
+  assert(usFinal.cash > 1000); // a real amount was received, not just 0
+});

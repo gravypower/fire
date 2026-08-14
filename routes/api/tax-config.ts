@@ -1,14 +1,31 @@
 /**
- * API route to serve tax configuration
+ * API route to serve tax configuration for the active country
  */
 
 import { Handlers } from "$fresh/server.ts";
+import { getCountryModule } from "../../lib/tax_modules/index.ts";
+import type { CountryCode } from "../../types/country_module.ts";
+
+const CONFIG_FILES: Record<CountryCode, string> = {
+  AU: "tax_brackets_au.json",
+  US: "tax_brackets_us.json",
+};
+
+function isCountryCode(value: string): value is CountryCode {
+  return value in CONFIG_FILES;
+}
 
 export const handler: Handlers = {
   GET(req) {
-    // Read the tax configuration file
+    const url = new URL(req.url);
+    const requestedCountry = url.searchParams.get("country")?.toUpperCase() ??
+      "AU";
+    const country: CountryCode = isCountryCode(requestedCountry)
+      ? requestedCountry
+      : "AU";
+
     const configPath = new URL(
-      "../../config/tax_brackets.json",
+      `../../config/${CONFIG_FILES[country]}`,
       import.meta.url,
     );
 
@@ -17,7 +34,6 @@ export const handler: Handlers = {
       const config = JSON.parse(configText);
 
       // Get the requested year from query params, or use default
-      const url = new URL(req.url);
       const requestedYear = url.searchParams.get("year") || config.defaultYear;
 
       // Get the tax data for the requested year
@@ -26,7 +42,7 @@ export const handler: Handlers = {
       if (!yearData) {
         return new Response(
           JSON.stringify({
-            error: `Tax year ${requestedYear} not found`,
+            error: `Tax year ${requestedYear} not found for ${country}`,
             availableYears: Object.keys(config.years),
           }),
           {
@@ -36,14 +52,22 @@ export const handler: Handlers = {
         );
       }
 
-      // Return the tax config for the requested year
+      const module = getCountryModule(country);
+
+      // Return the tax config for the requested country/year
       const response = {
-        country: config.country,
+        country,
+        countryLabel: config.country,
         taxYear: requestedYear,
         description: config.description,
         brackets: yearData.brackets,
         medicareLevy: yearData.medicareLevy,
-        preservationAge: yearData.preservationAge || 60,
+        standardDeduction: yearData.standardDeduction,
+        preservationAge: yearData.preservationAge ??
+          yearData.retirementAccessAge ?? module.retirementAccessRule.accessAge,
+        retirementAccountLabel: module.retirementAccountLabel,
+        retirementAccountShortLabel: module.retirementAccountShortLabel,
+        retirementAccessRule: module.retirementAccessRule,
         availableYears: Object.keys(config.years),
       };
 

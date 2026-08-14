@@ -557,6 +557,7 @@ export default function VisualizationIsland({
             retirementDate={result.retirementDate || undefined}
             allStates={result.states}
             milestones={milestones}
+            country={userParameters?.country}
           />
         )}
         {selectedDetailTable === "tax" && (

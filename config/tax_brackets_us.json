@@ -1,0 +1,55 @@
+{
+  "country": "United States",
+  "description": "US federal income tax brackets, single filer (state tax and FICA not modeled)",
+  "years": {
+    "2024": {
+      "brackets": [
+        {
+          "min": 0,
+          "max": 11600,
+          "rate": 10,
+          "description": "10% bracket"
+        },
+        {
+          "min": 11600,
+          "max": 47150,
+          "rate": 12,
+          "description": "12% bracket"
+        },
+        {
+          "min": 47150,
+          "max": 100525,
+          "rate": 22,
+          "description": "22% bracket"
+        },
+        {
+          "min": 100525,
+          "max": 191950,
+          "rate": 24,
+          "description": "24% bracket"
+        },
+        {
+          "min": 191950,
+          "max": 243725,
+          "rate": 32,
+          "description": "32% bracket"
+        },
+        {
+          "min": 243725,
+          "max": 609350,
+          "rate": 35,
+          "description": "35% bracket"
+        },
+        {
+          "min": 609350,
+          "max": null,
+          "rate": 37,
+          "description": "37% bracket"
+        }
+      ],
+      "standardDeduction": 14600,
+      "retirementAccessAge": 59.5
+    }
+  },
+  "defaultYear": "2024"
+}

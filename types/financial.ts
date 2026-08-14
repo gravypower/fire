@@ -5,6 +5,7 @@
 import type { ExpenseItem } from "./expenses.ts";
 import type { InvestmentHolding } from "./investments.ts";
 import type { HousePurchase } from "./property.ts";
+import type { CountryCode } from "./country_module.ts";
 import {
   AdviceCategory,
   AdviceItem,
@@ -175,6 +176,16 @@ export interface FinancialState {
  * All monetary values are in the user's currency
  */
 export interface UserParameters {
+  // Country / tax module
+  /** Which country's tax rules and retirement-account access rule apply
+   *  (undefined = Australia, the default). Selected in Settings. */
+  country?: CountryCode;
+  /** Country-specific extra numbers needed for tax calculation (e.g. AU
+   *  Medicare levy rate, US standard deduction), sourced from the
+   *  tax-config API alongside taxBrackets. */
+  medicareLevyRate?: number;
+  standardDeduction?: number;
+
   // Household Configuration
   /** Household mode: 'single' or 'couple' */
   householdMode?: "single" | "couple";
@@ -247,7 +258,9 @@ export interface UserParameters {
   desiredAnnualRetirementIncome: number;
   /** Target retirement age */
   retirementAge: number;
-  /** Age at which superannuation can be accessed (default: 60) */
+  /** Age at which the retirement account (superannuation/401k/etc.) can be
+   *  accessed. Optional override - when unset, falls back to the active
+   *  country module's retirementAccessRule.accessAge. */
   preservationAge?: number;
   /** Current age */
   currentAge: number;
