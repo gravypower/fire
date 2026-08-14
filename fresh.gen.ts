@@ -4,6 +4,7 @@
 
 import * as $_404 from "./routes/_404.tsx";
 import * as $_app from "./routes/_app.tsx";
+import * as $api_quote from "./routes/api/quote.ts";
 import * as $api_simulation_commands from "./routes/api/simulation/commands.ts";
 import * as $api_simulation_index from "./routes/api/simulation/index.ts";
 import * as $api_simulation_projections from "./routes/api/simulation/projections.ts";
@@ -36,6 +37,7 @@ const manifest = {
   routes: {
     "./routes/_404.tsx": $_404,
     "./routes/_app.tsx": $_app,
+    "./routes/api/quote.ts": $api_quote,
     "./routes/api/simulation/commands.ts": $api_simulation_commands,
     "./routes/api/simulation/index.ts": $api_simulation_index,
     "./routes/api/simulation/projections.ts": $api_simulation_projections,

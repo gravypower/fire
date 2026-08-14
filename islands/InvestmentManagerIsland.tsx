@@ -15,6 +15,7 @@ import type {
 } from "../types/investments.ts";
 import { INVESTMENT_TYPE_INFO, INVESTMENT_TEMPLATES } from "../types/investments.ts";
 import { sellFromPurchases, totalRealizedGainLoss } from "../lib/investment_ledger_utils.ts";
+import { apiClient } from "../lib/api-client.ts";
 
 const PLANNED_SALE_FREQUENCY_LABELS: Record<PlannedSaleFrequency, string> = {
   once: "Once",
@@ -49,6 +50,9 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
   const [isAddingPlannedSale, setIsAddingPlannedSale] = useState<string | null>(null);
   const [plannedSaleFormData, setPlannedSaleFormData] = useState<Partial<PlannedSale>>({});
   const [plannedSaleError, setPlannedSaleError] = useState<string | null>(null);
+  const [priceFetchErrors, setPriceFetchErrors] = useState<Record<string, string>>({});
+  const [isFetchingPrice, setIsFetchingPrice] = useState<Record<string, boolean>>({});
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
   const investments = config.baseParameters.investmentHoldings || [];
 
@@ -479,6 +483,122 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
     });
   };
 
+  /** Applies a fetched price to a holding: updates currentPrice/currentValue/
+   *  lastPriceFetch, same as the manual path above. */
+  const applyFetchedPrice = (
+    holdings: InvestmentHolding[],
+    investmentId: string,
+    price: number,
+  ): InvestmentHolding[] =>
+    holdings.map((inv) => {
+      if (inv.id !== investmentId) return inv;
+      const totalUnits = (inv.purchases || []).reduce((sum, p) => sum + p.units, 0);
+      return {
+        ...inv,
+        currentPrice: price,
+        currentValue: totalUnits > 0 ? totalUnits * price : inv.currentValue,
+        lastPriceFetch: new Date().toISOString(),
+      };
+    });
+
+  const toQuoteLookup = (inv: InvestmentHolding) => ({
+    id: inv.id,
+    tickerSymbol: inv.tickerSymbol!,
+    exchange: inv.exchange,
+    type: inv.type,
+  });
+
+  // Auto-fetch the current price for a single holding with a ticker symbol
+  const refreshPrice = async (investmentId: string) => {
+    const investment = investments.find((inv) => inv.id === investmentId);
+    if (!investment || !investment.tickerSymbol) return;
+
+    setIsFetchingPrice((prev) => ({ ...prev, [investmentId]: true }));
+    setPriceFetchErrors((prev) => {
+      const { [investmentId]: _removed, ...rest } = prev;
+      return rest;
+    });
+
+    try {
+      const quotes = await apiClient.fetchQuotes([toQuoteLookup(investment)]);
+      const quote = quotes[investmentId];
+
+      if (!quote || quote.error || typeof quote.price !== "number") {
+        setPriceFetchErrors((prev) => ({
+          ...prev,
+          [investmentId]: quote?.error || "Failed to fetch price",
+        }));
+        return;
+      }
+
+      onConfigChange({
+        ...config,
+        baseParameters: {
+          ...config.baseParameters,
+          investmentHoldings: applyFetchedPrice(investments, investmentId, quote.price),
+        },
+      });
+    } catch (_error) {
+      setPriceFetchErrors((prev) => ({
+        ...prev,
+        [investmentId]: "Failed to fetch price",
+      }));
+    } finally {
+      setIsFetchingPrice((prev) => ({ ...prev, [investmentId]: false }));
+    }
+  };
+
+  // Auto-fetch prices for every holding that has a ticker symbol, in one request
+  const refreshAllPrices = async () => {
+    const tickeredInvestments = investments.filter((inv) => inv.tickerSymbol);
+    if (tickeredInvestments.length === 0) return;
+
+    setIsRefreshingAll(true);
+    setPriceFetchErrors((prev) => {
+      const rest = { ...prev };
+      for (const inv of tickeredInvestments) delete rest[inv.id];
+      return rest;
+    });
+
+    try {
+      const quotes = await apiClient.fetchQuotes(
+        tickeredInvestments.map(toQuoteLookup),
+      );
+
+      let updatedInvestments = investments;
+      const newErrors: Record<string, string> = {};
+
+      for (const inv of tickeredInvestments) {
+        const quote = quotes[inv.id];
+        if (quote && !quote.error && typeof quote.price === "number") {
+          updatedInvestments = applyFetchedPrice(updatedInvestments, inv.id, quote.price);
+        } else {
+          newErrors[inv.id] = quote?.error || "Failed to fetch price";
+        }
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setPriceFetchErrors((prev) => ({ ...prev, ...newErrors }));
+      }
+
+      onConfigChange({
+        ...config,
+        baseParameters: {
+          ...config.baseParameters,
+          investmentHoldings: updatedInvestments,
+        },
+      });
+    } catch (_error) {
+      const newErrors: Record<string, string> = {};
+      for (const inv of tickeredInvestments) {
+        newErrors[inv.id] = "Failed to fetch price";
+      }
+      setPriceFetchErrors((prev) => ({ ...prev, ...newErrors }));
+    } finally {
+      setIsRefreshingAll(false);
+    }
+  };
+
   const totalValue = investments
     .filter(inv => inv.enabled)
     .reduce((sum, inv) => sum + inv.currentValue, 0);
@@ -516,7 +636,7 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
       {/* Summary */}
       {investments.length > 0 && (
         <div class="mb-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-          <div class="grid grid-cols-2 gap-6">
+          <div class="grid grid-cols-2 gap-6 mb-4">
             <div>
               <p class="text-sm text-gray-600 mb-1">Total Portfolio Value</p>
               <p class="text-3xl font-bold text-blue-700">
@@ -530,6 +650,15 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
               </p>
             </div>
           </div>
+          {investments.some((inv) => inv.tickerSymbol) && (
+            <button
+              onClick={refreshAllPrices}
+              disabled={isRefreshingAll}
+              class="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isRefreshingAll ? "Refreshing..." : "🔄 Refresh All Prices"}
+            </button>
+          )}
         </div>
       )}
 
@@ -768,6 +897,11 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                                 </span>
                               )}
                             </div>
+                            {priceFetchErrors[investment.id] && (
+                              <p class="text-xs text-red-600 mt-1">
+                                {priceFetchErrors[investment.id]}
+                              </p>
+                            )}
                             <div class="flex items-center gap-4 mt-1 text-sm text-gray-600">
                               <span>
                                 Value: <span class="font-medium text-gray-800">${metrics.currentValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -790,13 +924,24 @@ export default function InvestmentManagerIsland({ config, onConfigChange }: Inve
                         </div>
                         <div class="flex items-center gap-2 ml-4">
                           {metrics.totalUnits > 0 && (
-                            <button
-                              onClick={() => updateCurrentPrice(investment.id)}
-                              class="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors"
-                              title="Update current price"
-                            >
-                              💲 Set Price
-                            </button>
+                            investment.tickerSymbol ? (
+                              <button
+                                onClick={() => refreshPrice(investment.id)}
+                                disabled={isFetchingPrice[investment.id]}
+                                class="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Fetch current price from Yahoo Finance"
+                              >
+                                {isFetchingPrice[investment.id] ? "Fetching..." : "🔄 Refresh Price"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => updateCurrentPrice(investment.id)}
+                                class="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors"
+                                title="Set current price manually"
+                              >
+                                💲 Set Price
+                              </button>
+                            )
                           )}
                           <button
                             onClick={() => setExpandedInvestmentId(isExpanded ? null : investment.id)}

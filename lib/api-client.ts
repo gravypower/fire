@@ -617,6 +617,39 @@ export class ApiClient {
   }
 
   /**
+   * Fetches current prices for a set of investment holdings from the
+   * server-side Yahoo Finance proxy. Never throws for individual bad
+   * tickers - those come back as `{ error: string }` entries keyed by
+   * holding id so the caller can show a per-holding message.
+   */
+  async fetchQuotes(
+    holdings: {
+      id: string;
+      tickerSymbol: string;
+      exchange?: string;
+      type?: string;
+    }[],
+  ): Promise<
+    Record<string, { price?: number; currency?: string; error?: string }>
+  > {
+    try {
+      const response = await fetch("/api/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holdings }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch quotes: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data.quotes ?? {};
+    } catch (error) {
+      console.error("Error fetching quotes:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Get tax configuration from server
    */
   async getTaxConfig(country?: string, year?: string): Promise<any> {
