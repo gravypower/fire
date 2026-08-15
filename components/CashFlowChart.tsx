@@ -8,7 +8,14 @@ import type { FinancialState, TransitionPoint } from "../types/financial.ts";
 import { formatCurrency } from "../lib/result_utils.ts";
 
 interface CashFlowChartProps {
-  states: FinancialState[];
+  /** States for the selected time granularity. When a state carries a
+   *  `periodCashFlow` (the cash flow summed across every simulation tick in
+   *  that display period, rather than just the tick landed on when
+   *  sampling), that aggregated figure is used instead of the raw
+   *  point-in-time `cashFlow` - otherwise a lumpy income/expense (e.g. an
+   *  annual salary or yearly bill) would appear as a single spike with
+   *  every other period reading zero. */
+  states: (FinancialState & { periodCashFlow?: number })[];
   transitionPoints?: TransitionPoint[];
 }
 
@@ -54,7 +61,9 @@ export default function CashFlowChart(
 
       // Prepare data
       const labels = states.map((state) => state.date.toLocaleDateString());
-      const cashFlowData = states.map((state) => state.cashFlow);
+      const cashFlowData = states.map((state) =>
+        state.periodCashFlow ?? state.cashFlow
+      );
 
       // Create background colors based on positive/negative values
       const backgroundColors = cashFlowData.map((value) =>

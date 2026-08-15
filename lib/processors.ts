@@ -713,7 +713,7 @@ export const InvestmentProcessor = {
     if (!params.investmentHoldings || params.investmentHoldings.length === 0) {
       const contribution = (params.monthlyInvestmentContribution * 12) /
         intervalToPeriodsPerYear(interval);
-      const actualContribution = Math.min(availableCash, contribution);
+      const actualContribution = Math.max(0, Math.min(availableCash, contribution));
       const newBalance = this.calculateInvestmentGrowth(
         params.currentInvestmentBalance,
         actualContribution,
@@ -770,9 +770,12 @@ export const InvestmentProcessor = {
         if (availableCash - totalCashUsed >= contribution) {
           totalCashUsed += contribution;
         } else {
-          // Not enough cash for this contribution
+          // Not enough cash for this contribution - contribute whatever's
+          // left (clamped to zero, since availableCash can be negative when
+          // a one-off expense like a house deposit has already put this
+          // period's cash in the red)
           contribution = Math.max(0, availableCash - totalCashUsed);
-          totalCashUsed = availableCash;
+          totalCashUsed += contribution;
         }
       }
 

@@ -404,6 +404,231 @@ export default function MainIsland() {
     reader.readAsText(file);
   };
 
+  // Fill the form with realistic sample data so a new user can explore the
+  // tool without having to enter their own numbers first.
+  const handleLoadDummyData = () => {
+    if (
+      !confirm(
+        "This will replace your current configuration with sample data. Continue?",
+      )
+    ) {
+      return;
+    }
+
+    const dummyConfig: SimulationConfiguration = {
+      baseParameters: {
+        annualSalary: 95000,
+        salaryFrequency: "monthly",
+        incomeTaxRate: 32.5,
+        monthlyLivingExpenses: 1500,
+        monthlyRentOrMortgage: 0,
+        expenseItems: [
+          {
+            id: "expense-groceries",
+            name: "Groceries",
+            amount: 180,
+            frequency: "weekly",
+            category: "food",
+            enabled: true,
+          },
+          {
+            id: "expense-dining",
+            name: "Dining Out",
+            amount: 60,
+            frequency: "weekly",
+            category: "food",
+            enabled: true,
+          },
+          {
+            id: "expense-utilities",
+            name: "Utilities",
+            amount: 250,
+            frequency: "monthly",
+            category: "utilities",
+            enabled: true,
+          },
+          {
+            id: "expense-insurance",
+            name: "Health Insurance",
+            amount: 180,
+            frequency: "monthly",
+            category: "insurance",
+            enabled: true,
+          },
+          {
+            id: "expense-car",
+            name: "Car Registration",
+            amount: 800,
+            frequency: "yearly",
+            category: "transportation",
+            enabled: true,
+          },
+        ],
+        loans: [
+          {
+            id: "loan-mortgage",
+            label: "Home Mortgage",
+            principal: 450000,
+            interestRate: 6.1,
+            paymentAmount: 2800,
+            paymentFrequency: "monthly",
+            hasOffset: true,
+            offsetBalance: 20000,
+            autoPayoutWhenOffsetFull: false,
+          },
+        ],
+        loanPrincipal: 0,
+        loanInterestRate: 5.5,
+        loanPaymentAmount: 0,
+        loanPaymentFrequency: "monthly",
+        useOffsetAccount: true,
+        currentOffsetBalance: 20000,
+        monthlyInvestmentContribution: 800,
+        investmentReturnRate: 7.5,
+        currentInvestmentBalance: 35000,
+        superContributionRate: 11.5,
+        superReturnRate: 7,
+        currentSuperBalance: 120000,
+        desiredAnnualRetirementIncome: 65000,
+        retirementAge: 65,
+        currentAge: 35,
+        simulationYears: 40,
+        preservationAge: 60,
+        startDate: new Date(),
+        householdMode: "single",
+        people: [
+          {
+            id: "person-1",
+            name: "Alex",
+            currentAge: 35,
+            retirementAge: 65,
+            incomeSources: [
+              {
+                id: "income-salary",
+                label: "Salary",
+                amount: 95000,
+                frequency: "yearly",
+                isBeforeTax: true,
+              },
+              {
+                id: "income-side",
+                label: "Freelance Work",
+                amount: 400,
+                frequency: "monthly",
+                isBeforeTax: true,
+              },
+            ],
+            superAccounts: [],
+          },
+        ],
+        investmentHoldings: [
+          {
+            id: "investment-etf",
+            name: "Vanguard Australian Shares ETF",
+            type: "etf",
+            currentValue: 22000,
+            returnRate: 8,
+            contributionAmount: 500,
+            contributionFrequency: "monthly",
+            enabled: true,
+            tickerSymbol: "VAS.AX",
+            exchange: "ASX",
+            purchases: [
+              {
+                id: "purchase-etf-1",
+                date: "2023-06-01",
+                units: 200,
+                pricePerUnit: 90,
+                totalCost: 18000,
+              },
+            ],
+          },
+          {
+            id: "investment-shares",
+            name: "Individual Shares",
+            type: "shares",
+            currentValue: 8000,
+            returnRate: 9,
+            contributionAmount: 200,
+            contributionFrequency: "monthly",
+            enabled: true,
+            tickerSymbol: "CBA.AX",
+            exchange: "ASX",
+            purchases: [
+              {
+                id: "purchase-shares-1",
+                date: "2024-01-15",
+                units: 80,
+                pricePerUnit: 95,
+                totalCost: 7600,
+              },
+            ],
+          },
+          {
+            id: "investment-term-deposit",
+            name: "Term Deposit",
+            type: "term-deposit",
+            currentValue: 5000,
+            returnRate: 4.5,
+            enabled: true,
+          },
+        ],
+        housePurchases: [
+          {
+            id: "house-investment-property",
+            name: "Investment Property",
+            purchaseDate: new Date(
+              new Date().getFullYear() + 5,
+              new Date().getMonth(),
+              1,
+            ),
+            price: 600000,
+            depositAmount: 120000,
+            buyingCosts: 30000,
+            appreciationRate: 4,
+            movingIn: false,
+            mortgageInterestRate: 6.2,
+            mortgagePaymentAmount: 3200,
+            mortgagePaymentFrequency: "monthly",
+            hasOffset: false,
+            isDebtRecycling: false,
+            monthlyHoldingCosts: 450,
+          },
+        ],
+      },
+      transitions: [],
+    };
+
+    setConfig(dummyConfig);
+    try {
+      storageService.saveConfiguration(dummyConfig);
+
+      // Also seed the Scenarios tab with a couple of named scenarios so
+      // there's something to compare right away. Remove any sample
+      // scenarios from a previous click first so they don't pile up.
+      const sampleNames = ["Base Case", "Early Retirement at 60"];
+      storageService.getScenarios()
+        .filter((s) => sampleNames.includes(s.name))
+        .forEach((s) => storageService.deleteScenario(s.id));
+
+      storageService.saveScenario("Base Case", dummyConfig);
+      storageService.saveScenario("Early Retirement at 60", {
+        ...dummyConfig,
+        baseParameters: {
+          ...dummyConfig.baseParameters,
+          retirementAge: 60,
+          people: dummyConfig.baseParameters.people?.map((person) => ({
+            ...person,
+            retirementAge: 60,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error("Failed to save dummy configuration:", error);
+    }
+    runSimulation(dummyConfig);
+  };
+
   return (
     <div class="h-full bg-gray-50 flex flex-col">
       <ErrorBoundary>
@@ -1166,6 +1391,25 @@ export default function MainIsland() {
                           class="sr-only"
                         />
                       </label>
+                      <button
+                        onClick={handleLoadDummyData}
+                        class="inline-flex items-center px-4 py-2 border border-purple-300 rounded-md shadow-sm text-sm font-medium text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200"
+                      >
+                        <svg
+                          class="w-4 h-4 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                          />
+                        </svg>
+                        Load Sample Data
+                      </button>
                     </div>
                   </div>
                 </div>
