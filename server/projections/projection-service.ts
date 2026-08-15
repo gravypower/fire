@@ -36,12 +36,21 @@ export class ProjectionService {
     return session;
   }
 
-  async getFinancialProjection(sessionId: string): Promise<FinancialProjection> {
+  async getFinancialProjection(
+    sessionId: string,
+  ): Promise<FinancialProjection> {
     const session = await this.requireSession(sessionId);
     return buildFinancialProjection(
       sessionId,
       session.resultVersion,
-      session.result ?? { states: [], retirementDate: null, retirementAge: null, isSustainable: false, warnings: [] },
+      session.result ??
+        {
+          states: [],
+          retirementDate: null,
+          retirementAge: null,
+          isSustainable: false,
+          warnings: [],
+        },
     );
   }
 
@@ -50,14 +59,27 @@ export class ProjectionService {
     return buildTimelineProjection(
       sessionId,
       session.resultVersion,
-      session.result ?? { states: [], retirementDate: null, retirementAge: null, isSustainable: false, warnings: [] },
+      session.result ??
+        {
+          states: [],
+          retirementDate: null,
+          retirementAge: null,
+          isSustainable: false,
+          warnings: [],
+        },
       session.milestones ?? [],
     );
   }
 
-  async getMilestoneProjection(sessionId: string): Promise<MilestoneProjection> {
+  async getMilestoneProjection(
+    sessionId: string,
+  ): Promise<MilestoneProjection> {
     const session = await this.requireSession(sessionId);
-    return buildMilestoneProjection(sessionId, session.resultVersion, session.milestones ?? []);
+    return buildMilestoneProjection(
+      sessionId,
+      session.resultVersion,
+      session.milestones ?? [],
+    );
   }
 
   async getAllProjections(sessionId: string): Promise<{
@@ -78,6 +100,8 @@ export class ProjectionService {
 /**
  * Factory function to create a projection service with default dependencies
  */
-export function createProjectionService(sessionManager: SessionManager): ProjectionService {
+export function createProjectionService(
+  sessionManager: SessionManager,
+): ProjectionService {
   return new ProjectionService(sessionManager);
 }

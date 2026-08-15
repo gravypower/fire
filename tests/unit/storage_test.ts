@@ -272,7 +272,7 @@ Deno.test("LocalStorageService - saveParameters throws on quota exceeded", () =>
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   // Set quota exceeded after the service is created and storage availability is checked
   // This simulates quota being exceeded during the actual save operation
   const originalSetItem = testStorage.setItem.bind(testStorage);
@@ -400,7 +400,7 @@ Deno.test("LocalStorageService - saveConfiguration stores configuration with tra
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   const config = {
     baseParameters: params,
     transitions: [
@@ -427,7 +427,7 @@ Deno.test("LocalStorageService - loadConfiguration retrieves saved configuration
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   const config = {
     baseParameters: params,
     transitions: [
@@ -451,9 +451,15 @@ Deno.test("LocalStorageService - loadConfiguration retrieves saved configuration
   assertEquals(loaded.transitions.length, 1);
   assertEquals(loaded.transitions[0].id, "transition-1");
   assertEquals(loaded.transitions[0].label, "Semi-retirement");
-  assertEquals(loaded.transitions[0].transitionDate.toISOString(), "2025-01-01T00:00:00.000Z");
+  assertEquals(
+    loaded.transitions[0].transitionDate.toISOString(),
+    "2025-01-01T00:00:00.000Z",
+  );
   assertEquals(loaded.transitions[0].parameterChanges.annualSalary, 40000);
-  assertEquals(loaded.transitions[0].parameterChanges.monthlyLivingExpenses, 1600);
+  assertEquals(
+    loaded.transitions[0].parameterChanges.monthlyLivingExpenses,
+    1600,
+  );
 });
 
 Deno.test("LocalStorageService - loadConfiguration migrates from legacy format", () => {
@@ -470,7 +476,7 @@ Deno.test("LocalStorageService - loadConfiguration migrates from legacy format",
   assertExists(loaded);
   assertEquals(loaded.baseParameters.annualSalary, params.annualSalary);
   assertEquals(loaded.transitions.length, 0);
-  
+
   // Verify new format is now saved
   const stored = testStorage.getItem("finance-simulation-config");
   assertExists(stored);
@@ -480,7 +486,7 @@ Deno.test("LocalStorageService - clearConfiguration removes all data", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   const config = {
     baseParameters: params,
     transitions: [],
@@ -488,10 +494,10 @@ Deno.test("LocalStorageService - clearConfiguration removes all data", () => {
 
   service.saveConfiguration(config);
   service.clearConfiguration();
-  
+
   const configStored = testStorage.getItem("finance-simulation-config");
   const paramsStored = testStorage.getItem("finance-simulation-parameters");
-  
+
   assertEquals(configStored, null);
   assertEquals(paramsStored, null);
 });
@@ -500,7 +506,7 @@ Deno.test("LocalStorageService - loadConfiguration handles empty transitions arr
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   const config = {
     baseParameters: params,
     transitions: [],
@@ -517,7 +523,7 @@ Deno.test("LocalStorageService - loadConfiguration handles multiple transitions"
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   const config = {
     baseParameters: params,
     transitions: [
@@ -554,7 +560,7 @@ Deno.test("LocalStorageService - configuration round-trip preserves dates", () =
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
   const params = createTestParameters();
-  
+
   const transitionDate = new Date("2025-06-15T12:30:00.000Z");
   const config = {
     baseParameters: params,
@@ -573,6 +579,9 @@ Deno.test("LocalStorageService - configuration round-trip preserves dates", () =
   const loaded = service.loadConfiguration();
 
   assertExists(loaded);
-  assertEquals(loaded.transitions[0].transitionDate.toISOString(), transitionDate.toISOString());
+  assertEquals(
+    loaded.transitions[0].transitionDate.toISOString(),
+    transitionDate.toISOString(),
+  );
   assertEquals(loaded.transitions[0].transitionDate instanceof Date, true);
 });

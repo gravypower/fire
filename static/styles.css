@@ -1,66 +1,62 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* Custom animations and transitions */
-@layer utilities {
-  /* Smooth fade-in animation */
-  .fade-in {
-    animation: fadeIn 0.3s ease-in;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+/* Smooth fade-in animation */
+@utility fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
 
-  /* Smooth slide-in animation */
-  .slide-in {
-    animation: slideIn 0.4s ease-out;
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
   }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateX(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
+/* Smooth slide-in animation */
+@utility slide-in {
+  animation: slideIn 0.4s ease-out;
+}
 
-  /* Pulse animation for loading states */
-  .pulse-slow {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
+/* Pulse animation for loading states */
+@utility pulse-slow {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 
-  /* Smooth scale animation */
-  .scale-in {
-    animation: scaleIn 0.2s ease-out;
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
   }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 
-  @keyframes scaleIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
+/* Smooth scale animation */
+@utility scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
 
-  /* Chart transition */
-  .chart-transition {
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+/* Chart transition */
+@utility chart-transition {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Custom component styles */

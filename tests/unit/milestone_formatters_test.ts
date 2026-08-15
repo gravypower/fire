@@ -5,22 +5,22 @@
 
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
-  formatMilestone,
-  formatMilestones,
-  formatMilestoneDate,
-  formatFinancialImpact,
-  sortMilestonesByDate,
   filterMilestonesByCategory,
-  filterMilestonesByType,
   filterMilestonesByDateRange,
+  filterMilestonesByType,
+  formatFinancialImpact,
+  formatMilestone,
+  formatMilestoneDate,
+  formatMilestones,
   groupMilestonesByCategory,
   groupMilestonesByYear,
+  sortMilestonesByDate,
 } from "../../lib/milestone_formatters.ts";
 import type {
   LoanPayoffMilestone,
   OffsetCompletionMilestone,
-  RetirementMilestone,
   ParameterTransitionMilestone,
+  RetirementMilestone,
 } from "../../types/milestones.ts";
 
 // Test data
@@ -115,7 +115,7 @@ Deno.test("formatFinancialImpact - handles zero values", () => {
 
 Deno.test("formatMilestone - formats loan payoff milestone correctly", () => {
   const formatted = formatMilestone(loanPayoffMilestone);
-  
+
   assertEquals(formatted.id, "loan-1-payoff");
   assertEquals(formatted.type, "loan_payoff");
   assertEquals(formatted.category, "debt");
@@ -125,14 +125,17 @@ Deno.test("formatMilestone - formats loan payoff milestone correctly", () => {
   assertEquals(formatted.icon, "💳");
   assertEquals(formatted.badgeColor, "bg-green-100 text-green-800");
   assertEquals(formatted.secondaryDetails.length, 3);
-  assertEquals(formatted.secondaryDetails[0], "Total interest paid: $45,000.00");
+  assertEquals(
+    formatted.secondaryDetails[0],
+    "Total interest paid: $45,000.00",
+  );
   assertEquals(formatted.secondaryDetails[1], "Loan duration: 240 months");
   assertEquals(formatted.secondaryDetails[2], "Loan: Home Loan");
 });
 
 Deno.test("formatMilestone - formats offset completion milestone correctly", () => {
   const formatted = formatMilestone(offsetMilestone);
-  
+
   assertEquals(formatted.id, "offset-complete");
   assertEquals(formatted.type, "offset_completion");
   assertEquals(formatted.category, "debt");
@@ -147,7 +150,7 @@ Deno.test("formatMilestone - formats offset completion milestone correctly", () 
 
 Deno.test("formatMilestone - formats retirement milestone correctly", () => {
   const formatted = formatMilestone(retirementMilestone);
-  
+
   assertEquals(formatted.id, "retirement-eligible");
   assertEquals(formatted.type, "retirement_eligibility");
   assertEquals(formatted.category, "retirement");
@@ -160,31 +163,45 @@ Deno.test("formatMilestone - formats retirement milestone correctly", () => {
 
 Deno.test("formatMilestone - formats parameter transition milestone correctly", () => {
   const formatted = formatMilestone(parameterMilestone);
-  
+
   assertEquals(formatted.id, "salary-increase");
   assertEquals(formatted.type, "parameter_transition");
   assertEquals(formatted.category, "transition");
-  assertEquals(formatted.primaryDetail, "Increased income and investment contributions");
+  assertEquals(
+    formatted.primaryDetail,
+    "Increased income and investment contributions",
+  );
   assertEquals(formatted.icon, "📊");
   assertEquals(formatted.badgeColor, "bg-yellow-100 text-yellow-800");
   assertEquals(formatted.secondaryDetails.length, 2);
-  assertEquals(formatted.secondaryDetails[0], "Annual Income: $80,000.00 → $95,000.00");
-  assertEquals(formatted.secondaryDetails[1], "Investment Contribution: $500.00 → $750.00");
+  assertEquals(
+    formatted.secondaryDetails[0],
+    "Annual Income: $80,000.00 → $95,000.00",
+  );
+  assertEquals(
+    formatted.secondaryDetails[1],
+    "Investment Contribution: $500.00 → $750.00",
+  );
 });
 
 Deno.test("formatMilestones - formats multiple milestones", () => {
   const milestones = [loanPayoffMilestone, retirementMilestone];
   const formatted = formatMilestones(milestones);
-  
+
   assertEquals(formatted.length, 2);
   assertEquals(formatted[0].id, "loan-1-payoff");
   assertEquals(formatted[1].id, "retirement-eligible");
 });
 
 Deno.test("sortMilestonesByDate - sorts milestones chronologically", () => {
-  const milestones = [retirementMilestone, offsetMilestone, loanPayoffMilestone, parameterMilestone];
+  const milestones = [
+    retirementMilestone,
+    offsetMilestone,
+    loanPayoffMilestone,
+    parameterMilestone,
+  ];
   const sorted = sortMilestonesByDate(milestones);
-  
+
   assertEquals(sorted[0].id, "offset-complete"); // 2028
   assertEquals(sorted[1].id, "salary-increase"); // 2029
   assertEquals(sorted[2].id, "loan-1-payoff"); // 2030
@@ -192,37 +209,56 @@ Deno.test("sortMilestonesByDate - sorts milestones chronologically", () => {
 });
 
 Deno.test("filterMilestonesByCategory - filters by debt category", () => {
-  const milestones = [loanPayoffMilestone, offsetMilestone, retirementMilestone, parameterMilestone];
+  const milestones = [
+    loanPayoffMilestone,
+    offsetMilestone,
+    retirementMilestone,
+    parameterMilestone,
+  ];
   const debtMilestones = filterMilestonesByCategory(milestones, "debt");
-  
+
   assertEquals(debtMilestones.length, 2);
   assertEquals(debtMilestones[0].id, "loan-1-payoff");
   assertEquals(debtMilestones[1].id, "offset-complete");
 });
 
 Deno.test("filterMilestonesByType - filters by loan payoff type", () => {
-  const milestones = [loanPayoffMilestone, offsetMilestone, retirementMilestone];
+  const milestones = [
+    loanPayoffMilestone,
+    offsetMilestone,
+    retirementMilestone,
+  ];
   const loanPayoffs = filterMilestonesByType(milestones, "loan_payoff");
-  
+
   assertEquals(loanPayoffs.length, 1);
   assertEquals(loanPayoffs[0].id, "loan-1-payoff");
 });
 
 Deno.test("filterMilestonesByDateRange - filters by date range", () => {
-  const milestones = [loanPayoffMilestone, offsetMilestone, retirementMilestone, parameterMilestone];
+  const milestones = [
+    loanPayoffMilestone,
+    offsetMilestone,
+    retirementMilestone,
+    parameterMilestone,
+  ];
   const startDate = new Date("2029-01-01");
   const endDate = new Date("2030-12-31");
   const filtered = filterMilestonesByDateRange(milestones, startDate, endDate);
-  
+
   assertEquals(filtered.length, 2);
   assertEquals(filtered[0].id, "loan-1-payoff");
   assertEquals(filtered[1].id, "salary-increase");
 });
 
 Deno.test("groupMilestonesByCategory - groups milestones by category", () => {
-  const milestones = [loanPayoffMilestone, offsetMilestone, retirementMilestone, parameterMilestone];
+  const milestones = [
+    loanPayoffMilestone,
+    offsetMilestone,
+    retirementMilestone,
+    parameterMilestone,
+  ];
   const grouped = groupMilestonesByCategory(milestones);
-  
+
   assertEquals(grouped.debt.length, 2);
   assertEquals(grouped.retirement.length, 1);
   assertEquals(grouped.transition.length, 1);
@@ -230,9 +266,14 @@ Deno.test("groupMilestonesByCategory - groups milestones by category", () => {
 });
 
 Deno.test("groupMilestonesByYear - groups milestones by year", () => {
-  const milestones = [loanPayoffMilestone, offsetMilestone, retirementMilestone, parameterMilestone];
+  const milestones = [
+    loanPayoffMilestone,
+    offsetMilestone,
+    retirementMilestone,
+    parameterMilestone,
+  ];
   const grouped = groupMilestonesByYear(milestones);
-  
+
   assertEquals(grouped[2028].length, 1);
   assertEquals(grouped[2029].length, 1);
   assertEquals(grouped[2030].length, 1);

@@ -4,32 +4,37 @@
  * Validates: Requirements 1.1, 2.1
  */
 
-import { useState, useEffect } from "preact/hooks";
-import type { 
-  Milestone, 
-  RetirementAdvice, 
-  MilestoneDetectionResult,
+import { useEffect, useState } from "preact/hooks";
+import type {
+  AdviceGenerationError,
   AdviceGenerationResult,
+  Milestone,
   MilestoneDetectionError,
-  AdviceGenerationError
+  MilestoneDetectionResult,
+  RetirementAdvice,
 } from "../types/milestones.ts";
-import type { FinancialState, UserParameters, SimulationResult, TransitionPoint } from "../types/financial.ts";
+import type {
+  FinancialState,
+  SimulationResult,
+  TransitionPoint,
+  UserParameters,
+} from "../types/financial.ts";
 import { detectMilestonesFromSimulation } from "../lib/milestone_detector.ts";
 import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
-import { 
-  safeMilestoneDetection, 
-  safeAdviceGeneration,
-  validateMilestones,
-  validateAdvice,
-  createEmptyMilestoneResult,
+import {
   createEmptyAdviceResult,
-  sanitizeMilestoneForDisplay,
+  createEmptyMilestoneResult,
+  RetryManager,
+  safeAdviceGeneration,
+  safeMilestoneDetection,
   sanitizeAdviceForDisplay,
-  RetryManager
+  sanitizeMilestoneForDisplay,
+  validateAdvice,
+  validateMilestones,
 } from "../lib/error_handling_utils.ts";
 import MilestoneTimeline from "./MilestoneTimeline.tsx";
 import RetirementAdvicePanel from "./RetirementAdvicePanel.tsx";
-import { MilestoneLoadingState, AdviceLoadingState } from "./LoadingStates.tsx";
+import { AdviceLoadingState, MilestoneLoadingState } from "./LoadingStates.tsx";
 
 interface AsyncMilestoneAdviceWrapperProps {
   /** Simulation states for milestone detection */
@@ -54,13 +59,13 @@ interface AsyncState {
   milestonesLoading: boolean;
   milestonesError: Error | null;
   milestoneDetectionErrors: MilestoneDetectionError[];
-  
+
   // Advice state
   advice: RetirementAdvice | null;
   adviceLoading: boolean;
   adviceError: Error | null;
   adviceGenerationErrors: AdviceGenerationError[];
-  
+
   // General state
   hasAttemptedLoad: boolean;
 }
@@ -96,11 +101,11 @@ export default function AsyncMilestoneAdviceWrapper({
    * Loads milestones with error handling and retry logic
    */
   const loadMilestones = async () => {
-    setState(prev => ({ 
-      ...prev, 
-      milestonesLoading: true, 
+    setState((prev) => ({
+      ...prev,
+      milestonesLoading: true,
       milestonesError: null,
-      milestoneDetectionErrors: []
+      milestoneDetectionErrors: [],
     }));
 
     try {
@@ -109,53 +114,64 @@ export default function AsyncMilestoneAdviceWrapper({
           return await retryManager.execute(async () => {
             // Validate input data
             if (!simulationStates || simulationStates.length < 2) {
-              throw new Error('Insufficient simulation data for milestone detection');
+              throw new Error(
+                "Insufficient simulation data for milestone detection",
+              );
             }
 
             if (!userParameters) {
-              throw new Error('User parameters required for milestone detection');
+              throw new Error(
+                "User parameters required for milestone detection",
+              );
             }
 
             // Detect milestones
             const detectionResult = detectMilestonesFromSimulation(
               simulationStates,
               userParameters,
-              transitionPoints
+              transitionPoints,
             );
 
             // Validate results
-            const validationErrors = validateMilestones(detectionResult.milestones);
-            
+            const validationErrors = validateMilestones(
+              detectionResult.milestones,
+            );
+
             return {
               ...detectionResult,
-              errors: [...detectionResult.errors, ...validationErrors]
+              errors: [...detectionResult.errors, ...validationErrors],
             };
           });
         },
-        'detect milestones from simulation',
-        createEmptyMilestoneResult()
+        "detect milestones from simulation",
+        createEmptyMilestoneResult(),
       );
 
       // Sanitize milestones for display
-      const sanitizedMilestones = result.milestones.map(sanitizeMilestoneForDisplay);
+      const sanitizedMilestones = result.milestones.map(
+        sanitizeMilestoneForDisplay,
+      );
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         milestones: sanitizedMilestones,
         milestonesLoading: false,
         milestoneDetectionErrors: [...result.errors, ...errors],
       }));
-
     } catch (error) {
-      console.error('Failed to load milestones:', error);
-      setState(prev => ({
+      console.error("Failed to load milestones:", error);
+      setState((prev) => ({
         ...prev,
         milestonesLoading: false,
-        milestonesError: error instanceof Error ? error : new Error('Unknown milestone loading error'),
+        milestonesError: error instanceof Error
+          ? error
+          : new Error("Unknown milestone loading error"),
         milestoneDetectionErrors: [{
-          code: 'MILESTONE_LOAD_FAILED',
-          message: `Failed to load milestones: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          severity: 'critical',
+          code: "MILESTONE_LOAD_FAILED",
+          message: `Failed to load milestones: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+          severity: "critical",
           context: { error: String(error) },
         }],
       }));
@@ -166,11 +182,11 @@ export default function AsyncMilestoneAdviceWrapper({
    * Loads retirement advice with error handling and retry logic
    */
   const loadAdvice = async () => {
-    setState(prev => ({ 
-      ...prev, 
-      adviceLoading: true, 
+    setState((prev) => ({
+      ...prev,
+      adviceLoading: true,
       adviceError: null,
-      adviceGenerationErrors: []
+      adviceGenerationErrors: [],
     }));
 
     try {
@@ -178,54 +194,62 @@ export default function AsyncMilestoneAdviceWrapper({
         async () => {
           return await retryManager.execute(async () => {
             // Validate input data
-            if (!simulationResult || !simulationResult.states || simulationResult.states.length < 2) {
-              throw new Error('Insufficient simulation results for advice generation');
+            if (
+              !simulationResult || !simulationResult.states ||
+              simulationResult.states.length < 2
+            ) {
+              throw new Error(
+                "Insufficient simulation results for advice generation",
+              );
             }
 
             if (!userParameters) {
-              throw new Error('User parameters required for advice generation');
+              throw new Error("User parameters required for advice generation");
             }
 
             // Generate advice
             const adviceResult = generateRetirementAdvice(
               simulationResult,
               userParameters,
-              state.milestones // Use current milestones if available
+              state.milestones, // Use current milestones if available
             );
 
             // Validate results
             const validationErrors = validateAdvice(adviceResult.advice);
-            
+
             return {
               ...adviceResult,
-              errors: [...adviceResult.errors, ...validationErrors]
+              errors: [...adviceResult.errors, ...validationErrors],
             };
           });
         },
-        'generate retirement advice',
-        createEmptyAdviceResult()
+        "generate retirement advice",
+        createEmptyAdviceResult(),
       );
 
       // Sanitize advice for display
       const sanitizedAdvice = sanitizeAdviceForDisplay(result.advice);
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         advice: sanitizedAdvice,
         adviceLoading: false,
         adviceGenerationErrors: [...result.errors, ...errors],
       }));
-
     } catch (error) {
-      console.error('Failed to load advice:', error);
-      setState(prev => ({
+      console.error("Failed to load advice:", error);
+      setState((prev) => ({
         ...prev,
         adviceLoading: false,
-        adviceError: error instanceof Error ? error : new Error('Unknown advice loading error'),
+        adviceError: error instanceof Error
+          ? error
+          : new Error("Unknown advice loading error"),
         adviceGenerationErrors: [{
-          code: 'ADVICE_LOAD_FAILED',
-          message: `Failed to load advice: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          severity: 'critical',
+          code: "ADVICE_LOAD_FAILED",
+          message: `Failed to load advice: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+          severity: "critical",
           context: { error: String(error) },
         }],
       }));
@@ -236,8 +260,8 @@ export default function AsyncMilestoneAdviceWrapper({
    * Loads both milestones and advice
    */
   const loadAll = async () => {
-    setState(prev => ({ ...prev, hasAttemptedLoad: true }));
-    
+    setState((prev) => ({ ...prev, hasAttemptedLoad: true }));
+
     // Load milestones first, then advice (advice can use milestone data)
     await loadMilestones();
     await loadAdvice();
@@ -275,11 +299,11 @@ export default function AsyncMilestoneAdviceWrapper({
   }, [autoLoad, simulationStates, userParameters, simulationResult]);
 
   // Check if we have sufficient data
-  const hasSufficientData = simulationStates && 
-    simulationStates.length >= 2 && 
-    userParameters && 
-    simulationResult && 
-    simulationResult.states && 
+  const hasSufficientData = simulationStates &&
+    simulationStates.length >= 2 &&
+    userParameters &&
+    simulationResult &&
+    simulationResult.states &&
     simulationResult.states.length >= 2;
 
   if (!hasSufficientData && !state.hasAttemptedLoad) {
@@ -300,9 +324,12 @@ export default function AsyncMilestoneAdviceWrapper({
                 d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            <h4 class="text-lg font-medium text-gray-900 mb-2">Waiting for Simulation Data</h4>
+            <h4 class="text-lg font-medium text-gray-900 mb-2">
+              Waiting for Simulation Data
+            </h4>
             <p class="text-sm text-gray-600 mb-4">
-              Please run a complete financial simulation to see milestones and receive retirement advice.
+              Please run a complete financial simulation to see milestones and
+              receive retirement advice.
             </p>
             <button
               onClick={loadAll}
@@ -346,8 +373,8 @@ export default function AsyncMilestoneAdviceWrapper({
 
       {/* Loading state for advice if not yet loaded */}
       {!state.advice && state.adviceLoading && (
-        <AdviceLoadingState 
-          message="Generating retirement advice..." 
+        <AdviceLoadingState
+          message="Generating retirement advice..."
           details="Analyzing your financial situation and creating personalized recommendations"
         />
       )}
@@ -356,9 +383,12 @@ export default function AsyncMilestoneAdviceWrapper({
       {!autoLoad && !state.hasAttemptedLoad && (
         <div class="card p-6">
           <div class="text-center">
-            <h4 class="text-lg font-medium text-gray-900 mb-2">Load Milestones & Advice</h4>
+            <h4 class="text-lg font-medium text-gray-900 mb-2">
+              Load Milestones & Advice
+            </h4>
             <p class="text-sm text-gray-600 mb-4">
-              Click below to analyze your simulation for milestones and generate retirement advice.
+              Click below to analyze your simulation for milestones and generate
+              retirement advice.
             </p>
             <button
               onClick={loadAll}
@@ -375,11 +405,22 @@ export default function AsyncMilestoneAdviceWrapper({
         <div class="card p-4 bg-amber-50 border border-amber-200">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-5 h-5 text-amber-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span class="text-sm text-amber-800">
-                Some features encountered issues. You can retry or continue with available data.
+                Some features encountered issues. You can retry or continue with
+                available data.
               </span>
             </div>
             <button

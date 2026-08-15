@@ -15,11 +15,11 @@ interface ComparisonViewProps {
 
 /**
  * ComparisonView component
- * 
+ *
  * Displays side-by-side results comparing scenarios with and without transitions.
  * Shows retirement date comparison, net worth comparison, sustainability comparison,
  * and highlights the impact of each transition.
- * 
+ *
  * Requirements 10.1: Display comparison results
  * Requirements 10.2: Show retirement date comparison
  * Requirements 10.3: Show final net worth comparison
@@ -75,60 +75,67 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
           {/* Retirement Date Impact */}
           <div class="bg-white p-3 rounded-md shadow-sm">
             <p class="text-xs text-gray-600 mb-1">Retirement Date Impact</p>
-            {metrics.retirementDateDifference !== null ? (
-              <>
-                <p
-                  class={`text-xl font-bold ${
-                    retirementImpactPositive ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {retirementImpactPositive ? "" : "+"}
-                  {Math.abs(metrics.retirementDateDifference).toFixed(1)} years
-                </p>
-                <p class="text-xs text-gray-500 mt-1">
-                  {retirementImpactPositive ? "Earlier" : "Later"} retirement
-                </p>
-              </>
-            ) : (
-              <>
-                <p class="text-xl font-bold text-gray-500">N/A</p>
-                <p class="text-xs text-gray-500 mt-1">
-                  Retirement not achievable in one or both scenarios
-                </p>
-              </>
-            )}
+            {metrics.retirementDateDifference !== null
+              ? (
+                <>
+                  <p
+                    class={`text-xl font-bold ${
+                      retirementImpactPositive
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {retirementImpactPositive ? "" : "+"}
+                    {Math.abs(metrics.retirementDateDifference).toFixed(1)}{" "}
+                    years
+                  </p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {retirementImpactPositive ? "Earlier" : "Later"} retirement
+                  </p>
+                </>
+              )
+              : (
+                <>
+                  <p class="text-xl font-bold text-gray-500">N/A</p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    Retirement not achievable in one or both scenarios
+                  </p>
+                </>
+              )}
           </div>
 
           {/* Sustainability Impact */}
           <div class="bg-white p-3 rounded-md shadow-sm">
             <p class="text-xs text-gray-600 mb-1">Sustainability</p>
-            {metrics.sustainabilityChanged ? (
-              <>
-                <p
-                  class={`text-xl font-bold ${
-                    withTransitions.isSustainable
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  Changed
-                </p>
-                <p class="text-xs text-gray-500 mt-1">
-                  {withTransitions.isSustainable
-                    ? "Improved to sustainable"
-                    : "Degraded to unsustainable"}
-                </p>
-              </>
-            ) : (
-              <>
-                <p class="text-xl font-bold text-gray-600">Unchanged</p>
-                <p class="text-xs text-gray-500 mt-1">
-                  {withTransitions.isSustainable
-                    ? "Sustainable in both"
-                    : "Unsustainable in both"}
-                </p>
-              </>
-            )}
+            {metrics.sustainabilityChanged
+              ? (
+                <>
+                  <p
+                    class={`text-xl font-bold ${
+                      withTransitions.isSustainable
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    Changed
+                  </p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {withTransitions.isSustainable
+                      ? "Improved to sustainable"
+                      : "Degraded to unsustainable"}
+                  </p>
+                </>
+              )
+              : (
+                <>
+                  <p class="text-xl font-bold text-gray-600">Unchanged</p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {withTransitions.isSustainable
+                      ? "Sustainable in both"
+                      : "Unsustainable in both"}
+                  </p>
+                </>
+              )}
           </div>
         </div>
       </div>
@@ -338,17 +345,17 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
               <h4 class="text-sm font-semibold text-blue-800 mb-2">
                 With Transitions
               </h4>
-              {withTransitions.warnings.length > 0 ? (
-                <ul class="list-disc list-inside space-y-1">
-                  {withTransitions.warnings.map((warning, index) => (
-                    <li key={index} class="text-sm text-yellow-700">
-                      {warning}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="text-sm text-green-600">No warnings</p>
-              )}
+              {withTransitions.warnings.length > 0
+                ? (
+                  <ul class="list-disc list-inside space-y-1">
+                    {withTransitions.warnings.map((warning, index) => (
+                      <li key={index} class="text-sm text-yellow-700">
+                        {warning}
+                      </li>
+                    ))}
+                  </ul>
+                )
+                : <p class="text-sm text-green-600">No warnings</p>}
             </div>
 
             {/* Without Transitions Warnings */}
@@ -356,17 +363,17 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
               <h4 class="text-sm font-semibold text-gray-800 mb-2">
                 Without Transitions
               </h4>
-              {withoutTransitions.warnings.length > 0 ? (
-                <ul class="list-disc list-inside space-y-1">
-                  {withoutTransitions.warnings.map((warning, index) => (
-                    <li key={index} class="text-sm text-yellow-700">
-                      {warning}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="text-sm text-green-600">No warnings</p>
-              )}
+              {withoutTransitions.warnings.length > 0
+                ? (
+                  <ul class="list-disc list-inside space-y-1">
+                    {withoutTransitions.warnings.map((warning, index) => (
+                      <li key={index} class="text-sm text-yellow-700">
+                        {warning}
+                      </li>
+                    ))}
+                  </ul>
+                )
+                : <p class="text-sm text-green-600">No warnings</p>}
             </div>
           </div>
         </div>
@@ -378,7 +385,9 @@ export default function ComparisonView({ comparison }: ComparisonViewProps) {
           <h3 class="text-lg font-semibold mb-4 text-gray-800">
             Milestone Comparison
           </h3>
-          <MilestoneComparisonView comparison={comparison.milestoneComparison} />
+          <MilestoneComparisonView
+            comparison={comparison.milestoneComparison}
+          />
         </div>
       )}
 

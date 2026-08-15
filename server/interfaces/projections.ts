@@ -78,7 +78,7 @@ export interface MilestoneProjection extends Projection {
  * Projection type registry
  */
 export const PROJECTION_TYPES = {
-  FINANCIAL: 'financial',
-  TIMELINE: 'timeline',
-  MILESTONE: 'milestone',
+  FINANCIAL: "financial",
+  TIMELINE: "timeline",
+  MILESTONE: "milestone",
 } as const;

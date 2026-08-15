@@ -3,9 +3,15 @@
  * Tests milestone and advice comparison between scenarios
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertExists,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { SimulationEngine } from "../../lib/simulation_engine.ts";
-import type { SimulationConfiguration, UserParameters } from "../../types/financial.ts";
+import type {
+  SimulationConfiguration,
+  UserParameters,
+} from "../../types/financial.ts";
 
 function getTestParameters(): UserParameters {
   return {
@@ -75,18 +81,23 @@ Deno.test("ScenarioComparison - includes milestone and advice comparison", async
 
   // Verify advice has been generated for both scenarios
   assertExists(result.adviceComparison.withTransitionsAdvice.recommendations);
-  assertExists(result.adviceComparison.withoutTransitionsAdvice.recommendations);
+  assertExists(
+    result.adviceComparison.withoutTransitionsAdvice.recommendations,
+  );
 
   console.log("Milestone comparison:", {
     commonMilestones: result.milestoneComparison.commonMilestones.length,
     uniqueToWith: result.milestoneComparison.uniqueToWithTransitions.length,
-    uniqueToWithout: result.milestoneComparison.uniqueToWithoutTransitions.length,
+    uniqueToWithout:
+      result.milestoneComparison.uniqueToWithoutTransitions.length,
     timingDifferences: result.milestoneComparison.timingDifferences.length,
   });
 
   console.log("Advice comparison:", {
-    withTransitionsRecommendations: result.adviceComparison.withTransitionsAdvice.recommendations.length,
-    withoutTransitionsRecommendations: result.adviceComparison.withoutTransitionsAdvice.recommendations.length,
+    withTransitionsRecommendations:
+      result.adviceComparison.withTransitionsAdvice.recommendations.length,
+    withoutTransitionsRecommendations:
+      result.adviceComparison.withoutTransitionsAdvice.recommendations.length,
     adviceDifferences: result.adviceComparison.adviceDifferences.length,
     variationExplanations: result.adviceComparison.variationExplanation.length,
   });
@@ -114,6 +125,6 @@ Deno.test("ScenarioComparison - handles scenarios with no transitions", async ()
   // Advice should be very similar between scenarios
   assertEquals(
     result.adviceComparison.withTransitionsAdvice.overallAssessment,
-    result.adviceComparison.withoutTransitionsAdvice.overallAssessment
+    result.adviceComparison.withoutTransitionsAdvice.overallAssessment,
   );
 });

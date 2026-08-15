@@ -54,7 +54,10 @@ Deno.test("auTaxModule.calculateTax - falls back to the default levy rate when e
   const withExtras = auTaxModule.calculateTax(80000, DEFAULT_AU_TAX_BRACKETS, {
     medicareLevyRatePercent: 2.0,
   });
-  const withoutExtras = auTaxModule.calculateTax(80000, DEFAULT_AU_TAX_BRACKETS);
+  const withoutExtras = auTaxModule.calculateTax(
+    80000,
+    DEFAULT_AU_TAX_BRACKETS,
+  );
   assertEquals(withExtras, withoutExtras);
 });
 

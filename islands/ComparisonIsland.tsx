@@ -17,10 +17,10 @@ interface ComparisonIslandProps {
 
 /**
  * ComparisonIsland component
- * 
+ *
  * Provides a button to trigger comparison simulation and displays results.
  * Compares scenarios with and without parameter transitions.
- * 
+ *
  * Requirements 10.1: Offer option to run comparison simulation
  */
 export default function ComparisonIsland({ config }: ComparisonIslandProps) {
@@ -87,8 +87,8 @@ export default function ComparisonIsland({ config }: ComparisonIslandProps) {
                 Compare Scenarios
               </h3>
               <p class="text-sm text-gray-600">
-                See how your transitions impact your financial future compared to
-                maintaining base parameters
+                See how your transitions impact your financial future compared
+                to maintaining base parameters
               </p>
             </div>
             <button

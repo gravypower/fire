@@ -3,7 +3,10 @@
  * Tests the client-side API integration for server communication
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertExists,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { ApiClient } from "../../lib/api-client.ts";
 import type { SimulationConfiguration } from "../../types/financial.ts";
 
@@ -11,26 +14,32 @@ import type { SimulationConfiguration } from "../../types/financial.ts";
 const originalFetch = globalThis.fetch;
 
 function mockFetch(responses: Record<string, any>) {
-  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const method = init?.method || 'GET';
+  globalThis.fetch = async (
+    input: string | Request | URL,
+    init?: RequestInit,
+  ) => {
+    const url = typeof input === "string" ? input : input.toString();
+    const method = init?.method || "GET";
     const key = `${method} ${url}`;
-    
+
     if (responses[key]) {
       return new Response(JSON.stringify(responses[key]), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     }
-    
+
     // Default error response
-    return new Response(JSON.stringify({
-      success: false,
-      error: 'Not found',
-    }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: "Not found",
+      }),
+      {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   };
 }
 
@@ -42,8 +51,8 @@ Deno.test("ApiClient - creates session successfully", async () => {
   const mockResponse = {
     success: true,
     data: {
-      sessionId: 'test-session-123',
-      userId: 'test-user',
+      sessionId: "test-session-123",
+      userId: "test-user",
       createdAt: new Date(),
       lastAccessedAt: new Date(),
       expiresAt: new Date(Date.now() + 3600000), // 1 hour from now
@@ -51,17 +60,17 @@ Deno.test("ApiClient - creates session successfully", async () => {
   };
 
   mockFetch({
-    'POST /api/simulation/session': mockResponse,
+    "POST /api/simulation/session": mockResponse,
   });
 
   try {
     const client = new ApiClient();
-    const session = await client.createSession('test-user');
-    
+    const session = await client.createSession("test-user");
+
     assertExists(session);
-    assertEquals(session.sessionId, 'test-session-123');
-    assertEquals(session.userId, 'test-user');
-    assertEquals(client.getCurrentSessionId(), 'test-session-123');
+    assertEquals(session.sessionId, "test-session-123");
+    assertEquals(session.userId, "test-user");
+    assertEquals(client.getCurrentSessionId(), "test-session-123");
   } finally {
     restoreFetch();
   }
@@ -69,24 +78,24 @@ Deno.test("ApiClient - creates session successfully", async () => {
 
 Deno.test("ApiClient - handles server errors gracefully", async () => {
   mockFetch({
-    'POST /api/simulation/session': {
+    "POST /api/simulation/session": {
       success: false,
-      error: 'Server error',
+      error: "Server error",
     },
   });
 
   try {
     const client = new ApiClient();
-    
+
     let errorThrown = false;
     try {
-      await client.createSession('test-user');
+      await client.createSession("test-user");
     } catch (error) {
       errorThrown = true;
-      assertEquals((error as Error).message, 'Server error');
+      assertEquals((error as Error).message, "Server error");
     }
-    
-    assertEquals(errorThrown, true, 'Should throw error when server fails');
+
+    assertEquals(errorThrown, true, "Should throw error when server fails");
   } finally {
     restoreFetch();
   }
@@ -96,7 +105,7 @@ Deno.test("ApiClient - runs simulation successfully", async () => {
   const sessionResponse = {
     success: true,
     data: {
-      sessionId: 'test-session-123',
+      sessionId: "test-session-123",
       createdAt: new Date(),
       lastAccessedAt: new Date(),
       expiresAt: new Date(Date.now() + 3600000),
@@ -107,7 +116,7 @@ Deno.test("ApiClient - runs simulation successfully", async () => {
     success: true,
     data: {
       success: true,
-      commandId: 'cmd-123',
+      commandId: "cmd-123",
       events: [],
       data: {},
     },
@@ -142,17 +151,18 @@ Deno.test("ApiClient - runs simulation successfully", async () => {
   };
 
   mockFetch({
-    'POST /api/simulation/session': sessionResponse,
-    'POST /api/simulation/commands': commandResponse,
-    'GET /api/simulation/projections?sessionId=test-session-123&type=all': projectionResponse,
+    "POST /api/simulation/session": sessionResponse,
+    "POST /api/simulation/commands": commandResponse,
+    "GET /api/simulation/projections?sessionId=test-session-123&type=all":
+      projectionResponse,
   });
 
   try {
     const client = new ApiClient();
-    
+
     // Create session first
     await client.createSession();
-    
+
     // Run simulation
     const config: SimulationConfiguration = {
       baseParameters: {
@@ -185,9 +195,9 @@ Deno.test("ApiClient - runs simulation successfully", async () => {
       },
       transitions: [],
     };
-    
+
     const result = await client.runSimulation(config);
-    
+
     assertExists(result);
     assertExists(result.states);
     assertEquals(result.states.length, 1);
@@ -202,7 +212,7 @@ Deno.test("ApiClient - updates parameters successfully", async () => {
   const sessionResponse = {
     success: true,
     data: {
-      sessionId: 'test-session-123',
+      sessionId: "test-session-123",
       createdAt: new Date(),
       lastAccessedAt: new Date(),
       expiresAt: new Date(Date.now() + 3600000),
@@ -213,29 +223,29 @@ Deno.test("ApiClient - updates parameters successfully", async () => {
     success: true,
     data: {
       success: true,
-      commandId: 'update-cmd-123',
+      commandId: "update-cmd-123",
       events: [],
       data: {},
     },
   };
 
   mockFetch({
-    'POST /api/simulation/session': sessionResponse,
-    'POST /api/simulation/commands': updateResponse,
+    "POST /api/simulation/session": sessionResponse,
+    "POST /api/simulation/commands": updateResponse,
   });
 
   try {
     const client = new ApiClient();
-    
+
     // Create session first
     await client.createSession();
-    
+
     // Update parameters
     await client.updateParameters({
       annualSalary: 90000,
       monthlyInvestmentContribution: 600,
     });
-    
+
     // Should not throw error
   } finally {
     restoreFetch();
@@ -245,9 +255,9 @@ Deno.test("ApiClient - updates parameters successfully", async () => {
 Deno.test("ApiClient - WebSocket manager handles connection", () => {
   // Note: This is a basic test since WebSocket mocking is complex
   // In a real implementation, you might use a WebSocket mock library
-  
+
   const client = new ApiClient();
-  
+
   // Test initial state
   assertEquals(client.getCurrentSessionId(), null);
 

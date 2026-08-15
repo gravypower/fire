@@ -3,20 +3,28 @@
  * Validates: Requirements 1.1, 3.1, 3.2, 3.3, 3.4, 3.5
  */
 
-import type { Milestone, MilestoneCategory, MilestoneType, MilestoneDetectionError } from "../types/milestones.ts";
+import type {
+  Milestone,
+  MilestoneCategory,
+  MilestoneDetectionError,
+  MilestoneType,
+} from "../types/milestones.ts";
 import type { FinancialState } from "../types/financial.ts";
-import { formatMilestone, type MilestoneDisplay } from "../lib/milestone_formatters.ts";
+import {
+  formatMilestone,
+  type MilestoneDisplay,
+} from "../lib/milestone_formatters.ts";
 import { useState } from "preact/hooks";
 import MilestoneErrorBoundary from "./MilestoneErrorBoundary.tsx";
-import { 
-  MilestoneLoadingState, 
-  MilestoneSkeletonLoader, 
-  InlineLoadingState 
+import {
+  InlineLoadingState,
+  MilestoneLoadingState,
+  MilestoneSkeletonLoader,
 } from "./LoadingStates.tsx";
-import { 
-  NoMilestonesDisplay, 
-  MilestoneDetectionFailedDisplay, 
-  InsufficientDataDisplay 
+import {
+  InsufficientDataDisplay,
+  MilestoneDetectionFailedDisplay,
+  NoMilestonesDisplay,
 } from "./FallbackDisplays.tsx";
 
 interface MilestoneTimelineProps {
@@ -43,18 +51,18 @@ interface MilestoneTimelineProps {
  */
 function getMilestoneIcon(type: MilestoneType): string {
   switch (type) {
-    case 'loan_payoff':
-      return '💳';
-    case 'offset_completion':
-      return '🏦';
-    case 'retirement_eligibility':
-      return '🏖️';
-    case 'parameter_transition':
-      return '📊';
-    case 'expense_expiration':
-      return '💸';
+    case "loan_payoff":
+      return "💳";
+    case "offset_completion":
+      return "🏦";
+    case "retirement_eligibility":
+      return "🏖️";
+    case "parameter_transition":
+      return "📊";
+    case "expense_expiration":
+      return "💸";
     default:
-      return '📅';
+      return "📅";
   }
 }
 
@@ -68,47 +76,47 @@ function getCategoryColors(category: MilestoneCategory): {
   dot: string;
 } {
   switch (category) {
-    case 'debt':
+    case "debt":
       return {
-        badge: 'bg-green-100 text-green-800',
-        border: 'border-green-200',
-        bg: 'bg-green-50',
-        dot: 'bg-green-600 border-green-600',
+        badge: "bg-green-100 text-green-800",
+        border: "border-green-200",
+        bg: "bg-green-50",
+        dot: "bg-green-600 border-green-600",
       };
-    case 'investment':
+    case "investment":
       return {
-        badge: 'bg-blue-100 text-blue-800',
-        border: 'border-blue-200',
-        bg: 'bg-blue-50',
-        dot: 'bg-blue-600 border-blue-600',
+        badge: "bg-blue-100 text-blue-800",
+        border: "border-blue-200",
+        bg: "bg-blue-50",
+        dot: "bg-blue-600 border-blue-600",
       };
-    case 'retirement':
+    case "retirement":
       return {
-        badge: 'bg-purple-100 text-purple-800',
-        border: 'border-purple-200',
-        bg: 'bg-purple-50',
-        dot: 'bg-purple-600 border-purple-600',
+        badge: "bg-purple-100 text-purple-800",
+        border: "border-purple-200",
+        bg: "bg-purple-50",
+        dot: "bg-purple-600 border-purple-600",
       };
-    case 'transition':
+    case "transition":
       return {
-        badge: 'bg-yellow-100 text-yellow-800',
-        border: 'border-yellow-200',
-        bg: 'bg-yellow-50',
-        dot: 'bg-yellow-600 border-yellow-600',
+        badge: "bg-yellow-100 text-yellow-800",
+        border: "border-yellow-200",
+        bg: "bg-yellow-50",
+        dot: "bg-yellow-600 border-yellow-600",
       };
-    case 'expense':
+    case "expense":
       return {
-        badge: 'bg-orange-100 text-orange-800',
-        border: 'border-orange-200',
-        bg: 'bg-orange-50',
-        dot: 'bg-orange-600 border-orange-600',
+        badge: "bg-orange-100 text-orange-800",
+        border: "border-orange-200",
+        bg: "bg-orange-50",
+        dot: "bg-orange-600 border-orange-600",
       };
     default:
       return {
-        badge: 'bg-gray-100 text-gray-800',
-        border: 'border-gray-200',
-        bg: 'bg-gray-50',
-        dot: 'bg-gray-600 border-gray-600',
+        badge: "bg-gray-100 text-gray-800",
+        border: "border-gray-200",
+        bg: "bg-gray-50",
+        dot: "bg-gray-600 border-gray-600",
       };
   }
 }
@@ -116,13 +124,13 @@ function getCategoryColors(category: MilestoneCategory): {
 /**
  * Individual milestone card component
  */
-function MilestoneCard({ 
-  milestone, 
-  display, 
-  colors, 
-  isExpanded, 
-  onToggle, 
-  onClick 
+function MilestoneCard({
+  milestone,
+  display,
+  colors,
+  isExpanded,
+  onToggle,
+  onClick,
 }: {
   milestone: Milestone;
   display: MilestoneDisplay;
@@ -143,14 +151,18 @@ function MilestoneCard({
   return (
     <div
       class={`border rounded-lg p-4 transition-all duration-200 cursor-pointer hover:shadow-md ${colors.border} ${colors.bg} ${
-        isExpanded ? 'shadow-md' : 'hover:border-opacity-80'
+        isExpanded ? "shadow-md" : "hover:border-opacity-80"
       }`}
       onClick={handleCardClick}
     >
       {/* Header */}
       <div class="flex items-start justify-between mb-3">
         <div class="flex items-center gap-3">
-          <span class="text-2xl" role="img" aria-label={`${milestone.type} milestone`}>
+          <span
+            class="text-2xl"
+            role="img"
+            aria-label={`${milestone.type} milestone`}
+          >
             {getMilestoneIcon(milestone.type)}
           </span>
           <div>
@@ -159,7 +171,9 @@ function MilestoneCard({
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <span class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors.badge}`}>
+          <span
+            class={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors.badge}`}
+          >
             {milestone.category}
           </span>
           <button
@@ -168,10 +182,12 @@ function MilestoneCard({
               e.stopPropagation();
               onToggle();
             }}
-            aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+            aria-label={isExpanded ? "Collapse details" : "Expand details"}
           >
             <svg
-              class={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+              class={`w-4 h-4 transition-transform duration-200 ${
+                isExpanded ? "rotate-180" : ""
+              }`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -195,7 +211,9 @@ function MilestoneCard({
       {/* Financial impact */}
       {display.financialImpact.text !== "No financial impact" && (
         <div class="mb-3">
-          <span class={`text-sm font-medium ${display.financialImpact.className}`}>
+          <span
+            class={`text-sm font-medium ${display.financialImpact.className}`}
+          >
             {display.financialImpact.text}
           </span>
         </div>
@@ -206,13 +224,16 @@ function MilestoneCard({
         <div class="mt-4 pt-3 border-t border-gray-200 fade-in">
           <div class="space-y-2">
             <p class="text-sm text-gray-600">{display.description}</p>
-            
+
             {display.secondaryDetails.length > 0 && (
               <div class="mt-3">
                 <h5 class="text-xs font-medium text-gray-700 mb-2">Details:</h5>
                 <ul class="space-y-1">
                   {display.secondaryDetails.map((detail, index) => (
-                    <li key={index} class="text-xs text-gray-600 flex items-start gap-2">
+                    <li
+                      key={index}
+                      class="text-xs text-gray-600 flex items-start gap-2"
+                    >
                       <span class="text-gray-400 mt-0.5">•</span>
                       <span>{detail}</span>
                     </li>
@@ -226,7 +247,12 @@ function MilestoneCard({
 
       {/* Click hint */}
       <div class="mt-2 text-xs text-gray-500 flex items-center gap-1">
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="w-3 h-3"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -234,7 +260,7 @@ function MilestoneCard({
             d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"
           />
         </svg>
-        <span>Click to {isExpanded ? 'collapse' : 'expand'} details</span>
+        <span>Click to {isExpanded ? "collapse" : "expand"} details</span>
       </div>
     </div>
   );
@@ -253,13 +279,15 @@ function MilestoneTimelineCore({
   onRetry,
   showSkeleton = false,
 }: MilestoneTimelineProps) {
-  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set());
+  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Handle loading state
   if (isLoading) {
     return showSkeleton ? <MilestoneSkeletonLoader /> : (
-      <MilestoneLoadingState 
-        message="Detecting milestones..." 
+      <MilestoneLoadingState
+        message="Detecting milestones..."
         details="Analyzing your financial timeline for major events"
       />
     );
@@ -277,7 +305,9 @@ function MilestoneTimelineCore({
 
   // Handle detection errors
   if (detectionErrors.length > 0) {
-    const criticalErrors = detectionErrors.filter(e => e.severity === 'critical');
+    const criticalErrors = detectionErrors.filter((e) =>
+      e.severity === "critical"
+    );
     if (criticalErrors.length > 0) {
       return (
         <MilestoneDetectionFailedDisplay
@@ -300,14 +330,14 @@ function MilestoneTimelineCore({
         />
       );
     }
-    
+
     // No milestones found but data is sufficient
     return <NoMilestonesDisplay onRetry={onRetry} />;
   }
 
   // Sort milestones chronologically
   const sortedMilestones = [...milestones].sort(
-    (a, b) => a.date.getTime() - b.date.getTime()
+    (a, b) => a.date.getTime() - b.date.getTime(),
   );
 
   // Format milestones for display with error handling
@@ -346,23 +376,38 @@ function MilestoneTimelineCore({
     }
   };
 
-
-
   return (
     <div class="card p-6">
       <div class="flex items-center justify-between mb-6">
-        <h3 class="text-lg font-semibold text-gray-800">Financial Milestones</h3>
+        <h3 class="text-lg font-semibold text-gray-800">
+          Financial Milestones
+        </h3>
         <div class="flex items-center gap-3">
           <span class="text-sm text-gray-500">
-            {milestones.length} milestone{milestones.length !== 1 ? 's' : ''}
+            {milestones.length} milestone{milestones.length !== 1 ? "s" : ""}
           </span>
           {detectionErrors.length > 0 && (
             <div class="flex items-center gap-1 text-amber-600">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <span class="text-xs">
-                {detectionErrors.filter(e => e.severity === 'warning').length} warning{detectionErrors.filter(e => e.severity === 'warning').length !== 1 ? 's' : ''}
+                {detectionErrors.filter((e) => e.severity === "warning").length}
+                {" "}
+                warning{detectionErrors.filter((e) => e.severity === "warning")
+                    .length !== 1
+                  ? "s"
+                  : ""}
               </span>
             </div>
           )}
@@ -384,7 +429,9 @@ function MilestoneTimelineCore({
             return (
               <div key={milestone.id} class="relative">
                 {/* Timeline dot (hidden on mobile) */}
-                <div class={`absolute left-4 w-4 h-4 rounded-full border-2 hidden sm:block ${colors.dot}`} />
+                <div
+                  class={`absolute left-4 w-4 h-4 rounded-full border-2 hidden sm:block ${colors.dot}`}
+                />
 
                 {/* Milestone card */}
                 <div class="sm:pl-12">
@@ -394,7 +441,9 @@ function MilestoneTimelineCore({
                     colors={colors}
                     isExpanded={isExpanded}
                     onToggle={() => toggleMilestone(milestone.id)}
-                    onClick={onMilestoneClick ? () => handleMilestoneClick(milestone) : undefined}
+                    onClick={onMilestoneClick
+                      ? () => handleMilestoneClick(milestone)
+                      : undefined}
                   />
                 </div>
               </div>
@@ -407,7 +456,12 @@ function MilestoneTimelineCore({
           <div class="absolute left-4 w-4 h-4 rounded-full border-2 bg-gray-300 border-gray-300" />
           <div class="pl-12">
             <div class="text-sm text-gray-500 flex items-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -436,7 +490,7 @@ function MilestoneTimelineCore({
  */
 export default function MilestoneTimeline(props: MilestoneTimelineProps) {
   return (
-    <MilestoneErrorBoundary 
+    <MilestoneErrorBoundary
       context="displaying milestone timeline"
       onRetry={props.onRetry}
     >

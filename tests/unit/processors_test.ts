@@ -5,15 +5,19 @@
 
 import { assert, assertEquals, assertExists } from "$std/assert/mod.ts";
 import {
-  IncomeProcessor,
-  ExpenseProcessor,
-  LoanProcessor,
-  InvestmentProcessor,
-  RetirementCalculator,
   calculateTaxWithBrackets,
   DEFAULT_AU_TAX_BRACKETS,
+  ExpenseProcessor,
+  IncomeProcessor,
+  InvestmentProcessor,
+  LoanProcessor,
+  RetirementCalculator,
 } from "../../lib/processors.ts";
-import type { UserParameters, FinancialState, TaxBracket } from "../../types/financial.ts";
+import type {
+  FinancialState,
+  TaxBracket,
+  UserParameters,
+} from "../../types/financial.ts";
 import type { PlannedSale } from "../../types/investments.ts";
 
 /**
@@ -53,7 +57,7 @@ Deno.test("calculateTaxWithBrackets - no tax below threshold", () => {
     { min: 0, max: 18200, rate: 0 },
     { min: 18200, max: 45000, rate: 19 },
   ];
-  
+
   const tax = calculateTaxWithBrackets(15000, brackets);
   assertEquals(tax, 0);
 });
@@ -63,7 +67,7 @@ Deno.test("calculateTaxWithBrackets - single bracket", () => {
     { min: 0, max: 18200, rate: 0 },
     { min: 18200, max: 45000, rate: 19 },
   ];
-  
+
   const tax = calculateTaxWithBrackets(30000, brackets);
   // Tax on (30000 - 18200) = 11800 * 0.19 = 2242
   assertEquals(Math.abs(tax - 2242) < 1, true);
@@ -75,7 +79,7 @@ Deno.test("calculateTaxWithBrackets - multiple brackets", () => {
     { min: 18200, max: 45000, rate: 19 },
     { min: 45000, max: 120000, rate: 32.5 },
   ];
-  
+
   const tax = calculateTaxWithBrackets(60000, brackets);
   // Bracket 1: 0
   // Bracket 2: (45000 - 18200) * 0.19 = 5092
@@ -90,7 +94,7 @@ Deno.test("calculateTaxWithBrackets - top bracket with no max", () => {
     { min: 18200, max: 45000, rate: 19 },
     { min: 45000, max: null, rate: 45 },
   ];
-  
+
   const tax = calculateTaxWithBrackets(200000, brackets);
   // Bracket 1: 0
   // Bracket 2: (45000 - 18200) * 0.19 = 5092
@@ -104,7 +108,7 @@ Deno.test("calculateTaxWithBrackets - Australian tax brackets", () => {
   const tax80k = calculateTaxWithBrackets(80000, DEFAULT_AU_TAX_BRACKETS);
   // Expected: 0 + (45000-18200)*0.19 + (80000-45000)*0.325 = 5092 + 11375 = 16467
   assertEquals(Math.abs(tax80k - 16467) < 1, true);
-  
+
   const tax150k = calculateTaxWithBrackets(150000, DEFAULT_AU_TAX_BRACKETS);
   // Expected: 0 + 5092 + (120000-45000)*0.325 + (150000-120000)*0.37 = 5092 + 24375 + 11100 = 40567
   assertEquals(Math.abs(tax150k - 40567) < 1, true);
@@ -115,7 +119,7 @@ Deno.test("calculateTaxWithBrackets - Australian tax brackets", () => {
 Deno.test("IncomeProcessor.calculateIncome - monthly interval", () => {
   const params = getTestParameters();
   params.annualSalary = 120000;
-  
+
   const income = IncomeProcessor.calculateIncome(params, "month");
   assertEquals(income, 10000); // 120000 / 12
 });
@@ -123,7 +127,7 @@ Deno.test("IncomeProcessor.calculateIncome - monthly interval", () => {
 Deno.test("IncomeProcessor.calculateIncome - weekly interval", () => {
   const params = getTestParameters();
   params.annualSalary = 52000;
-  
+
   const income = IncomeProcessor.calculateIncome(params, "week");
   assertEquals(income, 1000); // 52000 / 52
 });
@@ -133,7 +137,7 @@ Deno.test("IncomeProcessor.calculateTax - flat rate", () => {
   params.annualSalary = 100000;
   params.incomeTaxRate = 25;
   params.taxBrackets = undefined;
-  
+
   const tax = IncomeProcessor.calculateTax(params, "month");
   // Annual tax: 100000 * 0.25 = 25000
   // Monthly: 25000 / 12 = 2083.33
@@ -144,10 +148,10 @@ Deno.test("IncomeProcessor.calculateTax - progressive brackets", () => {
   const params = getTestParameters();
   params.annualSalary = 80000;
   params.taxBrackets = DEFAULT_AU_TAX_BRACKETS;
-  
+
   const monthlyTax = IncomeProcessor.calculateTax(params, "month");
   const annualTax = IncomeProcessor.calculateAnnualTax(params, 80000);
-  
+
   // Monthly should be annual / 12
   assertEquals(Math.abs(monthlyTax - (annualTax / 12)) < 0.01, true);
 });
@@ -158,7 +162,7 @@ Deno.test("ExpenseProcessor.calculateExpenses - monthly interval", () => {
   const params = getTestParameters();
   params.monthlyLivingExpenses = 2000;
   params.monthlyRentOrMortgage = 1500;
-  
+
   const expenses = ExpenseProcessor.calculateExpenses(params, "month");
   assertEquals(expenses, 3500); // 2000 + 1500
 });
@@ -167,7 +171,7 @@ Deno.test("ExpenseProcessor.calculateExpenses - weekly interval", () => {
   const params = getTestParameters();
   params.monthlyLivingExpenses = 2600; // 600/week * 52/12
   params.monthlyRentOrMortgage = 0;
-  
+
   const expenses = ExpenseProcessor.calculateExpenses(params, "week");
   // (2600 * 12) / 52 = 600
   assertEquals(Math.abs(expenses - 600) < 1, true);
@@ -182,9 +186,9 @@ Deno.test("LoanProcessor.calculateLoanPayment - basic payment", () => {
     0.06, // 6% annual rate
     1000, // payment
     "month",
-    false
+    false,
   );
-  
+
   // Interest for month: 100000 * (1.06^(1/12) - 1) ≈ 487
   // Principal: 1000 - 487 = 513
   // New balance: 100000 - 513 = 99487
@@ -201,24 +205,24 @@ Deno.test("LoanProcessor.calculateLoanPayment - with offset account", () => {
     0.06,
     1000,
     "month",
-    false
+    false,
   );
-  
+
   const withOffset = LoanProcessor.calculateLoanPayment(
     100000,
     20000, // $20k offset
     0.06,
     1000,
     "month",
-    true
+    true,
   );
-  
+
   // With offset, interest should be less
   assertEquals(withOffset.interestPaid < withoutOffset.interestPaid, true);
-  
+
   // Principal paid should be more
   assertEquals(withOffset.principalPaid > withoutOffset.principalPaid, true);
-  
+
   // Interest saved should be positive
   assertEquals(withOffset.interestSaved > 0, true);
 });
@@ -230,9 +234,9 @@ Deno.test("LoanProcessor.calculateLoanPayment - zero balance", () => {
     0.06,
     1000,
     "month",
-    false
+    false,
   );
-  
+
   assertEquals(result.newBalance, 0);
   assertEquals(result.interestPaid, 0);
   assertEquals(result.principalPaid, 0);
@@ -245,9 +249,9 @@ Deno.test("LoanProcessor.calculateLoanPayment - payment exceeds balance", () => 
     0.06,
     1000, // large payment
     "month",
-    false
+    false,
   );
-  
+
   // Should pay off completely
   assertEquals(result.newBalance, 0);
   assertEquals(result.principalPaid <= 500, true);
@@ -260,12 +264,12 @@ Deno.test("InvestmentProcessor.calculateInvestmentGrowth - with contribution", (
     10000, // balance
     500, // contribution
     0.08, // 8% annual return
-    "month"
+    "month",
   );
-  
+
   // Should be more than 10500 due to growth
   assertEquals(newBalance > 10500, true);
-  
+
   // Monthly growth rate: (1.08)^(1/12) - 1 ≈ 0.00643
   // Expected: 10000 * 1.00643 + 500 * 1.00643 ≈ 10567
   assertEquals(Math.abs(newBalance - 10567) < 10, true);
@@ -276,9 +280,9 @@ Deno.test("InvestmentProcessor.calculateInvestmentGrowth - no contribution", () 
     10000,
     0,
     0.08,
-    "month"
+    "month",
   );
-  
+
   // Should grow by monthly rate
   assertEquals(newBalance > 10000, true);
   assertEquals(newBalance < 10100, true); // Less than 1% monthly
@@ -289,9 +293,9 @@ Deno.test("InvestmentProcessor.calculateInvestmentGrowth - negative return", () 
     10000,
     0,
     -0.10, // -10% annual
-    "month"
+    "month",
   );
-  
+
   // Should decrease
   assertEquals(newBalance < 10000, true);
 });
@@ -302,9 +306,9 @@ Deno.test("RetirementCalculator.calculateSafeWithdrawal - 4% rule", () => {
   const withdrawal = RetirementCalculator.calculateSafeWithdrawal(
     500000, // investments
     0, // super (below preservation age)
-    55 // age
+    55, // age
   );
-  
+
   // 4% of 500000 = 20000
   assertEquals(withdrawal, 20000);
 });
@@ -313,9 +317,9 @@ Deno.test("RetirementCalculator.calculateSafeWithdrawal - includes super at pres
   const withdrawal = RetirementCalculator.calculateSafeWithdrawal(
     500000, // investments
     300000, // super
-    65 // age >= 60
+    65, // age >= 60
   );
-  
+
   // 4% of (500000 + 300000) = 32000
   assertEquals(withdrawal, 32000);
 });
@@ -323,12 +327,12 @@ Deno.test("RetirementCalculator.calculateSafeWithdrawal - includes super at pres
 Deno.test("RetirementCalculator.findRetirementDate - achievable retirement", () => {
   const states: FinancialState[] = [];
   const startDate = new Date("2024-01-01");
-  
+
   // Create states with growing wealth over 10 years (120 months)
   for (let i = 0; i < 120; i++) {
     const date = new Date(startDate);
     date.setMonth(date.getMonth() + i);
-    
+
     states.push({
       date,
       cash: 1000,
@@ -343,14 +347,14 @@ Deno.test("RetirementCalculator.findRetirementDate - achievable retirement", () 
       interestSaved: 0,
     });
   }
-  
+
   const result = RetirementCalculator.findRetirementDate(
     states,
     40000, // desired income (4% of 1M = 40k)
     55, // current age
-    60 // retirement age (5 years = 60 months)
+    60, // retirement age (5 years = 60 months)
   );
-  
+
   assertExists(result.date);
   assertExists(result.age);
   assertEquals(result.age! >= 60, true);
@@ -359,12 +363,12 @@ Deno.test("RetirementCalculator.findRetirementDate - achievable retirement", () 
 Deno.test("RetirementCalculator.findRetirementDate - not achievable", () => {
   const states: FinancialState[] = [];
   const startDate = new Date("2024-01-01");
-  
+
   // Create states with insufficient wealth
   for (let i = 0; i < 120; i++) {
     const date = new Date(startDate);
     date.setMonth(date.getMonth() + i);
-    
+
     states.push({
       date,
       cash: 1000,
@@ -379,12 +383,12 @@ Deno.test("RetirementCalculator.findRetirementDate - not achievable", () => {
       interestSaved: 0,
     });
   }
-  
+
   const result = RetirementCalculator.findRetirementDate(
     states,
     100000, // high desired income
     30,
-    35
+    35,
   );
 
   assertEquals(result.date, null);
@@ -402,19 +406,34 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - once fires exactly o
 
   // Before the sale date
   assertEquals(
-    InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-01-01"), new Date("2025-02-01")),
+    InvestmentProcessor.calculatePlannedSaleAmount(
+      sale,
+      100000,
+      new Date("2025-01-01"),
+      new Date("2025-02-01"),
+    ),
     0,
   );
 
   // Period containing the sale date
   assertEquals(
-    InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-06-01"), new Date("2025-07-01")),
+    InvestmentProcessor.calculatePlannedSaleAmount(
+      sale,
+      100000,
+      new Date("2025-06-01"),
+      new Date("2025-07-01"),
+    ),
     5000,
   );
 
   // After - should not fire again
   assertEquals(
-    InvestmentProcessor.calculatePlannedSaleAmount(sale, 95000, new Date("2025-07-01"), new Date("2025-08-01")),
+    InvestmentProcessor.calculatePlannedSaleAmount(
+      sale,
+      95000,
+      new Date("2025-07-01"),
+      new Date("2025-08-01"),
+    ),
     0,
   );
 });
@@ -429,7 +448,12 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - clamps a fixed amoun
   };
 
   assertEquals(
-    InvestmentProcessor.calculatePlannedSaleAmount(sale, 10000, new Date("2025-06-01"), new Date("2025-07-01")),
+    InvestmentProcessor.calculatePlannedSaleAmount(
+      sale,
+      10000,
+      new Date("2025-06-01"),
+      new Date("2025-07-01"),
+    ),
     10000,
   );
 });
@@ -448,15 +472,30 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - yearly percent-of-ba
   // Each window is deliberately wider than one year so it comfortably
   // straddles the occurrence boundary regardless of leap-year noise, and
   // tiles into the next window with no gap or overlap.
-  const y1 = InvestmentProcessor.calculatePlannedSaleAmount(sale, balance, new Date("2025-01-01"), new Date("2026-02-01"));
+  const y1 = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    balance,
+    new Date("2025-01-01"),
+    new Date("2026-02-01"),
+  );
   assertEquals(y1, 20000); // 20% of 100,000
   balance -= y1;
 
-  const y2 = InvestmentProcessor.calculatePlannedSaleAmount(sale, balance, new Date("2026-02-01"), new Date("2027-02-01"));
+  const y2 = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    balance,
+    new Date("2026-02-01"),
+    new Date("2027-02-01"),
+  );
   assertEquals(y2, 16000); // 20% of the remaining 80,000
   balance -= y2;
 
-  const y3 = InvestmentProcessor.calculatePlannedSaleAmount(sale, balance, new Date("2027-02-01"), new Date("2028-02-01"));
+  const y3 = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    balance,
+    new Date("2027-02-01"),
+    new Date("2028-02-01"),
+  );
   assertEquals(y3, 12800); // 20% of the remaining 64,000
   balance -= y3;
 
@@ -472,10 +511,20 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - half-yearly fixed am
     amount: 5000,
   };
 
-  const first = InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-01-01"), new Date("2025-08-01"));
+  const first = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    100000,
+    new Date("2025-01-01"),
+    new Date("2025-08-01"),
+  );
   assertEquals(first, 5000);
 
-  const second = InvestmentProcessor.calculatePlannedSaleAmount(sale, 95000, new Date("2025-08-01"), new Date("2026-02-01"));
+  const second = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    95000,
+    new Date("2025-08-01"),
+    new Date("2026-02-01"),
+  );
   assertEquals(second, 5000);
 });
 
@@ -490,11 +539,21 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - respects endDate", (
   };
 
   // First occurrence, before endDate, should fire
-  const beforeEnd = InvestmentProcessor.calculatePlannedSaleAmount(sale, 100000, new Date("2025-01-01"), new Date("2026-02-01"));
+  const beforeEnd = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    100000,
+    new Date("2025-01-01"),
+    new Date("2026-02-01"),
+  );
   assertEquals(beforeEnd, 1000);
 
   // Occurrence that would be well after endDate should not fire
-  const afterEnd = InvestmentProcessor.calculatePlannedSaleAmount(sale, 99000, new Date("2027-01-01"), new Date("2028-01-01"));
+  const afterEnd = InvestmentProcessor.calculatePlannedSaleAmount(
+    sale,
+    99000,
+    new Date("2027-01-01"),
+    new Date("2028-01-01"),
+  );
   assertEquals(afterEnd, 0);
 });
 
@@ -508,7 +567,12 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - a depleted holding n
   };
 
   assertEquals(
-    InvestmentProcessor.calculatePlannedSaleAmount(sale, 0, new Date("2025-06-01"), new Date("2025-07-01")),
+    InvestmentProcessor.calculatePlannedSaleAmount(
+      sale,
+      0,
+      new Date("2025-06-01"),
+      new Date("2025-07-01"),
+    ),
     0,
   );
 });
@@ -533,9 +597,19 @@ Deno.test("InvestmentProcessor.calculatePlannedSaleAmount - multiple rules on th
   const periodStart = new Date("2025-01-01");
   const periodEnd = new Date("2026-02-01");
 
-  const lumpSumAmount = InvestmentProcessor.calculatePlannedSaleAmount(lumpSum, balance, periodStart, periodEnd);
+  const lumpSumAmount = InvestmentProcessor.calculatePlannedSaleAmount(
+    lumpSum,
+    balance,
+    periodStart,
+    periodEnd,
+  );
   balance -= lumpSumAmount;
-  const drawdownAmount = InvestmentProcessor.calculatePlannedSaleAmount(drawdown, balance, periodStart, periodEnd);
+  const drawdownAmount = InvestmentProcessor.calculatePlannedSaleAmount(
+    drawdown,
+    balance,
+    periodStart,
+    periodEnd,
+  );
   balance -= drawdownAmount;
 
   assertEquals(lumpSumAmount, 20000);

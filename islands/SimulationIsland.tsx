@@ -14,10 +14,10 @@ interface SimulationIslandProps {
 
 /**
  * SimulationIsland component
- * 
+ *
  * Receives UserParameters as props and automatically triggers simulation
  * when parameters change. Manages loading state and error handling.
- * 
+ *
  * Requirements 5.1: Parameter changes trigger new simulation runs
  * Requirements 5.2: Results update to reflect new scenarios
  */
@@ -31,7 +31,7 @@ export default function SimulationIsland({
 
   /**
    * Runs simulation when parameters change
-   * Requirements 5.1: WHEN a user modifies a financial parameter 
+   * Requirements 5.1: WHEN a user modifies a financial parameter
    * THEN the Finance Simulation Tool SHALL trigger a new simulation run automatically
    */
   useEffect(() => {
@@ -43,8 +43,6 @@ export default function SimulationIsland({
         // Run simulation in a setTimeout to allow UI to update
         // This prevents blocking the UI thread for long simulations
         await new Promise((resolve) => setTimeout(resolve, 0));
-
-
 
         // Create a basic configuration for the API
         const config = {
@@ -80,14 +78,27 @@ export default function SimulationIsland({
 
         if (err instanceof Error) {
           // Provide more specific error messages based on error type
-          if (err.message.includes("division by zero") || err.message.includes("divide by zero")) {
-            errorMessage = "Invalid calculation detected. Please check your input values, especially interest rates and payment amounts.";
-          } else if (err.message.includes("overflow") || err.message.includes("Infinity")) {
-            errorMessage = "The simulation produced values that are too large. Please adjust your parameters to more realistic values.";
-          } else if (err.message.includes("NaN") || err.message.includes("not a number")) {
-            errorMessage = "Invalid numeric values detected. Please ensure all inputs are valid numbers.";
-          } else if (err.message.includes("timeout") || err.message.includes("time out")) {
-            errorMessage = "The simulation is taking too long. Try reducing the simulation years or adjusting your parameters.";
+          if (
+            err.message.includes("division by zero") ||
+            err.message.includes("divide by zero")
+          ) {
+            errorMessage =
+              "Invalid calculation detected. Please check your input values, especially interest rates and payment amounts.";
+          } else if (
+            err.message.includes("overflow") || err.message.includes("Infinity")
+          ) {
+            errorMessage =
+              "The simulation produced values that are too large. Please adjust your parameters to more realistic values.";
+          } else if (
+            err.message.includes("NaN") || err.message.includes("not a number")
+          ) {
+            errorMessage =
+              "Invalid numeric values detected. Please ensure all inputs are valid numbers.";
+          } else if (
+            err.message.includes("timeout") || err.message.includes("time out")
+          ) {
+            errorMessage =
+              "The simulation is taking too long. Try reducing the simulation years or adjusting your parameters.";
           } else {
             errorMessage = err.message;
           }
@@ -112,11 +123,19 @@ export default function SimulationIsland({
         <div class="flex flex-col items-center justify-center space-y-4">
           <div class="spinner-lg"></div>
           <div class="text-center">
-            <p class="text-lg font-medium text-gray-700">Running simulation...</p>
-            <p class="text-sm text-gray-500 mt-1">Calculating your financial future</p>
+            <p class="text-lg font-medium text-gray-700">
+              Running simulation...
+            </p>
+            <p class="text-sm text-gray-500 mt-1">
+              Calculating your financial future
+            </p>
           </div>
           <div class="w-full max-w-xs bg-gray-200 rounded-full h-2 overflow-hidden">
-            <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 100%"></div>
+            <div
+              class="bg-blue-600 h-2 rounded-full animate-pulse"
+              style="width: 100%"
+            >
+            </div>
           </div>
         </div>
       </div>
@@ -158,8 +177,12 @@ export default function SimulationIsland({
                 <ul class="text-xs text-red-700 list-disc list-inside space-y-1">
                   <li>Verify all input values are positive numbers</li>
                   <li>Ensure interest rates are reasonable (0-100%)</li>
-                  <li>Check that loan payments are sufficient to cover interest</li>
-                  <li>Reduce simulation years if the calculation is too complex</li>
+                  <li>
+                    Check that loan payments are sufficient to cover interest
+                  </li>
+                  <li>
+                    Reduce simulation years if the calculation is too complex
+                  </li>
                 </ul>
               </div>
               <div class="flex gap-3">
@@ -192,7 +215,9 @@ export default function SimulationIsland({
   if (result) {
     return (
       <div class="card p-6 fade-in">
-        <h2 class="text-2xl font-bold mb-6 text-gray-800">Simulation Results</h2>
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          Simulation Results
+        </h2>
 
         {/* Key Metrics */}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -221,22 +246,24 @@ export default function SimulationIsland({
             <p class="text-2xl font-bold text-green-600">
               ${result.states[result.states.length - 1].netWorth.toLocaleString(
                 undefined,
-                { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                { minimumFractionDigits: 2, maximumFractionDigits: 2 },
               )}
             </p>
           </div>
 
           {/* Sustainability */}
           <div
-            class={`metric-card ${result.isSustainable ? "bg-green-50" : "bg-red-50"
-              }`}
+            class={`metric-card ${
+              result.isSustainable ? "bg-green-50" : "bg-red-50"
+            }`}
           >
             <h3 class="text-sm font-medium text-gray-600 mb-1">
               Financial Health
             </h3>
             <p
-              class={`text-2xl font-bold ${result.isSustainable ? "text-green-600" : "text-red-600"
-                }`}
+              class={`text-2xl font-bold ${
+                result.isSustainable ? "text-green-600" : "text-red-600"
+              }`}
             >
               {result.isSustainable ? "Sustainable" : "Unsustainable"}
             </p>
@@ -276,26 +303,28 @@ export default function SimulationIsland({
               <p class="text-lg font-semibold text-gray-800">
                 ${result.states[result.states.length - 1].cash.toLocaleString(
                   undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                  { minimumFractionDigits: 2, maximumFractionDigits: 2 },
                 )}
               </p>
             </div>
             <div class="scale-in">
               <p class="text-sm text-gray-600">Final Investments</p>
               <p class="text-lg font-semibold text-gray-800">
-                ${result.states[result.states.length - 1].investments.toLocaleString(
-                  undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-                )}
+                ${result.states[result.states.length - 1].investments
+                  .toLocaleString(
+                    undefined,
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                  )}
               </p>
             </div>
             <div class="scale-in">
               <p class="text-sm text-gray-600">Final Super</p>
               <p class="text-lg font-semibold text-gray-800">
-                ${result.states[result.states.length - 1].superannuation.toLocaleString(
-                  undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-                )}
+                ${result.states[result.states.length - 1].superannuation
+                  .toLocaleString(
+                    undefined,
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                  )}
               </p>
             </div>
           </div>

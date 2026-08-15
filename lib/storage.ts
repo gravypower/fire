@@ -3,7 +3,12 @@
  * Validates: Requirements 9.1, 9.2, 9.3, 9.4, 6.1, 6.2, 6.4, 6.5
  */
 
-import type { UserParameters, SimulationConfiguration, ParameterTransition, SavedScenario } from "../types/financial.ts";
+import type {
+  ParameterTransition,
+  SavedScenario,
+  SimulationConfiguration,
+  UserParameters,
+} from "../types/financial.ts";
 
 /**
  * Storage service interface for persisting user parameters
@@ -62,7 +67,10 @@ export interface StorageService {
    * Saves a named scenario (a snapshot of a SimulationConfiguration)
    * @throws Error if storage is unavailable or quota exceeded
    */
-  saveScenario(name: string, configuration: SimulationConfiguration): SavedScenario;
+  saveScenario(
+    name: string,
+    configuration: SimulationConfiguration,
+  ): SavedScenario;
 
   /**
    * Returns all saved scenarios
@@ -128,7 +136,7 @@ interface SerializableUserParameters {
   currentAge: number;
   simulationYears: number;
   startDate: string; // ISO date string
-  
+
   // New fields (optional for backward compatibility)
   householdMode?: "single" | "couple";
   people?: any[]; // Simplified - will be serialized as-is
@@ -194,19 +202,21 @@ function convertNestedDates(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
   }
-  
+
   if (Array.isArray(obj)) {
     return obj.map(convertNestedDates);
   }
-  
-  if (typeof obj === 'object') {
+
+  if (typeof obj === "object") {
     const converted: any = {};
     for (const [key, value] of Object.entries(obj)) {
       // Convert known date fields
-      if ((key === 'startDate' || key === 'endDate' || key === 'oneOffDate') && 
-          typeof value === 'string') {
+      if (
+        (key === "startDate" || key === "endDate" || key === "oneOffDate") &&
+        typeof value === "string"
+      ) {
         converted[key] = new Date(value);
-      } else if (typeof value === 'object') {
+      } else if (typeof value === "object") {
         converted[key] = convertNestedDates(value);
       } else {
         converted[key] = value;
@@ -214,7 +224,7 @@ function convertNestedDates(obj: any): any {
     }
     return converted;
   }
-  
+
   return obj;
 }
 
@@ -230,16 +240,16 @@ function fromSerializable(
     ...serializable,
     startDate: new Date(serializable.startDate),
   };
-  
+
   // Convert nested dates in arrays
   if (result.expenseItems) {
     result.expenseItems = convertNestedDates(result.expenseItems);
   }
-  
+
   if (result.incomeSources) {
     result.incomeSources = convertNestedDates(result.incomeSources);
   }
-  
+
   if (result.people) {
     result.people = convertNestedDates(result.people);
   }
@@ -382,7 +392,9 @@ function scenarioFromSerializable(
  * @param data - The data to validate
  * @returns true if data is valid UserParameters structure
  */
-function isValidParametersStructure(data: unknown): data is SerializableUserParameters {
+function isValidParametersStructure(
+  data: unknown,
+): data is SerializableUserParameters {
   if (typeof data !== "object" || data === null) {
     return false;
   }
@@ -450,8 +462,10 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
   }
 
   // New optional fields - just check they're the right type if present
-  if (params.householdMode !== undefined && 
-      typeof params.householdMode !== "string") {
+  if (
+    params.householdMode !== undefined &&
+    typeof params.householdMode !== "string"
+  ) {
     return false;
   }
 
@@ -459,7 +473,9 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
     return false;
   }
 
-  if (params.incomeSources !== undefined && !Array.isArray(params.incomeSources)) {
+  if (
+    params.incomeSources !== undefined && !Array.isArray(params.incomeSources)
+  ) {
     return false;
   }
 
@@ -467,7 +483,9 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
     return false;
   }
 
-  if (params.expenseItems !== undefined && !Array.isArray(params.expenseItems)) {
+  if (
+    params.expenseItems !== undefined && !Array.isArray(params.expenseItems)
+  ) {
     return false;
   }
 
@@ -475,7 +493,9 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
     return false;
   }
 
-  if (params.superAccounts !== undefined && !Array.isArray(params.superAccounts)) {
+  if (
+    params.superAccounts !== undefined && !Array.isArray(params.superAccounts)
+  ) {
     return false;
   }
 
@@ -487,7 +507,9 @@ function isValidParametersStructure(data: unknown): data is SerializableUserPara
  * @param data - The data to validate
  * @returns true if data is valid SimulationConfiguration structure
  */
-function isValidConfigurationStructure(data: unknown): data is SerializableSimulationConfiguration {
+function isValidConfigurationStructure(
+  data: unknown,
+): data is SerializableSimulationConfiguration {
   if (typeof data !== "object" || data === null) {
     return false;
   }
@@ -672,7 +694,10 @@ export class LocalStorageService implements StorageService {
     try {
       // Sync legacy fields with people array before saving
       const configToSave = { ...config };
-      if (configToSave.baseParameters.people && configToSave.baseParameters.people.length > 0) {
+      if (
+        configToSave.baseParameters.people &&
+        configToSave.baseParameters.people.length > 0
+      ) {
         const firstPerson = configToSave.baseParameters.people[0];
         configToSave.baseParameters = {
           ...configToSave.baseParameters,
@@ -680,7 +705,7 @@ export class LocalStorageService implements StorageService {
           retirementAge: firstPerson.retirementAge,
         };
       }
-      
+
       const serializable = configToSerializable(configToSave);
       const json = JSON.stringify(serializable);
       this.storage.setItem(CONFIG_STORAGE_KEY, json);
@@ -725,14 +750,16 @@ export class LocalStorageService implements StorageService {
       }
 
       const config = configFromSerializable(parsed);
-      
+
       // Sync legacy fields with people array if present
-      if (config.baseParameters.people && config.baseParameters.people.length > 0) {
+      if (
+        config.baseParameters.people && config.baseParameters.people.length > 0
+      ) {
         const firstPerson = config.baseParameters.people[0];
         config.baseParameters.currentAge = firstPerson.currentAge;
         config.baseParameters.retirementAge = firstPerson.retirementAge;
       }
-      
+
       // Ensure loans array exists (migrate from legacy single loan if needed)
       if (config.baseParameters.loans === undefined) {
         // Check if there's a legacy loan to migrate
@@ -759,11 +786,14 @@ export class LocalStorageService implements StorageService {
         // Save the migrated config
         this.saveConfiguration(config);
       }
-      
+
       return config;
     } catch (error) {
       // Handle corrupted data
-      console.error("Failed to load configuration, data may be corrupted:", error);
+      console.error(
+        "Failed to load configuration, data may be corrupted:",
+        error,
+      );
       // Try to migrate from legacy format as fallback
       return this.migrateFromLegacyFormat();
     }
@@ -805,7 +835,7 @@ export class LocalStorageService implements StorageService {
         appName: "Finance Simulation Tool",
         ...configToSerializable(config),
       };
-      
+
       return JSON.stringify(exportData, null, 2);
     } catch (error) {
       console.error("Failed to export configuration:", error);
@@ -821,7 +851,7 @@ export class LocalStorageService implements StorageService {
   importConfiguration(jsonData: string): boolean {
     try {
       const parsed = JSON.parse(jsonData);
-      
+
       // Validate it's our export format
       if (!parsed.version || !parsed.baseParameters) {
         console.error("Invalid configuration format");
@@ -856,7 +886,10 @@ export class LocalStorageService implements StorageService {
   /**
    * Saves a named scenario (a snapshot of a SimulationConfiguration)
    */
-  saveScenario(name: string, configuration: SimulationConfiguration): SavedScenario {
+  saveScenario(
+    name: string,
+    configuration: SimulationConfiguration,
+  ): SavedScenario {
     if (!this.isStorageAvailable()) {
       throw new Error("Local storage is not available");
     }
@@ -908,7 +941,9 @@ export class LocalStorageService implements StorageService {
         return [];
       }
 
-      return (parsed as SerializableSavedScenario[]).map(scenarioFromSerializable);
+      return (parsed as SerializableSavedScenario[]).map(
+        scenarioFromSerializable,
+      );
     } catch (error) {
       console.error("Failed to load scenarios, data may be corrupted:", error);
       return [];
@@ -974,7 +1009,7 @@ export class LocalStorageService implements StorageService {
   private migrateFromLegacyFormat(): SimulationConfiguration | null {
     try {
       const legacyParams = this.loadParameters();
-      
+
       if (legacyParams === null) {
         return null;
       }

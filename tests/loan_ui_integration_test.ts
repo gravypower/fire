@@ -5,7 +5,11 @@
 
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { SimulationEngine } from "../lib/simulation_engine.ts";
-import type { SimulationConfiguration, UserParameters, Loan } from "../types/financial.ts";
+import type {
+  Loan,
+  SimulationConfiguration,
+  UserParameters,
+} from "../types/financial.ts";
 
 Deno.test("UI Integration - Adding loans through UI flow", () => {
   // Simulate the default parameters that a new user would see
@@ -56,10 +60,14 @@ Deno.test("UI Integration - Adding loans through UI flow", () => {
     baseParameters: defaultParams,
     transitions: [],
   };
-  
+
   const result1 = SimulationEngine.runSimulationWithTransitions(config1);
-  assertEquals(result1.states[0].loanBalance, 0, "Default should have no loans");
-  
+  assertEquals(
+    result1.states[0].loanBalance,
+    0,
+    "Default should have no loans",
+  );
+
   console.log("✓ Step 1: Default state has no loans");
 
   // Step 2: User clicks "+ Add Loan" button - simulate adding first loan
@@ -84,9 +92,17 @@ Deno.test("UI Integration - Adding loans through UI flow", () => {
   };
 
   const result2 = SimulationEngine.runSimulationWithTransitions(config2);
-  assertEquals(result2.states[0].loanBalance, 500000, "Should have loan balance");
-  assertEquals(result2.states[1].loanBalance < 500000, true, "Loan should reduce after first month");
-  
+  assertEquals(
+    result2.states[0].loanBalance,
+    500000,
+    "Should have loan balance",
+  );
+  assertEquals(
+    result2.states[1].loanBalance < 500000,
+    true,
+    "Loan should reduce after first month",
+  );
+
   console.log("✓ Step 2: Added loan appears in simulation");
   console.log(`  Initial: $${result2.states[0].loanBalance.toFixed(2)}`);
   console.log(`  Month 1: $${result2.states[1].loanBalance.toFixed(2)}`);
@@ -109,14 +125,16 @@ Deno.test("UI Integration - Adding loans through UI flow", () => {
   };
 
   const result3 = SimulationEngine.runSimulationWithTransitions(config3);
-  
+
   // After a few months, offset should have accumulated
   const month3 = result3.states[3];
   assertEquals(month3.offsetBalance > 0, true, "Offset should accumulate");
   assertEquals(month3.cash, 0, "Cash should go to offset");
-  
+
   console.log("✓ Step 3: Offset account accumulates leftover cash");
-  console.log(`  Offset balance (month 3): $${month3.offsetBalance.toFixed(2)}`);
+  console.log(
+    `  Offset balance (month 3): $${month3.offsetBalance.toFixed(2)}`,
+  );
 
   // Step 4: User adds a second loan
   const secondLoan: Loan = {
@@ -140,17 +158,17 @@ Deno.test("UI Integration - Adding loans through UI flow", () => {
   };
 
   const result4 = SimulationEngine.runSimulationWithTransitions(config4);
-  
+
   const initialTotal = result4.states[0].loanBalance;
   assertEquals(initialTotal, 535000, "Total should be sum of both loans");
-  
+
   const month6 = result4.states[6];
   const loan1Balance = month6.loanBalances?.[loanWithOffset.id] || 0;
   const loan2Balance = month6.loanBalances?.[secondLoan.id] || 0;
-  
+
   assertEquals(loan1Balance < 500000, true, "Home loan should reduce");
   assertEquals(loan2Balance < 35000, true, "Car loan should reduce");
-  
+
   console.log("✓ Step 4: Multiple loans both reduce correctly");
   console.log(`  Home loan (month 6): $${loan1Balance.toFixed(2)}`);
   console.log(`  Car loan (month 6): $${loan2Balance.toFixed(2)}`);
@@ -168,8 +186,12 @@ Deno.test("UI Integration - Adding loans through UI flow", () => {
   };
 
   const result5 = SimulationEngine.runSimulationWithTransitions(config5);
-  assertEquals(result5.states[0].loanBalance, 500000, "Should only have home loan");
-  
+  assertEquals(
+    result5.states[0].loanBalance,
+    500000,
+    "Should only have home loan",
+  );
+
   console.log("✓ Step 5: Removing loan works correctly");
 
   // Step 6: User removes all loans
@@ -186,7 +208,7 @@ Deno.test("UI Integration - Adding loans through UI flow", () => {
   const result6 = SimulationEngine.runSimulationWithTransitions(config6);
   assertEquals(result6.states[0].loanBalance, 0, "Should have no loans");
   assertEquals(result6.states[6].loanBalance, 0, "Should stay at zero");
-  
+
   console.log("✓ Step 6: Removing all loans results in zero balance");
 });
 
@@ -262,8 +284,12 @@ Deno.test("UI Integration - Loan configuration changes", () => {
   const result2 = SimulationEngine.runSimulationWithTransitions(config2);
   const month6Balance2 = result2.states[6].loanBalance;
 
-  assertEquals(month6Balance2 < month6Balance1, true, "Higher payment should reduce balance faster");
-  
+  assertEquals(
+    month6Balance2 < month6Balance1,
+    true,
+    "Higher payment should reduce balance faster",
+  );
+
   console.log("✓ Changing payment amount affects loan reduction");
   console.log(`  $2000/month (month 6): $${month6Balance1.toFixed(2)}`);
   console.log(`  $3000/month (month 6): $${month6Balance2.toFixed(2)}`);
@@ -280,8 +306,12 @@ Deno.test("UI Integration - Loan configuration changes", () => {
   const result3 = SimulationEngine.runSimulationWithTransitions(config3);
   const month6Balance3 = result3.states[6].loanBalance;
 
-  assertEquals(month6Balance3 > month6Balance1, true, "Higher rate should reduce balance slower");
-  
+  assertEquals(
+    month6Balance3 > month6Balance1,
+    true,
+    "Higher rate should reduce balance slower",
+  );
+
   console.log("✓ Changing interest rate affects loan reduction");
   console.log(`  6% rate (month 6): $${month6Balance1.toFixed(2)}`);
   console.log(`  8% rate (month 6): $${month6Balance3.toFixed(2)}`);
@@ -301,8 +331,12 @@ Deno.test("UI Integration - Loan configuration changes", () => {
 
   // Fortnightly payments (26 per year) vs monthly (12 per year)
   // $1000 fortnightly = $26,000/year vs $2000 monthly = $24,000/year
-  assertEquals(month6Balance4 < month6Balance1, true, "Fortnightly should pay more per year");
-  
+  assertEquals(
+    month6Balance4 < month6Balance1,
+    true,
+    "Fortnightly should pay more per year",
+  );
+
   console.log("✓ Changing payment frequency affects loan reduction");
   console.log(`  $2000 monthly (month 6): $${month6Balance1.toFixed(2)}`);
   console.log(`  $1000 fortnightly (month 6): $${month6Balance4.toFixed(2)}`);

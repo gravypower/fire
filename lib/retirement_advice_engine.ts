@@ -593,9 +593,9 @@ export class RetirementAdviceEngine {
             formatCurrency(extraPayment)
           } to your monthly ${loan.label} payment to save ${
             timeSavings.toFixed(1)
-          } years and ${
-            formatCurrency(interestSavings)
-          } in interest.${note ? ` ${note}` : ""}`,
+          } years and ${formatCurrency(interestSavings)} in interest.${
+            note ? ` ${note}` : ""
+          }`,
           specificActions: [
             `Increase monthly payment from ${
               formatCurrency(currentPayment)
@@ -682,9 +682,9 @@ export class RetirementAdviceEngine {
             formatCurrency(extraPayment)
           } to your monthly loan payment to save ${
             timeSavings.toFixed(1)
-          } years and ${
-            formatCurrency(interestSavings)
-          } in interest.${note ? ` ${note}` : ""}`,
+          } years and ${formatCurrency(interestSavings)} in interest.${
+            note ? ` ${note}` : ""
+          }`,
           specificActions: [
             `Increase monthly payment from ${
               formatCurrency(currentPayment)

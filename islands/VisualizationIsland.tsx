@@ -4,17 +4,32 @@
  */
 
 import { useState } from "preact/hooks";
-import type { SimulationResult, TimeInterval, TransitionPoint, EnhancedSimulationResult, UserParameters } from "../types/financial.ts";
+import type {
+  EnhancedSimulationResult,
+  SimulationResult,
+  TimeInterval,
+  TransitionPoint,
+  UserParameters,
+} from "../types/financial.ts";
 import type { Milestone, RetirementAdvice } from "../types/milestones.ts";
-import { formatCurrency, groupByTimeInterval, findLoanPayoffDate } from "../lib/result_utils.ts";
+import {
+  findLoanPayoffDate,
+  formatCurrency,
+  groupByTimeInterval,
+} from "../lib/result_utils.ts";
 import { detectMilestonesFromSimulation } from "../lib/milestone_detector.ts";
 import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
 import NetWorthChart from "../components/NetWorthChart.tsx";
 import CashFlowChart from "../components/CashFlowChart.tsx";
 import ChartErrorBoundary from "../components/ChartErrorBoundary.tsx";
 
-
-import { SummaryTable, LoansTable, InvestmentsTable, TaxTable, CashFlowTable } from "../components/FinancialTimelineTables.tsx";
+import {
+  CashFlowTable,
+  InvestmentsTable,
+  LoansTable,
+  SummaryTable,
+  TaxTable,
+} from "../components/FinancialTimelineTables.tsx";
 
 interface VisualizationIslandProps {
   result: SimulationResult | EnhancedSimulationResult;
@@ -25,10 +40,10 @@ interface VisualizationIslandProps {
 
 /**
  * VisualizationIsland component
- * 
+ *
  * Displays simulation results with key metrics, warnings, and time-series data.
  * Provides time granularity selector for viewing results at different intervals.
- * 
+ *
  * Requirements 3.5: Time granularity selector
  * Requirements 4.4: Retirement date display
  * Requirements 10.1: Sustainability indication
@@ -44,40 +59,64 @@ export default function VisualizationIsland({
   userParameters,
 }: VisualizationIslandProps) {
   // State for time granularity selection
-  const [selectedGranularity, setSelectedGranularity] = useState<TimeInterval>("year");
+  const [selectedGranularity, setSelectedGranularity] = useState<TimeInterval>(
+    "year",
+  );
 
   // State for which detailed table to show
-  const [selectedDetailTable, setSelectedDetailTable] = useState<"summary" | "loans" | "tax" | "investments" | "cashflow">("summary");
-
-
+  const [selectedDetailTable, setSelectedDetailTable] = useState<
+    "summary" | "loans" | "tax" | "investments" | "cashflow"
+  >("summary");
 
   // Check if result is an EnhancedSimulationResult
-  const isEnhancedResult = (res: SimulationResult | EnhancedSimulationResult): res is EnhancedSimulationResult => {
-    return 'transitionPoints' in res && 'periods' in res;
+  const isEnhancedResult = (
+    res: SimulationResult | EnhancedSimulationResult,
+  ): res is EnhancedSimulationResult => {
+    return "transitionPoints" in res && "periods" in res;
   };
 
   // Get transition points from result or props
-  console.log('VisualizationIsland result:', result ? {
-    statesLength: result.states?.length,
-    firstStateDate: result.states?.[0]?.date,
-    firstStateDateType: typeof result.states?.[0]?.date,
-    retirementDate: result.retirementDate,
-    isEnhanced: isEnhancedResult(result)
-  } : 'null');
+  console.log(
+    "VisualizationIsland result:",
+    result
+      ? {
+        statesLength: result.states?.length,
+        firstStateDate: result.states?.[0]?.date,
+        firstStateDateType: typeof result.states?.[0]?.date,
+        retirementDate: result.retirementDate,
+        isEnhanced: isEnhancedResult(result),
+      }
+      : "null",
+  );
 
-  const effectiveTransitionPoints = isEnhancedResult(result) ? result.transitionPoints : transitionPoints;
+  const effectiveTransitionPoints = isEnhancedResult(result)
+    ? result.transitionPoints
+    : transitionPoints;
 
   // Handle missing or invalid result
   if (!result || !result.states || result.states.length === 0) {
     return (
       <div class="card p-8 fade-in">
         <div class="text-center">
-          <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <svg
+            class="mx-auto h-16 w-16 text-gray-400 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
           </svg>
-          <h3 class="text-lg font-semibold text-gray-700 mb-2">No Results Available</h3>
+          <h3 class="text-lg font-semibold text-gray-700 mb-2">
+            No Results Available
+          </h3>
           <p class="text-sm text-gray-500 mb-4">
-            The simulation hasn't produced any results yet. Please check your input parameters and try again.
+            The simulation hasn't produced any results yet. Please check your
+            input parameters and try again.
           </p>
         </div>
       </div>
@@ -85,12 +124,17 @@ export default function VisualizationIsland({
   }
 
   // Filter results based on selected granularity
-  const filteredStates = groupByTimeInterval(result.states, selectedGranularity);
+  const filteredStates = groupByTimeInterval(
+    result.states,
+    selectedGranularity,
+  );
 
   // Calculate cumulative values for each filtered period
   const statesWithPeriodTotals = filteredStates.map((state, index) => {
     // Find the previous filtered state date
-    const prevDateObj = index === 0 ? null : new Date(filteredStates[index - 1].date);
+    const prevDateObj = index === 0
+      ? null
+      : new Date(filteredStates[index - 1].date);
     const currentDateObj = new Date(state.date);
 
     // Sum up values between previous state and current state
@@ -110,11 +154,26 @@ export default function VisualizationIsland({
       return false;
     });
 
-    const periodTaxPaid = periodStates.reduce((sum, s) => sum + (s.taxPaid || 0), 0);
-    const periodExpenses = periodStates.reduce((sum, s) => sum + (s.expenses || 0), 0);
-    const periodInterestSaved = periodStates.reduce((sum, s) => sum + (s.interestSaved || 0), 0);
-    const periodDeductibleInterest = periodStates.reduce((sum, s) => sum + (s.deductibleInterest || 0), 0);
-    const periodCashFlow = periodStates.reduce((sum, s) => sum + (s.cashFlow || 0), 0);
+    const periodTaxPaid = periodStates.reduce(
+      (sum, s) => sum + (s.taxPaid || 0),
+      0,
+    );
+    const periodExpenses = periodStates.reduce(
+      (sum, s) => sum + (s.expenses || 0),
+      0,
+    );
+    const periodInterestSaved = periodStates.reduce(
+      (sum, s) => sum + (s.interestSaved || 0),
+      0,
+    );
+    const periodDeductibleInterest = periodStates.reduce(
+      (sum, s) => sum + (s.deductibleInterest || 0),
+      0,
+    );
+    const periodCashFlow = periodStates.reduce(
+      (sum, s) => sum + (s.cashFlow || 0),
+      0,
+    );
 
     return {
       ...state,
@@ -156,15 +215,36 @@ export default function VisualizationIsland({
     : 0;
 
   // Calculate total tax paid and interest saved (full simulation)
-  const totalTaxPaid = result.states.reduce((sum, state) => sum + (state.taxPaid || 0), 0);
-  const totalInterestSaved = result.states.reduce((sum, state) => sum + (state.interestSaved || 0), 0);
-  const totalDeductibleInterest = result.states.reduce((sum, state) => sum + (state.deductibleInterest || 0), 0);
+  const totalTaxPaid = result.states.reduce(
+    (sum, state) => sum + (state.taxPaid || 0),
+    0,
+  );
+  const totalInterestSaved = result.states.reduce(
+    (sum, state) => sum + (state.interestSaved || 0),
+    0,
+  );
+  const totalDeductibleInterest = result.states.reduce(
+    (sum, state) => sum + (state.deductibleInterest || 0),
+    0,
+  );
 
   // Calculate cumulative totals for filtered states (sum of all period totals)
-  const filteredTaxPaid = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodTaxPaid || 0), 0);
-  const filteredExpenses = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodExpenses || 0), 0);
-  const filteredInterestSaved = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodInterestSaved || 0), 0);
-  const filteredDeductibleInterest = statesWithPeriodTotals.reduce((sum, state) => sum + (state.periodDeductibleInterest || 0), 0);
+  const filteredTaxPaid = statesWithPeriodTotals.reduce(
+    (sum, state) => sum + (state.periodTaxPaid || 0),
+    0,
+  );
+  const filteredExpenses = statesWithPeriodTotals.reduce(
+    (sum, state) => sum + (state.periodExpenses || 0),
+    0,
+  );
+  const filteredInterestSaved = statesWithPeriodTotals.reduce(
+    (sum, state) => sum + (state.periodInterestSaved || 0),
+    0,
+  );
+  const filteredDeductibleInterest = statesWithPeriodTotals.reduce(
+    (sum, state) => sum + (state.periodDeductibleInterest || 0),
+    0,
+  );
 
   // Find loan payoff date
   const loanPayoffDate = findLoanPayoffDate(result.states);
@@ -179,7 +259,7 @@ export default function VisualizationIsland({
       const milestoneResult = detectMilestonesFromSimulation(
         result.states,
         userParameters,
-        effectiveTransitionPoints
+        effectiveTransitionPoints,
       );
       milestones = milestoneResult.milestones;
 
@@ -187,11 +267,11 @@ export default function VisualizationIsland({
       const adviceResult = generateRetirementAdvice(
         result,
         userParameters,
-        milestones
+        milestones,
       );
       retirementAdvice = adviceResult.advice;
     } catch (error) {
-      console.warn('Failed to generate milestones or advice:', error);
+      console.warn("Failed to generate milestones or advice:", error);
     }
   }
 
@@ -205,23 +285,27 @@ export default function VisualizationIsland({
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Retirement Date - Requirements 4.4 */}
         <div
-          class={`metric-card ${result.retirementDate
-            ? (desiredRetirementAge && result.retirementAge && result.retirementAge > desiredRetirementAge + 1
-              ? "bg-orange-50"
-              : "bg-blue-50")
-            : "bg-red-50"
-            }`}
+          class={`metric-card ${
+            result.retirementDate
+              ? (desiredRetirementAge && result.retirementAge &&
+                  result.retirementAge > desiredRetirementAge + 1
+                ? "bg-orange-50"
+                : "bg-blue-50")
+              : "bg-red-50"
+          }`}
         >
           <h3 class="text-sm font-medium text-gray-600 mb-1">
             Retirement Date
           </h3>
           <p
-            class={`text-2xl font-bold ${result.retirementDate
-              ? (desiredRetirementAge && result.retirementAge && result.retirementAge > desiredRetirementAge + 1
-                ? "text-orange-600"
-                : "text-blue-600")
-              : "text-red-600"
-              }`}
+            class={`text-2xl font-bold ${
+              result.retirementDate
+                ? (desiredRetirementAge && result.retirementAge &&
+                    result.retirementAge > desiredRetirementAge + 1
+                  ? "text-orange-600"
+                  : "text-blue-600")
+                : "text-red-600"
+            }`}
           >
             {result.retirementDate
               ? result.retirementDate.toLocaleDateString()
@@ -230,7 +314,8 @@ export default function VisualizationIsland({
           {result.retirementAge && (
             <p class="text-sm text-gray-600 mt-1">
               Age {Math.floor(result.retirementAge)}
-              {desiredRetirementAge && result.retirementAge > desiredRetirementAge + 1 && (
+              {desiredRetirementAge &&
+                result.retirementAge > desiredRetirementAge + 1 && (
                 <span class="text-orange-600 font-semibold">
                   {" "}(Goal: {desiredRetirementAge})
                 </span>
@@ -247,15 +332,17 @@ export default function VisualizationIsland({
         {/* Loan Payoff Date */}
         {initialLoanBalance > 0 && (
           <div
-            class={`metric-card ${loanPayoffDate ? "bg-green-50" : "bg-orange-50"
-              }`}
+            class={`metric-card ${
+              loanPayoffDate ? "bg-green-50" : "bg-orange-50"
+            }`}
           >
             <h3 class="text-sm font-medium text-gray-600 mb-1">
               Loan Paid Off
             </h3>
             <p
-              class={`text-2xl font-bold ${loanPayoffDate ? "text-green-600" : "text-orange-600"
-                }`}
+              class={`text-2xl font-bold ${
+                loanPayoffDate ? "text-green-600" : "text-orange-600"
+              }`}
             >
               {loanPayoffDate
                 ? loanPayoffDate.toLocaleDateString()
@@ -286,15 +373,17 @@ export default function VisualizationIsland({
 
         {/* Sustainability Status - Requirements 10.1 */}
         <div
-          class={`metric-card ${result.isSustainable ? "bg-green-50" : "bg-red-50"
-            }`}
+          class={`metric-card ${
+            result.isSustainable ? "bg-green-50" : "bg-red-50"
+          }`}
         >
           <h3 class="text-sm font-medium text-gray-600 mb-1">
             Financial Health
           </h3>
           <p
-            class={`text-2xl font-bold ${result.isSustainable ? "text-green-600" : "text-red-600"
-              }`}
+            class={`text-2xl font-bold ${
+              result.isSustainable ? "text-green-600" : "text-red-600"
+            }`}
           >
             {result.isSustainable ? "Sustainable" : "Unsustainable"}
           </p>
@@ -324,9 +413,15 @@ export default function VisualizationIsland({
               </h3>
               <div class="mt-2 text-sm text-green-700">
                 <p>
-                  Based on your current financial trajectory, you can retire on{" "}
-                  <span class="font-semibold">{result.retirementDate.toLocaleDateString()}</span> at age{" "}
-                  <span class="font-semibold">{Math.floor(result.retirementAge || 0)}</span>. Your financial plan is sustainable.
+                  Based on your current financial trajectory, you can retire on
+                  {" "}
+                  <span class="font-semibold">
+                    {result.retirementDate.toLocaleDateString()}
+                  </span>{" "}
+                  at age{" "}
+                  <span class="font-semibold">
+                    {Math.floor(result.retirementAge || 0)}
+                  </span>. Your financial plan is sustainable.
                 </p>
               </div>
             </div>
@@ -367,8 +462,6 @@ export default function VisualizationIsland({
         </div>
       )}
 
-
-
       {/* Charts Section - Requirements 6.1, 6.2, 6.3, 6.4, 4.1, 4.4 */}
       <div class="grid grid-cols-1 gap-6 mb-6">
         <ChartErrorBoundary chartName="Net Worth Chart">
@@ -385,8 +478,6 @@ export default function VisualizationIsland({
         </ChartErrorBoundary>
       </div>
 
-
-
       {/* Time Granularity Selector - Requirements 3.5 */}
       <div class="mb-6">
         <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -395,37 +486,41 @@ export default function VisualizationIsland({
         <div class="flex flex-wrap gap-2">
           <button
             onClick={() => setSelectedGranularity("week")}
-            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedGranularity === "week"
-              ? "bg-blue-600 text-white shadow-md scale-105"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-              }`}
+            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              selectedGranularity === "week"
+                ? "bg-blue-600 text-white shadow-md scale-105"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+            }`}
           >
             Weekly
           </button>
           <button
             onClick={() => setSelectedGranularity("fortnight")}
-            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedGranularity === "fortnight"
-              ? "bg-blue-600 text-white shadow-md scale-105"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-              }`}
+            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              selectedGranularity === "fortnight"
+                ? "bg-blue-600 text-white shadow-md scale-105"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+            }`}
           >
             Fortnightly
           </button>
           <button
             onClick={() => setSelectedGranularity("month")}
-            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedGranularity === "month"
-              ? "bg-blue-600 text-white shadow-md scale-105"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-              }`}
+            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              selectedGranularity === "month"
+                ? "bg-blue-600 text-white shadow-md scale-105"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+            }`}
           >
             Monthly
           </button>
           <button
             onClick={() => setSelectedGranularity("year")}
-            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedGranularity === "year"
-              ? "bg-blue-600 text-white shadow-md scale-105"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-              }`}
+            class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+              selectedGranularity === "year"
+                ? "bg-blue-600 text-white shadow-md scale-105"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+            }`}
           >
             Yearly
           </button>
@@ -435,7 +530,9 @@ export default function VisualizationIsland({
       {/* Filtered Results Display */}
       <div class="border-t pt-6">
         <h3 class="text-lg font-semibold mb-4 text-gray-700">
-          Financial Timeline ({selectedGranularity === "fortnight" ? "Fortnightly" : selectedGranularity}ly view)
+          Financial Timeline ({selectedGranularity === "fortnight"
+            ? "Fortnightly"
+            : selectedGranularity}ly view)
         </h3>
         <p class="text-sm text-gray-600 mb-4">
           Showing {statesWithPeriodTotals.length} data points
@@ -443,7 +540,9 @@ export default function VisualizationIsland({
 
         {/* Event Legend */}
         <div class="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-          <h4 class="text-sm font-semibold text-gray-700 mb-2">Timeline Events:</h4>
+          <h4 class="text-sm font-semibold text-gray-700 mb-2">
+            Timeline Events:
+          </h4>
           <div class="flex flex-wrap gap-4 text-xs">
             {result.retirementDate && (
               <div class="flex items-center">
@@ -453,23 +552,40 @@ export default function VisualizationIsland({
             )}
             {initialLoanBalance > 0 && (
               <div class="flex items-center">
-                <svg class="w-4 h-4 text-blue-600 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                <svg
+                  class="w-4 h-4 text-blue-600 mr-1"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
                 <span class="text-gray-700">Loan Paid Off</span>
               </div>
             )}
             {effectiveTransitionPoints.length > 0 && (
               <div class="flex items-center">
-                <svg class="w-4 h-4 text-purple-600 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                <svg
+                  class="w-4 h-4 text-purple-600 mr-1"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
                 <span class="text-gray-700">Parameter Transition</span>
               </div>
             )}
           </div>
           <p class="text-xs text-gray-600 mt-2">
-            Look for highlighted rows in the table below to see when these events occur.
+            Look for highlighted rows in the table below to see when these
+            events occur.
           </p>
         </div>
 
@@ -481,46 +597,51 @@ export default function VisualizationIsland({
           <div class="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedDetailTable("summary")}
-              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedDetailTable === "summary"
-                ? "bg-blue-600 text-white shadow-md scale-105"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-                }`}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "summary"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
             >
               Summary
             </button>
             <button
               onClick={() => setSelectedDetailTable("loans")}
-              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedDetailTable === "loans"
-                ? "bg-blue-600 text-white shadow-md scale-105"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-                }`}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "loans"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
             >
               Loans & Debt
             </button>
             <button
               onClick={() => setSelectedDetailTable("investments")}
-              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedDetailTable === "investments"
-                ? "bg-blue-600 text-white shadow-md scale-105"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-                }`}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "investments"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
             >
               Investments & Super
             </button>
             <button
               onClick={() => setSelectedDetailTable("tax")}
-              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedDetailTable === "tax"
-                ? "bg-blue-600 text-white shadow-md scale-105"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-                }`}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "tax"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
             >
               Tax & Deductions
             </button>
             <button
               onClick={() => setSelectedDetailTable("cashflow")}
-              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${selectedDetailTable === "cashflow"
-                ? "bg-blue-600 text-white shadow-md scale-105"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
-                }`}
+              class={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                selectedDetailTable === "cashflow"
+                  ? "bg-blue-600 text-white shadow-md scale-105"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105"
+              }`}
             >
               Cash Flow & Expenses
             </button>
@@ -528,7 +649,10 @@ export default function VisualizationIsland({
         </div>
 
         <p class="text-sm text-gray-600 mb-4">
-          Note: Period values show cumulative amounts for each {selectedGranularity === "fortnight" ? "fortnight" : selectedGranularity}. Headers show final or total values.
+          Note: Period values show cumulative amounts for each{" "}
+          {selectedGranularity === "fortnight"
+            ? "fortnight"
+            : selectedGranularity}. Headers show final or total values.
         </p>
 
         {/* Render Selected Table */}
@@ -587,31 +711,48 @@ export default function VisualizationIsland({
                 <th class="sticky-header">
                   <div>Date</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    Final: {statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.date.toLocaleDateString()}
+                    Final:{" "}
+                    {statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                      ?.date.toLocaleDateString()}
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
                   <div>Cash Available</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency((statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.cash || 0) + (statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.offsetBalance || 0))}
+                    {formatCurrency(
+                      (statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                        ?.cash || 0) +
+                        (statesWithPeriodTotals[
+                          statesWithPeriodTotals.length - 1
+                        ]?.offsetBalance || 0),
+                    )}
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
                   <div>Investments</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.investments || 0)}
+                    {formatCurrency(
+                      statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                        ?.investments || 0,
+                    )}
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
                   <div>Super</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.superannuation || 0)}
+                    {formatCurrency(
+                      statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                        ?.superannuation || 0,
+                    )}
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
                   <div>Loan</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.loanBalance || 0)}
+                    {formatCurrency(
+                      statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                        ?.loanBalance || 0,
+                    )}
                   </div>
                 </th>
                 {finalOffsetBalance > 0 && (
@@ -625,13 +766,19 @@ export default function VisualizationIsland({
                 <th class="text-right sticky-header bg-gray-50">
                   <div>Net Worth</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.netWorth || 0)}
+                    {formatCurrency(
+                      statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                        ?.netWorth || 0,
+                    )}
                   </div>
                 </th>
                 <th class="text-right sticky-header bg-gray-50">
                   <div>Cash Flow</div>
                   <div class="text-xs font-normal text-gray-500 mt-1">
-                    {formatCurrency(statesWithPeriodTotals[statesWithPeriodTotals.length - 1]?.periodCashFlow || 0)}
+                    {formatCurrency(
+                      statesWithPeriodTotals[statesWithPeriodTotals.length - 1]
+                        ?.periodCashFlow || 0,
+                    )}
                   </div>
                 </th>
                 {filteredExpenses > 0 && (
@@ -671,32 +818,44 @@ export default function VisualizationIsland({
             <tbody>
               {statesWithPeriodTotals.map((state, index) => {
                 // Find the original state index in the full states array
-                const originalIndex = result.states.findIndex(s => s.date.getTime() === state.date.getTime());
+                const originalIndex = result.states.findIndex((s) =>
+                  s.date.getTime() === state.date.getTime()
+                );
 
                 // Check if this date matches retirement date
                 const isRetirementDate = result.retirementDate &&
-                  state.date.toDateString() === result.retirementDate.toDateString();
+                  state.date.toDateString() ===
+                    result.retirementDate.toDateString();
 
                 // Check if there's a transition at this state
                 const transitionAtThisState = effectiveTransitionPoints.find(
-                  tp => tp.stateIndex === originalIndex
+                  (tp) => tp.stateIndex === originalIndex,
                 );
 
                 // Check if loan was paid off at this date
-                const isPreviousLoanBalance = index > 0 && statesWithPeriodTotals[index - 1].loanBalance > 0;
-                const isLoanPayoff = isPreviousLoanBalance && state.loanBalance === 0;
+                const isPreviousLoanBalance = index > 0 &&
+                  statesWithPeriodTotals[index - 1].loanBalance > 0;
+                const isLoanPayoff = isPreviousLoanBalance &&
+                  state.loanBalance === 0;
 
                 // Determine row styling based on events
-                const hasEvent = isRetirementDate || transitionAtThisState || isLoanPayoff;
+                const hasEvent = isRetirementDate || transitionAtThisState ||
+                  isLoanPayoff;
                 let rowClass = "";
-                if (isRetirementDate) rowClass = "bg-green-50 border-l-4 border-green-500";
-                else if (isLoanPayoff) rowClass = "bg-blue-50 border-l-4 border-blue-500";
-                else if (transitionAtThisState) rowClass = "bg-purple-50 border-l-4 border-purple-500";
+                if (isRetirementDate) {
+                  rowClass = "bg-green-50 border-l-4 border-green-500";
+                } else if (isLoanPayoff) {
+                  rowClass = "bg-blue-50 border-l-4 border-blue-500";
+                } else if (transitionAtThisState) {
+                  rowClass = "bg-purple-50 border-l-4 border-purple-500";
+                }
 
                 return (
                   <tr key={index} class={rowClass}>
                     <td class="text-gray-900 font-medium">
-                      <div class={hasEvent ? "font-bold" : ""}>{state.date.toLocaleDateString()}</div>
+                      <div class={hasEvent ? "font-bold" : ""}>
+                        {state.date.toLocaleDateString()}
+                      </div>
                       {isRetirementDate && (
                         <div class="text-xs font-bold text-green-700 mt-1 flex items-center bg-green-100 px-2 py-1 rounded">
                           <span class="mr-1">🎉</span>
@@ -705,25 +864,47 @@ export default function VisualizationIsland({
                       )}
                       {isLoanPayoff && (
                         <div class="text-xs font-bold text-blue-700 mt-1 flex items-center bg-blue-100 px-2 py-1 rounded">
-                          <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                          <svg
+                            class="w-3 h-3 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fill-rule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              clip-rule="evenodd"
+                            />
                           </svg>
                           Loan Paid Off
                         </div>
                       )}
                       {transitionAtThisState && (
                         <div class="text-xs font-bold text-purple-700 mt-1 flex items-center bg-purple-100 px-2 py-1 rounded">
-                          <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                          <svg
+                            class="w-3 h-3 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fill-rule="evenodd"
+                              d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                              clip-rule="evenodd"
+                            />
                           </svg>
-                          {transitionAtThisState.transition.label || "Transition"}
+                          {transitionAtThisState.transition.label ||
+                            "Transition"}
                         </div>
                       )}
                     </td>
                     <td
-                      class={`text-right ${(state.cash + state.offsetBalance) < 0 ? "text-red-600 font-semibold" : "text-gray-900"
-                        }`}
-                      title={`Cash: ${formatCurrency(state.cash)}\nOffset: ${formatCurrency(state.offsetBalance)}`}
+                      class={`text-right ${
+                        (state.cash + state.offsetBalance) < 0
+                          ? "text-red-600 font-semibold"
+                          : "text-gray-900"
+                      }`}
+                      title={`Cash: ${formatCurrency(state.cash)}\nOffset: ${
+                        formatCurrency(state.offsetBalance)
+                      }`}
                     >
                       {formatCurrency(state.cash + state.offsetBalance)}
                     </td>
@@ -742,14 +923,18 @@ export default function VisualizationIsland({
                       </td>
                     )}
                     <td
-                      class={`text-right font-semibold ${state.netWorth < 0 ? "text-red-600" : "text-green-600"
-                        }`}
+                      class={`text-right font-semibold ${
+                        state.netWorth < 0 ? "text-red-600" : "text-green-600"
+                      }`}
                     >
                       {formatCurrency(state.netWorth)}
                     </td>
                     <td
-                      class={`text-right font-medium ${state.periodCashFlow < 0 ? "text-red-600" : "text-green-600"
-                        }`}
+                      class={`text-right font-medium ${
+                        state.periodCashFlow < 0
+                          ? "text-red-600"
+                          : "text-green-600"
+                      }`}
                     >
                       {formatCurrency(state.periodCashFlow)}
                     </td>

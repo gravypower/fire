@@ -12,7 +12,7 @@ Deno.test("fast-check is properly installed and working", () => {
     fc.property(fc.integer(), (n) => {
       return n + 0 === n;
     }),
-    { numRuns: 100 }
+    { numRuns: 100 },
   );
 });
 

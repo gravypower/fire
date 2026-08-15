@@ -5,7 +5,10 @@
 
 import { assertEquals, assertExists } from "$std/assert/mod.ts";
 import { LocalStorageService } from "../../lib/storage.ts";
-import type { UserParameters, SimulationConfiguration } from "../../types/financial.ts";
+import type {
+  SimulationConfiguration,
+  UserParameters,
+} from "../../types/financial.ts";
 
 // Mock localStorage for testing in Deno environment
 class MockLocalStorage implements Storage {
@@ -41,7 +44,10 @@ class MockLocalStorage implements Storage {
 }
 
 // Helper function to create test configuration with people
-function createTestConfigWithPeople(currentAge: number, retirementAge: number): SimulationConfiguration {
+function createTestConfigWithPeople(
+  currentAge: number,
+  retirementAge: number,
+): SimulationConfiguration {
   return {
     baseParameters: {
       annualSalary: 80000,
@@ -86,63 +92,87 @@ function createTestConfigWithPeople(currentAge: number, retirementAge: number): 
 Deno.test("Age Persistence - currentAge 44 persists after save and load", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   // Create config with age 44
   const config = createTestConfigWithPeople(44, 65);
-  
+
   // Save configuration
   service.saveConfiguration(config);
-  
+
   // Load configuration
   const loaded = service.loadConfiguration();
-  
+
   assertExists(loaded);
-  assertEquals(loaded.baseParameters.currentAge, 44, "Legacy currentAge should be 44");
-  assertEquals(loaded.baseParameters.people?.[0]?.currentAge, 44, "Person currentAge should be 44");
+  assertEquals(
+    loaded.baseParameters.currentAge,
+    44,
+    "Legacy currentAge should be 44",
+  );
+  assertEquals(
+    loaded.baseParameters.people?.[0]?.currentAge,
+    44,
+    "Person currentAge should be 44",
+  );
 });
 
 Deno.test("Age Persistence - changing from 30 to 44 persists", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   // Start with age 30
   const initialConfig = createTestConfigWithPeople(30, 65);
   service.saveConfiguration(initialConfig);
-  
+
   // Update to age 44
   const updatedConfig = createTestConfigWithPeople(44, 65);
   service.saveConfiguration(updatedConfig);
-  
+
   // Load and verify
   const loaded = service.loadConfiguration();
-  
+
   assertExists(loaded);
-  assertEquals(loaded.baseParameters.currentAge, 44, "Legacy currentAge should be updated to 44");
-  assertEquals(loaded.baseParameters.people?.[0]?.currentAge, 44, "Person currentAge should be updated to 44");
+  assertEquals(
+    loaded.baseParameters.currentAge,
+    44,
+    "Legacy currentAge should be updated to 44",
+  );
+  assertEquals(
+    loaded.baseParameters.people?.[0]?.currentAge,
+    44,
+    "Person currentAge should be updated to 44",
+  );
 });
 
 Deno.test("Age Persistence - retirementAge persists correctly", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   // Create config with retirement age 70
   const config = createTestConfigWithPeople(44, 70);
-  
+
   // Save configuration
   service.saveConfiguration(config);
-  
+
   // Load configuration
   const loaded = service.loadConfiguration();
-  
+
   assertExists(loaded);
-  assertEquals(loaded.baseParameters.retirementAge, 70, "Legacy retirementAge should be 70");
-  assertEquals(loaded.baseParameters.people?.[0]?.retirementAge, 70, "Person retirementAge should be 70");
+  assertEquals(
+    loaded.baseParameters.retirementAge,
+    70,
+    "Legacy retirementAge should be 70",
+  );
+  assertEquals(
+    loaded.baseParameters.people?.[0]?.retirementAge,
+    70,
+    "Person retirementAge should be 70",
+  );
 });
 
 Deno.test("Age Persistence - both ages sync correctly in couple mode", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   const config: SimulationConfiguration = {
     baseParameters: {
       annualSalary: 80000,
@@ -190,17 +220,25 @@ Deno.test("Age Persistence - both ages sync correctly in couple mode", () => {
     } as UserParameters,
     transitions: [],
   };
-  
+
   // Save configuration
   service.saveConfiguration(config);
-  
+
   // Load configuration
   const loaded = service.loadConfiguration();
-  
+
   assertExists(loaded);
   // Legacy fields should sync with first person
-  assertEquals(loaded.baseParameters.currentAge, 44, "Legacy currentAge should sync with first person");
-  assertEquals(loaded.baseParameters.retirementAge, 70, "Legacy retirementAge should sync with first person");
+  assertEquals(
+    loaded.baseParameters.currentAge,
+    44,
+    "Legacy currentAge should sync with first person",
+  );
+  assertEquals(
+    loaded.baseParameters.retirementAge,
+    70,
+    "Legacy retirementAge should sync with first person",
+  );
   // Both people should maintain their own ages
   assertEquals(loaded.baseParameters.people?.[0]?.currentAge, 44);
   assertEquals(loaded.baseParameters.people?.[0]?.retirementAge, 70);
@@ -211,7 +249,7 @@ Deno.test("Age Persistence - both ages sync correctly in couple mode", () => {
 Deno.test("Age Persistence - legacy fields sync when people array exists", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   // Create config where legacy fields don't match people array
   const config: SimulationConfiguration = {
     baseParameters: {
@@ -252,17 +290,25 @@ Deno.test("Age Persistence - legacy fields sync when people array exists", () =>
     } as UserParameters,
     transitions: [],
   };
-  
+
   // Save configuration (should sync before saving)
   service.saveConfiguration(config);
-  
+
   // Load configuration (should sync after loading)
   const loaded = service.loadConfiguration();
-  
+
   assertExists(loaded);
   // Legacy fields should be synced with people array
-  assertEquals(loaded.baseParameters.currentAge, 44, "Legacy currentAge should sync with person");
-  assertEquals(loaded.baseParameters.retirementAge, 70, "Legacy retirementAge should sync with person");
+  assertEquals(
+    loaded.baseParameters.currentAge,
+    44,
+    "Legacy currentAge should sync with person",
+  );
+  assertEquals(
+    loaded.baseParameters.retirementAge,
+    70,
+    "Legacy retirementAge should sync with person",
+  );
   assertEquals(loaded.baseParameters.people?.[0]?.currentAge, 44);
   assertEquals(loaded.baseParameters.people?.[0]?.retirementAge, 70);
 });
@@ -270,39 +316,50 @@ Deno.test("Age Persistence - legacy fields sync when people array exists", () =>
 Deno.test("Age Persistence - multiple save/load cycles maintain age", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   // First save with age 44
   const config1 = createTestConfigWithPeople(44, 65);
   service.saveConfiguration(config1);
-  
+
   // Load
   const loaded1 = service.loadConfiguration();
   assertExists(loaded1);
   assertEquals(loaded1.baseParameters.currentAge, 44);
-  
+
   // Save again (simulating app state update)
   service.saveConfiguration(loaded1);
-  
+
   // Load again
   const loaded2 = service.loadConfiguration();
   assertExists(loaded2);
-  assertEquals(loaded2.baseParameters.currentAge, 44, "Age should still be 44 after multiple cycles");
+  assertEquals(
+    loaded2.baseParameters.currentAge,
+    44,
+    "Age should still be 44 after multiple cycles",
+  );
   assertEquals(loaded2.baseParameters.people?.[0]?.currentAge, 44);
 });
 
 Deno.test("Age Persistence - raw storage data contains correct age", () => {
   const testStorage = new MockLocalStorage();
   const service = new LocalStorageService(testStorage);
-  
+
   const config = createTestConfigWithPeople(44, 65);
   service.saveConfiguration(config);
-  
+
   // Check raw storage data
   const rawData = testStorage.getItem("finance-simulation-config");
   assertExists(rawData);
-  
-  const parsed = JSON.parse(rawData);
-  assertEquals(parsed.baseParameters.currentAge, 44, "Raw storage should have currentAge 44");
-  assertEquals(parsed.baseParameters.people[0].currentAge, 44, "Raw storage person should have currentAge 44");
-});
 
+  const parsed = JSON.parse(rawData);
+  assertEquals(
+    parsed.baseParameters.currentAge,
+    44,
+    "Raw storage should have currentAge 44",
+  );
+  assertEquals(
+    parsed.baseParameters.people[0].currentAge,
+    44,
+    "Raw storage person should have currentAge 44",
+  );
+});

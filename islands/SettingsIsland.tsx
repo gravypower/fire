@@ -74,8 +74,8 @@ export default function SettingsIsland(
         <h3 class="text-sm font-semibold text-gray-700 mb-1">Country</h3>
         <p class="text-sm text-gray-600 mb-4">
           Sets which tax brackets and retirement-account rules the simulation
-          uses. Changing this updates labels (e.g. "Superannuation" vs "401k
-          / IRA") and re-runs the simulation with the new country's rules.
+          uses. Changing this updates labels (e.g. "Superannuation" vs "401k /
+          IRA") and re-runs the simulation with the new country's rules.
         </p>
 
         <div class="space-y-3">
@@ -105,7 +105,8 @@ export default function SettingsIsland(
                 </div>
                 <p class="text-xs text-gray-500 mb-2">{option.description}</p>
                 <p class="text-xs text-gray-600">
-                  Retirement account: <strong>{module.retirementAccountLabel}</strong>{" "}
+                  Retirement account:{" "}
+                  <strong>{module.retirementAccountLabel}</strong>{" "}
                   (accessible from age {module.retirementAccessRule.accessAge})
                 </p>
               </button>

@@ -1,8 +1,3 @@
-/**
- * Command processing API endpoint
- */
-
-import { Handlers } from "$fresh/server.ts";
 import { sessionManager } from "./session.ts";
 import { projectionService } from "./projections.ts";
 import { broadcastProjectionUpdate } from "./websocket.ts";
@@ -19,6 +14,7 @@ import { ScenarioComparisonEngine } from "../../../lib/scenario_comparison_engin
 import { SimulationEngine } from "../../../lib/simulation_engine.ts";
 import { assessSustainability } from "../../../server/projections/projection-builder.ts";
 import type { SimulationConfiguration } from "../../../types/financial.ts";
+import { Handlers } from "fresh/compat";
 
 interface CommandResponse {
   success: boolean;
@@ -138,7 +134,9 @@ async function handleCompareScenarios(
   withoutTransitionsResult.isSustainable = withoutTransitionsIsSustainable;
 
   let retirementDateDifference: number | null = null;
-  if (withTransitions.retirementDate && withoutTransitionsResult.retirementDate) {
+  if (
+    withTransitions.retirementDate && withoutTransitionsResult.retirementDate
+  ) {
     const diffMs = withTransitions.retirementDate.getTime() -
       withoutTransitionsResult.retirementDate.getTime();
     retirementDateDifference = diffMs / (1000 * 60 * 60 * 24 * 365.25);
@@ -150,7 +148,8 @@ async function handleCompareScenarios(
 
   const finalNetWorthWithoutTransitions =
     withoutTransitionsResult.states.length > 0
-      ? withoutTransitionsResult.states[withoutTransitionsResult.states.length - 1].netWorth
+      ? withoutTransitionsResult
+        .states[withoutTransitionsResult.states.length - 1].netWorth
       : 0;
 
   const finalNetWorthDifference = finalNetWorthWithTransitions -
@@ -193,7 +192,10 @@ async function handleCompareNamedScenarios(
       : SimulationEngine.runSimulation(configuration.baseParameters);
 
     // See note in handleCompareScenarios: recompute with retirement-aware logic
-    result.isSustainable = assessSustainability(result.states, result.retirementDate);
+    result.isSustainable = assessSustainability(
+      result.states,
+      result.retirementDate,
+    );
 
     const milestoneResult = detectMilestonesFromSimulation(
       result.states,
@@ -221,7 +223,9 @@ async function dispatch(command: Command): Promise<CommandResponse> {
     case "CompareScenarios":
       return handleCompareScenarios(command as CompareScenariosCommand);
     case "CompareNamedScenarios":
-      return handleCompareNamedScenarios(command as CompareNamedScenariosCommand);
+      return handleCompareNamedScenarios(
+        command as CompareNamedScenariosCommand,
+      );
     default:
       return {
         success: false,
@@ -271,7 +275,9 @@ function deserializeDates(obj: any): any {
 
 export const handler: Handlers = {
   // POST /api/simulation/commands - Process a command
-  async POST(req) {
+  async POST(ctx) {
+    const req = ctx.req;
+
     try {
       const body = await req.json();
       const command = deserializeDates(body) as Command;
@@ -289,7 +295,10 @@ export const handler: Handlers = {
       const isValid = await sessionManager.isValidSession(command.sessionId);
       if (!isValid) {
         return new Response(
-          JSON.stringify({ success: false, error: "Invalid or expired session" }),
+          JSON.stringify({
+            success: false,
+            error: "Invalid or expired session",
+          }),
           { status: 401, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -319,7 +328,7 @@ export const handler: Handlers = {
   },
 
   // GET /api/simulation/commands - Get available command types
-  GET(_req) {
+  GET() {
     return new Response(
       JSON.stringify({
         success: true,

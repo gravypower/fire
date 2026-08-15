@@ -1,12 +1,5 @@
-/**
- * API route to fetch current share/crypto prices from Yahoo Finance's
- * unofficial chart endpoint. Server-side because Yahoo doesn't send
- * permissive CORS headers for browser fetches, and to keep the price
- * source swappable later without touching client code.
- */
-
-import { Handlers } from "$fresh/server.ts";
 import { buildYahooSymbol } from "../../lib/quote_utils.ts";
+import { Handlers } from "fresh/compat";
 
 interface QuoteRequestHolding {
   id: string;
@@ -58,7 +51,9 @@ async function fetchOneQuote(symbol: string): Promise<QuoteResult> {
 }
 
 export const handler: Handlers = {
-  async POST(req) {
+  async POST(ctx) {
+    const req = ctx.req;
+
     try {
       const body = await req.json();
       const holdings: QuoteRequestHolding[] = body?.holdings ?? [];

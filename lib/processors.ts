@@ -857,18 +857,25 @@ export const InvestmentProcessor = {
     if (sale.frequency === "once") {
       fires = start > periodStart && start <= periodEnd;
     } else {
-      const daysPerOccurrence: Record<Exclude<PlannedSale["frequency"], "once">, number> = {
+      const daysPerOccurrence: Record<
+        Exclude<PlannedSale["frequency"], "once">,
+        number
+      > = {
         monthly: 30.4375,
         quarterly: 91.3125,
         "half-yearly": 182.625,
         yearly: 365.25,
       };
-      const msPerOccurrence = daysPerOccurrence[sale.frequency] * 24 * 60 * 60 * 1000;
+      const msPerOccurrence = daysPerOccurrence[sale.frequency] * 24 * 60 * 60 *
+        1000;
 
-      const elapsedAtStart = (periodStart.getTime() - start.getTime()) / msPerOccurrence;
-      const elapsedAtEnd = (periodEnd.getTime() - start.getTime()) / msPerOccurrence;
+      const elapsedAtStart = (periodStart.getTime() - start.getTime()) /
+        msPerOccurrence;
+      const elapsedAtEnd = (periodEnd.getTime() - start.getTime()) /
+        msPerOccurrence;
 
-      fires = elapsedAtEnd >= 0 && Math.floor(elapsedAtEnd) > Math.floor(elapsedAtStart);
+      fires = elapsedAtEnd >= 0 &&
+        Math.floor(elapsedAtEnd) > Math.floor(elapsedAtStart);
     }
 
     if (!fires) {

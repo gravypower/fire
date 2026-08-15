@@ -25,7 +25,7 @@ interface AdviceErrorBoundaryState {
 
 /**
  * AdviceErrorBoundary component
- * 
+ *
  * Catches errors in advice-related components and displays a user-friendly
  * fallback UI with options to retry or continue without advice.
  */
@@ -42,7 +42,9 @@ export default class AdviceErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<AdviceErrorBoundaryState> {
+  static getDerivedStateFromError(
+    error: Error,
+  ): Partial<AdviceErrorBoundaryState> {
     return {
       hasError: true,
       error,
@@ -53,9 +55,10 @@ export default class AdviceErrorBoundary extends Component<
     console.error("Advice component error:", error);
     console.error("Error context:", this.props.context);
     console.error("Error info:", errorInfo);
-    
+
     this.setState({
-      errorInfo: errorInfo?.componentStack || "No additional error information available",
+      errorInfo: errorInfo?.componentStack ||
+        "No additional error information available",
     });
   }
 
@@ -105,20 +108,25 @@ export default class AdviceErrorBoundary extends Component<
               </h3>
               <div class="text-sm text-blue-700 mb-4">
                 <p class="mb-2">
-                  We encountered an issue while {this.props.context || "generating retirement advice"}. 
-                  Your simulation results are still available and accurate.
+                  We encountered an issue while{" "}
+                  {this.props.context || "generating retirement advice"}. Your
+                  simulation results are still available and accurate.
                 </p>
                 <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3">
                   <p class="text-xs text-blue-800">
-                    <strong>What this means:</strong> The financial simulation completed successfully, 
-                    but we couldn't generate personalized recommendations. You can still review your 
-                    timeline, milestones, and make your own strategic decisions.
+                    <strong>What this means:</strong>{" "}
+                    The financial simulation completed successfully, but we
+                    couldn't generate personalized recommendations. You can
+                    still review your timeline, milestones, and make your own
+                    strategic decisions.
                   </p>
                 </div>
                 <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3">
                   <p class="text-xs text-blue-800">
-                    <strong>Alternative:</strong> Consider consulting with a financial advisor for 
-                    personalized recommendations based on your simulation results.
+                    <strong>Alternative:</strong>{" "}
+                    Consider consulting with a financial advisor for
+                    personalized recommendations based on your simulation
+                    results.
                   </p>
                 </div>
                 <details class="mt-3">
@@ -130,7 +138,8 @@ export default class AdviceErrorBoundary extends Component<
                       <strong>Error:</strong> {this.state.error.message}
                     </p>
                     <p class="font-mono text-xs text-blue-600">
-                      <strong>Context:</strong> {this.props.context || "Unknown"}
+                      <strong>Context:</strong>{" "}
+                      {this.props.context || "Unknown"}
                     </p>
                   </div>
                 </details>
@@ -164,7 +173,7 @@ export default class AdviceErrorBoundary extends Component<
  */
 export function withAdviceErrorBoundary<T extends Record<string, any>>(
   Component: (props: T) => ComponentChildren,
-  context?: string
+  context?: string,
 ) {
   return function WrappedComponent(props: T) {
     return (

@@ -3,9 +3,15 @@
  * Tests the runComparisonSimulation function
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertExists,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { SimulationEngine } from "../../lib/simulation_engine.ts";
-import type { SimulationConfiguration, UserParameters } from "../../types/financial.ts";
+import type {
+  SimulationConfiguration,
+  UserParameters,
+} from "../../types/financial.ts";
 
 Deno.test("runComparisonSimulation - returns comparison result with both scenarios", async () => {
   // Create base parameters
@@ -60,7 +66,10 @@ Deno.test("runComparisonSimulation - returns comparison result with both scenari
 
   // Verify withTransitions has transition points
   assertEquals(result.withTransitions.transitionPoints.length, 1);
-  assertEquals(result.withTransitions.transitionPoints[0].transition.id, "test-transition-1");
+  assertEquals(
+    result.withTransitions.transitionPoints[0].transition.id,
+    "test-transition-1",
+  );
 
   // Verify withoutTransitions has no transition points
   assertEquals(result.withoutTransitions.states.length > 0, true);

@@ -12,8 +12,8 @@ export {
 
 // Service
 export {
-  ProjectionService,
   createProjectionService,
+  ProjectionService,
 } from "./projection-service.ts";
 
 // Re-export interfaces

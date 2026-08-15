@@ -2,7 +2,10 @@
  * Pure helpers for maintaining an investment holding's purchase/sale ledger.
  */
 
-import type { InvestmentPurchase, InvestmentSale } from "../types/investments.ts";
+import type {
+  InvestmentPurchase,
+  InvestmentSale,
+} from "../types/investments.ts";
 
 /**
  * Sells units from a FIFO (first-in, first-out) queue of purchase lots.
@@ -88,6 +91,8 @@ export function sellFromPurchases(
 /**
  * Sums realized gain/loss across a holding's sale history
  */
-export function totalRealizedGainLoss(sales: InvestmentSale[] | undefined): number {
+export function totalRealizedGainLoss(
+  sales: InvestmentSale[] | undefined,
+): number {
   return (sales ?? []).reduce((sum, sale) => sum + sale.realizedGainLoss, 0);
 }

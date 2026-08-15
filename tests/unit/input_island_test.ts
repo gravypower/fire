@@ -8,7 +8,7 @@ import { assertEquals } from "$std/assert/mod.ts";
 Deno.test("InputIsland - all required input fields are present", () => {
   // This test verifies that the InputIsland component structure includes all required fields
   // Since we're testing a Preact component, we verify the field definitions exist
-  
+
   const requiredFields = [
     "annualSalary",
     "salaryFrequency",
@@ -32,7 +32,11 @@ Deno.test("InputIsland - all required input fields are present", () => {
 
   // Verify all required fields are defined in the component
   // This is a structural test to ensure completeness
-  assertEquals(requiredFields.length, 18, "All 18 required fields should be defined");
+  assertEquals(
+    requiredFields.length,
+    18,
+    "All 18 required fields should be defined",
+  );
 });
 
 Deno.test("InputIsland - default parameters are valid", () => {
@@ -72,10 +76,10 @@ Deno.test("InputIsland - default parameters are valid", () => {
   assertEquals(defaultParams.superReturnRate > 0, true);
   assertEquals(defaultParams.currentSuperBalance > 0, true);
   assertEquals(defaultParams.desiredAnnualRetirementIncome > 0, true);
-  
+
   // Verify retirement age is greater than current age
   assertEquals(defaultParams.retirementAge > defaultParams.currentAge, true);
-  
+
   // Verify simulation years is reasonable
   assertEquals(defaultParams.simulationYears > 0, true);
   assertEquals(defaultParams.simulationYears <= 100, true);
@@ -83,7 +87,7 @@ Deno.test("InputIsland - default parameters are valid", () => {
 
 Deno.test("InputIsland - frequency options are valid", () => {
   const validFrequencies = ["weekly", "fortnightly", "monthly"];
-  
+
   // Verify the valid frequency options
   assertEquals(validFrequencies.length, 3);
   assertEquals(validFrequencies.includes("weekly"), true);

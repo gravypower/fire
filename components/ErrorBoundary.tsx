@@ -18,11 +18,12 @@ interface ErrorBoundaryState {
 
 /**
  * ErrorBoundary component
- * 
+ *
  * Catches JavaScript errors anywhere in the child component tree,
  * logs those errors, and displays a fallback UI instead of crashing.
  */
-export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export default class ErrorBoundary
+  extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -48,9 +49,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   componentDidCatch(error: Error, errorInfo: any) {
     console.error("ErrorBoundary caught an error:", error);
     console.error("Error info:", errorInfo);
-    
+
     this.setState({
-      errorInfo: errorInfo?.componentStack || "No additional error information available",
+      errorInfo: errorInfo?.componentStack ||
+        "No additional error information available",
     });
   }
 
@@ -69,7 +71,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     if (this.state.hasError && this.state.error) {
       // Use custom fallback if provided
       if (this.props.fallback) {
-        return this.props.fallback(this.state.error, this.state.errorInfo || "");
+        return this.props.fallback(
+          this.state.error,
+          this.state.errorInfo || "",
+        );
       }
 
       // Default fallback UI

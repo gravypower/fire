@@ -1,16 +1,12 @@
-/**
- * WebSocket API endpoint for real-time updates
- */
-
-import { Handlers } from "$fresh/server.ts";
 import { sessionManager } from "./session.ts";
+import { Handlers } from "fresh/compat";
 
 // Store active WebSocket connections by session
 const activeConnections = new Map<string, Set<WebSocket>>();
 
 // Message types for WebSocket communication
 interface WebSocketMessage {
-  type: 'subscribe' | 'unsubscribe' | 'ping' | 'projection_update' | 'error';
+  type: "subscribe" | "unsubscribe" | "ping" | "projection_update" | "error";
   sessionId?: string;
   data?: any;
   timestamp?: Date;
@@ -19,7 +15,10 @@ interface WebSocketMessage {
 /**
  * Broadcast a message to all connections for a session
  */
-export function broadcastToSession(sessionId: string, message: Omit<WebSocketMessage, 'sessionId'>): void {
+export function broadcastToSession(
+  sessionId: string,
+  message: Omit<WebSocketMessage, "sessionId">,
+): void {
   const connections = activeConnections.get(sessionId);
   if (!connections) {
     return;
@@ -42,7 +41,7 @@ export function broadcastToSession(sessionId: string, message: Omit<WebSocketMes
         deadConnections.push(ws);
       }
     } catch (error) {
-      console.error('Error sending WebSocket message:', error);
+      console.error("Error sending WebSocket message:", error);
       deadConnections.push(ws);
     }
   }
@@ -61,9 +60,13 @@ export function broadcastToSession(sessionId: string, message: Omit<WebSocketMes
 /**
  * Broadcast projection updates to session
  */
-export function broadcastProjectionUpdate(sessionId: string, projectionType: string, projection: any): void {
+export function broadcastProjectionUpdate(
+  sessionId: string,
+  projectionType: string,
+  projection: any,
+): void {
   broadcastToSession(sessionId, {
-    type: 'projection_update',
+    type: "projection_update",
     data: {
       projectionType,
       projection,
@@ -73,7 +76,9 @@ export function broadcastProjectionUpdate(sessionId: string, projectionType: str
 
 export const handler: Handlers = {
   // GET /api/simulation/websocket - Upgrade to WebSocket connection
-  async GET(req) {
+  async GET(ctx) {
+    const req = ctx.req;
+
     try {
       const url = new URL(req.url);
       const sessionId = url.searchParams.get("sessionId");
@@ -94,7 +99,7 @@ export const handler: Handlers = {
       // Handle WebSocket events
       socket.onopen = () => {
         console.log(`WebSocket connected for session: ${sessionId}`);
-        
+
         // Add to active connections
         if (!activeConnections.has(sessionId)) {
           activeConnections.set(sessionId, new Set());
@@ -103,39 +108,39 @@ export const handler: Handlers = {
 
         // Send welcome message
         socket.send(JSON.stringify({
-          type: 'connected',
+          type: "connected",
           sessionId,
           timestamp: new Date(),
-          data: { message: 'WebSocket connection established' },
+          data: { message: "WebSocket connection established" },
         }));
       };
 
       socket.onmessage = async (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          
+
           switch (message.type) {
-            case 'ping':
+            case "ping":
               socket.send(JSON.stringify({
-                type: 'pong',
+                type: "pong",
                 sessionId,
                 timestamp: new Date(),
               }));
               break;
 
-            case 'subscribe':
+            case "subscribe":
               // Client is subscribing to updates (already handled by connection)
               socket.send(JSON.stringify({
-                type: 'subscribed',
+                type: "subscribed",
                 sessionId,
                 timestamp: new Date(),
-                data: { message: 'Subscribed to session updates' },
+                data: { message: "Subscribed to session updates" },
               }));
               break;
 
             default:
               socket.send(JSON.stringify({
-                type: 'error',
+                type: "error",
                 sessionId,
                 timestamp: new Date(),
                 data: { error: `Unknown message type: ${message.type}` },
@@ -143,17 +148,17 @@ export const handler: Handlers = {
           }
         } catch (error) {
           socket.send(JSON.stringify({
-            type: 'error',
+            type: "error",
             sessionId,
             timestamp: new Date(),
-            data: { error: 'Invalid message format' },
+            data: { error: "Invalid message format" },
           }));
         }
       };
 
       socket.onclose = () => {
         console.log(`WebSocket disconnected for session: ${sessionId}`);
-        
+
         // Remove from active connections
         const connections = activeConnections.get(sessionId);
         if (connections) {
@@ -170,7 +175,12 @@ export const handler: Handlers = {
 
       return response;
     } catch (error) {
-      return new Response(`WebSocket upgrade failed: ${error instanceof Error ? error.message : String(error)}`, { status: 500 });
+      return new Response(
+        `WebSocket upgrade failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { status: 500 },
+      );
     }
   },
 };

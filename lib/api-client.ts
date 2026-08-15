@@ -439,7 +439,9 @@ export class ApiClient {
    * Run a side-by-side comparison of 2-4 independently configured scenarios
    */
   async runNamedScenarioComparison(
-    scenarios: Array<{ id: string; name: string; configuration: SimulationConfiguration }>,
+    scenarios: Array<
+      { id: string; name: string; configuration: SimulationConfiguration }
+    >,
     sessionId?: string,
   ): Promise<ScenarioComparisonResult> {
     const id = sessionId || this.currentSessionId;
@@ -467,7 +469,9 @@ export class ApiClient {
         );
 
       if (!commandResult.success || !commandResult.data) {
-        throw new Error(commandResult.error || "Failed to run scenario comparison");
+        throw new Error(
+          commandResult.error || "Failed to run scenario comparison",
+        );
       }
 
       return commandResult.data.data as ScenarioComparisonResult;

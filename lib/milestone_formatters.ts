@@ -5,14 +5,14 @@
  */
 
 import type {
-  Milestone,
-  LoanPayoffMilestone,
-  OffsetCompletionMilestone,
-  RetirementMilestone,
-  ParameterTransitionMilestone,
   ExpenseExpirationMilestone,
+  LoanPayoffMilestone,
+  Milestone,
   MilestoneCategory,
   MilestoneType,
+  OffsetCompletionMilestone,
+  ParameterTransitionMilestone,
+  RetirementMilestone,
 } from "../types/milestones.ts";
 import { formatCurrency } from "./result_utils.ts";
 
@@ -46,14 +46,14 @@ export function formatFinancialImpact(
   const isPositive = impact > 0;
   const isNegative = impact < 0;
   const sign = showSign && isPositive ? "+" : "";
-  
+
   return {
     text: `${sign}${formatCurrency(impact)}`,
-    className: isPositive 
-      ? "text-green-600 font-semibold" 
-      : isNegative 
-        ? "text-red-600 font-semibold"
-        : "text-gray-600",
+    className: isPositive
+      ? "text-green-600 font-semibold"
+      : isNegative
+      ? "text-red-600 font-semibold"
+      : "text-gray-600",
   };
 }
 
@@ -62,9 +62,11 @@ export function formatFinancialImpact(
  * @param milestone Loan payoff milestone
  * @returns Formatted milestone display object
  */
-export function formatLoanPayoffMilestone(milestone: LoanPayoffMilestone): MilestoneDisplay {
+export function formatLoanPayoffMilestone(
+  milestone: LoanPayoffMilestone,
+): MilestoneDisplay {
   const impact = formatFinancialImpact(milestone.totalInterestPaid, false);
-  
+
   return {
     id: milestone.id,
     type: milestone.type,
@@ -72,7 +74,9 @@ export function formatLoanPayoffMilestone(milestone: LoanPayoffMilestone): Miles
     date: formatMilestoneDate(milestone.date),
     title: milestone.title,
     description: milestone.description,
-    primaryDetail: `Final payment: ${formatCurrency(milestone.finalPaymentAmount)}`,
+    primaryDetail: `Final payment: ${
+      formatCurrency(milestone.finalPaymentAmount)
+    }`,
     secondaryDetails: [
       `Total interest paid: ${impact.text}`,
       `Loan duration: ${milestone.monthsToPayoff} months`,
@@ -89,10 +93,13 @@ export function formatLoanPayoffMilestone(milestone: LoanPayoffMilestone): Miles
  * @param milestone Offset completion milestone
  * @returns Formatted milestone display object
  */
-export function formatOffsetCompletionMilestone(milestone: OffsetCompletionMilestone): MilestoneDisplay {
-  const annualSavings = milestone.loanBalance * (milestone.interestSavingsRate / 100);
+export function formatOffsetCompletionMilestone(
+  milestone: OffsetCompletionMilestone,
+): MilestoneDisplay {
+  const annualSavings = milestone.loanBalance *
+    (milestone.interestSavingsRate / 100);
   const impact = formatFinancialImpact(annualSavings);
-  
+
   return {
     id: milestone.id,
     type: milestone.type,
@@ -117,10 +124,12 @@ export function formatOffsetCompletionMilestone(milestone: OffsetCompletionMiles
  * @param milestone Retirement milestone
  * @returns Formatted milestone display object
  */
-export function formatRetirementMilestone(milestone: RetirementMilestone): MilestoneDisplay {
+export function formatRetirementMilestone(
+  milestone: RetirementMilestone,
+): MilestoneDisplay {
   const surplus = milestone.actualAssets - milestone.requiredAssets;
   const impact = formatFinancialImpact(surplus);
-  
+
   const secondaryDetails = [
     `Required assets: ${formatCurrency(milestone.requiredAssets)}`,
     `Available assets: ${formatCurrency(milestone.actualAssets)}`,
@@ -129,10 +138,12 @@ export function formatRetirementMilestone(milestone: RetirementMilestone): Miles
 
   if (milestone.yearsEarlierThanTarget) {
     secondaryDetails.push(
-      `${milestone.yearsEarlierThanTarget.toFixed(1)} years earlier than target`
+      `${
+        milestone.yearsEarlierThanTarget.toFixed(1)
+      } years earlier than target`,
     );
   }
-  
+
   return {
     id: milestone.id,
     type: milestone.type,
@@ -140,7 +151,9 @@ export function formatRetirementMilestone(milestone: RetirementMilestone): Miles
     date: formatMilestoneDate(milestone.date),
     title: milestone.title,
     description: milestone.description,
-    primaryDetail: `Monthly capacity: ${formatCurrency(milestone.monthlyWithdrawalCapacity)}`,
+    primaryDetail: `Monthly capacity: ${
+      formatCurrency(milestone.monthlyWithdrawalCapacity)
+    }`,
     secondaryDetails,
     financialImpact: impact,
     icon: "🏖️",
@@ -153,15 +166,23 @@ export function formatRetirementMilestone(milestone: RetirementMilestone): Miles
  * @param milestone Parameter transition milestone
  * @returns Formatted milestone display object
  */
-export function formatParameterTransitionMilestone(milestone: ParameterTransitionMilestone): MilestoneDisplay {
+export function formatParameterTransitionMilestone(
+  milestone: ParameterTransitionMilestone,
+): MilestoneDisplay {
   const impact = formatFinancialImpact(milestone.financialImpact);
-  
-  const changes = Object.entries(milestone.parameterChanges).map(([param, change]) => {
-    const fromValue = typeof change.from === 'number' ? formatCurrency(change.from) : String(change.from);
-    const toValue = typeof change.to === 'number' ? formatCurrency(change.to) : String(change.to);
-    return `${formatParameterName(param)}: ${fromValue} → ${toValue}`;
-  });
-  
+
+  const changes = Object.entries(milestone.parameterChanges).map(
+    ([param, change]) => {
+      const fromValue = typeof change.from === "number"
+        ? formatCurrency(change.from)
+        : String(change.from);
+      const toValue = typeof change.to === "number"
+        ? formatCurrency(change.to)
+        : String(change.to);
+      return `${formatParameterName(param)}: ${fromValue} → ${toValue}`;
+    },
+  );
+
   return {
     id: milestone.id,
     type: milestone.type,
@@ -182,9 +203,11 @@ export function formatParameterTransitionMilestone(milestone: ParameterTransitio
  * @param milestone Expense expiration milestone
  * @returns Formatted milestone display object
  */
-export function formatExpenseExpirationMilestone(milestone: ExpenseExpirationMilestone): MilestoneDisplay {
+export function formatExpenseExpirationMilestone(
+  milestone: ExpenseExpirationMilestone,
+): MilestoneDisplay {
   const impact = formatFinancialImpact(milestone.annualSavings);
-  
+
   return {
     id: milestone.id,
     type: milestone.type,
@@ -213,16 +236,22 @@ export function formatExpenseExpirationMilestone(milestone: ExpenseExpirationMil
  */
 export function formatMilestone(milestone: Milestone): MilestoneDisplay {
   switch (milestone.type) {
-    case 'loan_payoff':
+    case "loan_payoff":
       return formatLoanPayoffMilestone(milestone as LoanPayoffMilestone);
-    case 'offset_completion':
-      return formatOffsetCompletionMilestone(milestone as OffsetCompletionMilestone);
-    case 'retirement_eligibility':
+    case "offset_completion":
+      return formatOffsetCompletionMilestone(
+        milestone as OffsetCompletionMilestone,
+      );
+    case "retirement_eligibility":
       return formatRetirementMilestone(milestone as RetirementMilestone);
-    case 'parameter_transition':
-      return formatParameterTransitionMilestone(milestone as ParameterTransitionMilestone);
-    case 'expense_expiration':
-      return formatExpenseExpirationMilestone(milestone as ExpenseExpirationMilestone);
+    case "parameter_transition":
+      return formatParameterTransitionMilestone(
+        milestone as ParameterTransitionMilestone,
+      );
+    case "expense_expiration":
+      return formatExpenseExpirationMilestone(
+        milestone as ExpenseExpirationMilestone,
+      );
     default:
       // Fallback for unknown milestone types
       const baseMilestone = milestone as Milestone;
@@ -271,7 +300,7 @@ export function filterMilestonesByCategory(
   milestones: Milestone[],
   category: MilestoneCategory,
 ): Milestone[] {
-  return milestones.filter(milestone => milestone.category === category);
+  return milestones.filter((milestone) => milestone.category === category);
 }
 
 /**
@@ -284,7 +313,7 @@ export function filterMilestonesByType(
   milestones: Milestone[],
   type: MilestoneType,
 ): Milestone[] {
-  return milestones.filter(milestone => milestone.type === type);
+  return milestones.filter((milestone) => milestone.type === type);
 }
 
 /**
@@ -299,7 +328,7 @@ export function filterMilestonesByDateRange(
   startDate: Date,
   endDate: Date,
 ): Milestone[] {
-  return milestones.filter(milestone => 
+  return milestones.filter((milestone) =>
     milestone.date >= startDate && milestone.date <= endDate
   );
 }
@@ -320,7 +349,7 @@ export function groupMilestonesByCategory(
     expense: [],
   };
 
-  milestones.forEach(milestone => {
+  milestones.forEach((milestone) => {
     groups[milestone.category].push(milestone);
   });
 
@@ -337,7 +366,7 @@ export function groupMilestonesByYear(
 ): Record<number, Milestone[]> {
   const groups: Record<number, Milestone[]> = {};
 
-  milestones.forEach(milestone => {
+  milestones.forEach((milestone) => {
     const year = milestone.date.getFullYear();
     if (!groups[year]) {
       groups[year] = [];
@@ -356,18 +385,18 @@ export function groupMilestonesByYear(
 function formatParameterName(paramName: string): string {
   // Convert camelCase to readable format
   const formatted = paramName
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase())
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase())
     .trim();
-  
+
   // Handle specific parameter names
   const paramMap: Record<string, string> = {
-    'Annual Income': 'Annual Income',
-    'Monthly Expenses': 'Monthly Expenses',
-    'Investment Contribution': 'Investment Contribution',
-    'Retirement Age': 'Retirement Age',
-    'Desired Annual Retirement Income': 'Desired Retirement Income',
-    'Investment Return Rate': 'Investment Return Rate',
+    "Annual Income": "Annual Income",
+    "Monthly Expenses": "Monthly Expenses",
+    "Investment Contribution": "Investment Contribution",
+    "Retirement Age": "Retirement Age",
+    "Desired Annual Retirement Income": "Desired Retirement Income",
+    "Investment Return Rate": "Investment Return Rate",
   };
 
   return paramMap[formatted] || formatted;
@@ -401,7 +430,7 @@ export interface MilestoneDisplayConfig {
   showSecondaryDetails: boolean;
   showIcons: boolean;
   showBadges: boolean;
-  dateFormat: 'short' | 'long' | 'numeric';
+  dateFormat: "short" | "long" | "numeric";
 }
 
 /**
@@ -412,5 +441,5 @@ export const defaultDisplayConfig: MilestoneDisplayConfig = {
   showSecondaryDetails: true,
   showIcons: true,
   showBadges: true,
-  dateFormat: 'short',
+  dateFormat: "short",
 };

@@ -602,7 +602,9 @@ export const SimulationEngine = {
             type: SimulationEventType.HOUSE_PURCHASED,
             timestamp: new Date(currentState.date),
             phase: SimulationPhase.PROPERTY,
-            description: `Purchased ${house.name} for $${house.price.toFixed(2)}`,
+            description: `Purchased ${house.name} for $${
+              house.price.toFixed(2)
+            }`,
             data: {
               houseId: house.id,
               houseName: house.name,
@@ -612,7 +614,9 @@ export const SimulationEngine = {
               loanPrincipal,
             },
           });
-        } else if (alreadyPurchased || house.purchaseDate <= currentState.date) {
+        } else if (
+          alreadyPurchased || house.purchaseDate <= currentState.date
+        ) {
           // Already owned - grow the value for this period
           houseValues[house.id] = InvestmentProcessor.calculateInvestmentGrowth(
             houseValues[house.id] ?? house.price,
@@ -907,7 +911,8 @@ export const SimulationEngine = {
           continue;
         }
 
-        let holdingBalance = investmentBalances[holding.id] ?? holding.currentValue;
+        let holdingBalance = investmentBalances[holding.id] ??
+          holding.currentValue;
         const balanceBefore = holdingBalance;
         let totalSold = 0;
 
@@ -933,7 +938,9 @@ export const SimulationEngine = {
             type: SimulationEventType.PLANNED_SALE_EXECUTED,
             timestamp: new Date(currentState.date),
             phase: SimulationPhase.INVESTMENT,
-            description: `Planned sale of $${totalSold.toFixed(2)} from ${holding.name}`,
+            description: `Planned sale of $${
+              totalSold.toFixed(2)
+            } from ${holding.name}`,
             data: {
               holdingId: holding.id,
               holdingLabel: holding.name,
@@ -1382,7 +1389,8 @@ export const SimulationEngine = {
       ? (currentParams.loans.length > 0
         ? currentParams.loans.reduce(
           (sum, loan) =>
-            sum + this.loanInitialBalance(loan, config.baseParameters.startDate),
+            sum +
+            this.loanInitialBalance(loan, config.baseParameters.startDate),
           0,
         )
         : 0)

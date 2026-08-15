@@ -17,7 +17,8 @@ export default function MultiScenarioComparisonView(
   const { scenarios } = comparison;
 
   const rows = scenarios.map((scenario) => {
-    const finalState = scenario.result.states[scenario.result.states.length - 1];
+    const finalState =
+      scenario.result.states[scenario.result.states.length - 1];
     const firstRetirementMilestone = scenario.milestones
       .filter((m) => m.type === "retirement_eligibility")
       .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
@@ -52,14 +53,21 @@ export default function MultiScenarioComparisonView(
           </thead>
           <tbody class="divide-y divide-gray-100">
             {rows.map((row) => (
-              <tr key={row.id} class={row.finalNetWorth === bestNetWorth ? "bg-green-50" : ""}>
+              <tr
+                key={row.id}
+                class={row.finalNetWorth === bestNetWorth ? "bg-green-50" : ""}
+              >
                 <td class="py-3 pr-4 font-medium text-gray-800">{row.name}</td>
                 <td class="py-3 pr-4">{formatCurrency(row.finalNetWorth)}</td>
                 <td class="py-3 pr-4">
-                  {row.retirementDate ? row.retirementDate.toLocaleDateString() : "Not Achievable"}
+                  {row.retirementDate
+                    ? row.retirementDate.toLocaleDateString()
+                    : "Not Achievable"}
                 </td>
                 <td class="py-3 pr-4">
-                  {row.retirementAge !== null ? row.retirementAge.toFixed(1) : "—"}
+                  {row.retirementAge !== null
+                    ? row.retirementAge.toFixed(1)
+                    : "—"}
                 </td>
                 <td class="py-3 pr-4">
                   <span
@@ -79,7 +87,10 @@ export default function MultiScenarioComparisonView(
       </div>
 
       <ScenarioOverlayChart
-        scenarios={scenarios.map((s) => ({ label: s.name, states: s.result.states }))}
+        scenarios={scenarios.map((s) => ({
+          label: s.name,
+          states: s.result.states,
+        }))}
       />
     </div>
   );

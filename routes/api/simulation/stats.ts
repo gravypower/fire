@@ -1,14 +1,10 @@
-/**
- * System statistics API endpoint
- */
-
-import { Handlers } from "$fresh/server.ts";
 import { sessionManager } from "./session.ts";
 import { getWebSocketStats } from "./websocket.ts";
+import { Handlers } from "fresh/compat";
 
 export const handler: Handlers = {
   // GET /api/simulation/stats - Get system statistics
-  async GET(_req) {
+  async GET() {
     try {
       const [sessionStats, wsStats] = await Promise.all([
         sessionManager.getStats(),
@@ -31,21 +27,27 @@ export const handler: Handlers = {
         },
       };
 
-      return new Response(JSON.stringify({
-        success: true,
-        data: combinedStats,
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: combinedStats,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } catch (error) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
   },
 };

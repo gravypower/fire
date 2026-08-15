@@ -448,9 +448,8 @@ Deno.test("SimulationEngine.runComparisonSimulation - compares scenarios", async
   const withTransitionsNetWorth =
     result.withTransitions.states[result.withTransitions.states.length - 1]
       .netWorth;
-  const withoutTransitionsNetWorth =
-    result.withoutTransitions
-      .states[result.withoutTransitions.states.length - 1].netWorth;
+  const withoutTransitionsNetWorth = result.withoutTransitions
+    .states[result.withoutTransitions.states.length - 1].netWorth;
 
   assertEquals(withTransitionsNetWorth > withoutTransitionsNetWorth, true);
   assertEquals(result.comparison.finalNetWorthDifference > 0, true);
@@ -506,7 +505,9 @@ Deno.test("SimulationEngine.runSimulation - applies a one-off planned sale on th
   // Skip states[0] (the hand-constructed initial state, before any timestep
   // has run) since it has no investmentBalances map populated yet
   const steppedStates = result.states.slice(1);
-  const beforeSale = steppedStates.find((s) => s.date < new Date("2025-06-01"))!;
+  const beforeSale = steppedStates.find((s) =>
+    s.date < new Date("2025-06-01")
+  )!;
   const afterSale = steppedStates.find((s) =>
     s.date >= new Date("2025-06-01") && s.date < new Date("2025-07-01")
   )!;
@@ -516,7 +517,10 @@ Deno.test("SimulationEngine.runSimulation - applies a one-off planned sale on th
   const holdingAfter = afterSale.investmentBalances!["holding-1"];
 
   // The holding drops by (approximately) the sale amount, and never again
-  assert(holdingBefore - holdingAfter >= 19999 && holdingBefore - holdingAfter <= 20001);
+  assert(
+    holdingBefore - holdingAfter >= 19999 &&
+      holdingBefore - holdingAfter <= 20001,
+  );
   const holdingFinal = wellAfterSale.investmentBalances!["holding-1"];
   assert(Math.abs(holdingFinal - holdingAfter) < 1); // no further drawdown after the one-off fires
 

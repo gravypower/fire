@@ -51,7 +51,7 @@ Deno.test("Legacy loan migration - single loan with offset", () => {
 
   // Simulate the migration logic
   const migratedParams = { ...legacyParams };
-  
+
   if (migratedParams.loans === undefined) {
     if (migratedParams.loanPrincipal > 0) {
       migratedParams.loans = [{
@@ -75,27 +75,65 @@ Deno.test("Legacy loan migration - single loan with offset", () => {
   }
 
   // Verify migration
-  assertEquals(migratedParams.loans !== undefined, true, "loans array should exist");
-  assertEquals(migratedParams.loans!.length, 1, "should have one migrated loan");
-  
+  assertEquals(
+    migratedParams.loans !== undefined,
+    true,
+    "loans array should exist",
+  );
+  assertEquals(
+    migratedParams.loans!.length,
+    1,
+    "should have one migrated loan",
+  );
+
   const migratedLoan = migratedParams.loans![0];
   assertEquals(migratedLoan.principal, 400000, "principal should match");
   assertEquals(migratedLoan.interestRate, 6.5, "interest rate should match");
   assertEquals(migratedLoan.paymentAmount, 3000, "payment amount should match");
-  assertEquals(migratedLoan.paymentFrequency, "monthly", "frequency should match");
+  assertEquals(
+    migratedLoan.paymentFrequency,
+    "monthly",
+    "frequency should match",
+  );
   assertEquals(migratedLoan.hasOffset, true, "offset should be enabled");
   assertEquals(migratedLoan.offsetBalance, 5000, "offset balance should match");
-  
+
   // Verify legacy fields are cleared
-  assertEquals(migratedParams.loanPrincipal, 0, "legacy loanPrincipal should be cleared");
-  assertEquals(migratedParams.loanPaymentAmount, 0, "legacy loanPaymentAmount should be cleared");
-  assertEquals(migratedParams.useOffsetAccount, false, "legacy useOffsetAccount should be cleared");
-  assertEquals(migratedParams.currentOffsetBalance, 0, "legacy currentOffsetBalance should be cleared");
-  
+  assertEquals(
+    migratedParams.loanPrincipal,
+    0,
+    "legacy loanPrincipal should be cleared",
+  );
+  assertEquals(
+    migratedParams.loanPaymentAmount,
+    0,
+    "legacy loanPaymentAmount should be cleared",
+  );
+  assertEquals(
+    migratedParams.useOffsetAccount,
+    false,
+    "legacy useOffsetAccount should be cleared",
+  );
+  assertEquals(
+    migratedParams.currentOffsetBalance,
+    0,
+    "legacy currentOffsetBalance should be cleared",
+  );
+
   console.log("✓ Legacy loan migrated successfully");
-  console.log(`  Migrated loan: $${migratedLoan.principal.toFixed(2)} @ ${migratedLoan.interestRate}%`);
-  console.log(`  Payment: $${migratedLoan.paymentAmount} ${migratedLoan.paymentFrequency}`);
-  console.log(`  Offset: ${migratedLoan.hasOffset ? `$${migratedLoan.offsetBalance}` : 'No'}`);
+  console.log(
+    `  Migrated loan: $${
+      migratedLoan.principal.toFixed(2)
+    } @ ${migratedLoan.interestRate}%`,
+  );
+  console.log(
+    `  Payment: $${migratedLoan.paymentAmount} ${migratedLoan.paymentFrequency}`,
+  );
+  console.log(
+    `  Offset: ${
+      migratedLoan.hasOffset ? `$${migratedLoan.offsetBalance}` : "No"
+    }`,
+  );
 });
 
 Deno.test("Legacy loan migration - no loan", () => {
@@ -144,7 +182,7 @@ Deno.test("Legacy loan migration - no loan", () => {
 
   // Simulate the migration logic
   const migratedParams = { ...legacyParams };
-  
+
   if (migratedParams.loans === undefined) {
     if (migratedParams.loanPrincipal > 0) {
       migratedParams.loans = [{
@@ -163,9 +201,13 @@ Deno.test("Legacy loan migration - no loan", () => {
   }
 
   // Verify migration
-  assertEquals(migratedParams.loans !== undefined, true, "loans array should exist");
+  assertEquals(
+    migratedParams.loans !== undefined,
+    true,
+    "loans array should exist",
+  );
   assertEquals(migratedParams.loans!.length, 0, "should have no loans");
-  
+
   console.log("✓ Legacy data with no loan migrated successfully");
   console.log(`  Loans array: empty (no legacy loan to migrate)`);
 });
@@ -227,7 +269,7 @@ Deno.test("Legacy loan migration - already has loans array", () => {
 
   // Simulate the migration logic (should not modify)
   const migratedParams = { ...modernParams };
-  
+
   if (migratedParams.loans === undefined) {
     // This branch should NOT execute
     migratedParams.loans = [];
@@ -235,9 +277,17 @@ Deno.test("Legacy loan migration - already has loans array", () => {
 
   // Verify no migration occurred
   assertEquals(migratedParams.loans.length, 1, "should still have one loan");
-  assertEquals(migratedParams.loans[0].principal, 500000, "loan should be unchanged");
-  assertEquals(migratedParams.loans[0].label, "Home Mortgage", "loan label should be unchanged");
-  
+  assertEquals(
+    migratedParams.loans[0].principal,
+    500000,
+    "loan should be unchanged",
+  );
+  assertEquals(
+    migratedParams.loans[0].label,
+    "Home Mortgage",
+    "loan label should be unchanged",
+  );
+
   console.log("✓ Modern data with loans array unchanged");
   console.log(`  Existing loan preserved: ${migratedParams.loans[0].label}`);
 });

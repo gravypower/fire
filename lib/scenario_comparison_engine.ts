@@ -497,16 +497,14 @@ export class ScenarioComparisonEngine {
   ) {
     return {
       priorityChanged: withTransitions.priority !== withoutTransitions.priority,
-      effectivenessChanged:
-        Math.abs(
-          withTransitions.effectivenessScore -
-            withoutTransitions.effectivenessScore,
-        ) > 5,
-      feasibilityChanged:
-        Math.abs(
-          withTransitions.feasibilityScore -
-            withoutTransitions.feasibilityScore,
-        ) > 5,
+      effectivenessChanged: Math.abs(
+        withTransitions.effectivenessScore -
+          withoutTransitions.effectivenessScore,
+      ) > 5,
+      feasibilityChanged: Math.abs(
+        withTransitions.feasibilityScore -
+          withoutTransitions.feasibilityScore,
+      ) > 5,
       impactChanged: this.hasImpactChanged(withTransitions, withoutTransitions),
     };
   }

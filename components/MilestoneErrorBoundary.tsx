@@ -25,7 +25,7 @@ interface MilestoneErrorBoundaryState {
 
 /**
  * MilestoneErrorBoundary component
- * 
+ *
  * Catches errors in milestone-related components and displays a user-friendly
  * fallback UI with options to retry or continue without milestones.
  */
@@ -42,7 +42,9 @@ export default class MilestoneErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<MilestoneErrorBoundaryState> {
+  static getDerivedStateFromError(
+    error: Error,
+  ): Partial<MilestoneErrorBoundaryState> {
     return {
       hasError: true,
       error,
@@ -53,9 +55,10 @@ export default class MilestoneErrorBoundary extends Component<
     console.error("Milestone component error:", error);
     console.error("Error context:", this.props.context);
     console.error("Error info:", errorInfo);
-    
+
     this.setState({
-      errorInfo: errorInfo?.componentStack || "No additional error information available",
+      errorInfo: errorInfo?.componentStack ||
+        "No additional error information available",
     });
   }
 
@@ -105,13 +108,16 @@ export default class MilestoneErrorBoundary extends Component<
               </h3>
               <div class="text-sm text-amber-700 mb-4">
                 <p class="mb-2">
-                  We encountered an issue while {this.props.context || "processing milestones"}. 
-                  Your simulation results are still available, but milestone information may be incomplete.
+                  We encountered an issue while{" "}
+                  {this.props.context || "processing milestones"}. Your
+                  simulation results are still available, but milestone
+                  information may be incomplete.
                 </p>
                 <div class="bg-amber-50 border border-amber-200 rounded-md p-3 mb-3">
                   <p class="text-xs text-amber-800">
-                    <strong>What this means:</strong> The core simulation completed successfully, 
-                    but we couldn't detect or display some milestone events. You can still view 
+                    <strong>What this means:</strong>{" "}
+                    The core simulation completed successfully, but we couldn't
+                    detect or display some milestone events. You can still view
                     your financial timeline and other results.
                   </p>
                 </div>
@@ -124,7 +130,8 @@ export default class MilestoneErrorBoundary extends Component<
                       <strong>Error:</strong> {this.state.error.message}
                     </p>
                     <p class="font-mono text-xs text-amber-600">
-                      <strong>Context:</strong> {this.props.context || "Unknown"}
+                      <strong>Context:</strong>{" "}
+                      {this.props.context || "Unknown"}
                     </p>
                   </div>
                 </details>
@@ -158,7 +165,7 @@ export default class MilestoneErrorBoundary extends Component<
  */
 export function withMilestoneErrorBoundary<T extends Record<string, any>>(
   Component: (props: T) => ComponentChildren,
-  context?: string
+  context?: string,
 ) {
   return function WrappedComponent(props: T) {
     return (

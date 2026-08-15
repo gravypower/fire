@@ -28,7 +28,7 @@ export class PerformanceMonitor {
   startOperation(operationName: string, metadata?: Record<string, any>): void {
     const startTime = performance.now();
     this.activeOperations.set(operationName, startTime);
-    
+
     if (metadata) {
       // Store metadata for later use
       this.activeOperations.set(`${operationName}_metadata`, metadata as any);
@@ -41,13 +41,15 @@ export class PerformanceMonitor {
   endOperation(operationName: string, dataSize?: number): PerformanceMetrics {
     const endTime = performance.now();
     const startTime = this.activeOperations.get(operationName);
-    
+
     if (startTime === undefined) {
       throw new Error(`Operation "${operationName}" was not started`);
     }
 
-    const metadata = this.activeOperations.get(`${operationName}_metadata`) as Record<string, any> | undefined;
-    
+    const metadata = this.activeOperations.get(`${operationName}_metadata`) as
+      | Record<string, any>
+      | undefined;
+
     const metrics: PerformanceMetrics = {
       operationName,
       startTime,
@@ -75,7 +77,7 @@ export class PerformanceMonitor {
    * Get metrics for a specific operation
    */
   getMetricsForOperation(operationName: string): PerformanceMetrics[] {
-    return this.metrics.filter(m => m.operationName === operationName);
+    return this.metrics.filter((m) => m.operationName === operationName);
   }
 
   /**
@@ -84,8 +86,11 @@ export class PerformanceMonitor {
   getAverageDuration(operationName: string): number {
     const operationMetrics = this.getMetricsForOperation(operationName);
     if (operationMetrics.length === 0) return 0;
-    
-    const totalDuration = operationMetrics.reduce((sum, m) => sum + m.duration, 0);
+
+    const totalDuration = operationMetrics.reduce(
+      (sum, m) => sum + m.duration,
+      0,
+    );
     return totalDuration / operationMetrics.length;
   }
 
@@ -106,7 +111,7 @@ export class PerformanceMonitor {
     }
 
     const operationGroups = new Map<string, PerformanceMetrics[]>();
-    
+
     // Group metrics by operation name
     for (const metric of this.metrics) {
       if (!operationGroups.has(metric.operationName)) {
@@ -122,8 +127,8 @@ export class PerformanceMonitor {
       const count = metrics.length;
       const totalDuration = metrics.reduce((sum, m) => sum + m.duration, 0);
       const avgDuration = totalDuration / count;
-      const minDuration = Math.min(...metrics.map(m => m.duration));
-      const maxDuration = Math.max(...metrics.map(m => m.duration));
+      const minDuration = Math.min(...metrics.map((m) => m.duration));
+      const maxDuration = Math.max(...metrics.map((m) => m.duration));
 
       report += `Operation: ${operationName}\n`;
       report += `  Executions: ${count}\n`;
@@ -133,9 +138,10 @@ export class PerformanceMonitor {
       report += `  Max Time: ${maxDuration.toFixed(2)}ms\n`;
 
       // Include data size info if available
-      const metricsWithSize = metrics.filter(m => m.dataSize !== undefined);
+      const metricsWithSize = metrics.filter((m) => m.dataSize !== undefined);
       if (metricsWithSize.length > 0) {
-        const avgDataSize = metricsWithSize.reduce((sum, m) => sum + (m.dataSize || 0), 0) / metricsWithSize.length;
+        const avgDataSize = metricsWithSize.reduce((sum, m) =>
+          sum + (m.dataSize || 0), 0) / metricsWithSize.length;
         const avgTimePerItem = avgDuration / avgDataSize;
         report += `  Average Data Size: ${avgDataSize.toFixed(0)} items\n`;
         report += `  Time per Item: ${avgTimePerItem.toFixed(4)}ms\n`;
@@ -160,7 +166,7 @@ export function timed(operationName?: string) {
   return function (
     target: any,
     propertyKey: string,
-    descriptor: PropertyDescriptor
+    descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
     const originalMethod = descriptor.value!;
     const name = operationName || `${target.constructor.name}.${propertyKey}`;
@@ -169,9 +175,9 @@ export function timed(operationName?: string) {
       globalPerformanceMonitor.startOperation(name);
       try {
         const result = originalMethod.apply(this, args);
-        
+
         // Handle both sync and async results
-        if (result && typeof result.then === 'function') {
+        if (result && typeof result.then === "function") {
           return result.finally(() => {
             globalPerformanceMonitor.endOperation(name);
           });
@@ -193,7 +199,10 @@ export function timed(operationName?: string) {
  * Simple memoization cache with LRU eviction
  */
 export class MemoizationCache<K, V> {
-  private cache = new Map<string, { value: V; timestamp: number; accessCount: number }>();
+  private cache = new Map<
+    string,
+    { value: V; timestamp: number; accessCount: number }
+  >();
   private maxSize: number;
   private maxAge: number; // in milliseconds
 
@@ -206,7 +215,7 @@ export class MemoizationCache<K, V> {
    * Generate cache key from input
    */
   private generateKey(key: K): string {
-    if (typeof key === 'string') {
+    if (typeof key === "string") {
       return key;
     }
     return JSON.stringify(key);
@@ -218,7 +227,7 @@ export class MemoizationCache<K, V> {
   get(key: K): V | undefined {
     const keyStr = this.generateKey(key);
     const entry = this.cache.get(keyStr);
-    
+
     if (!entry) {
       return undefined;
     }
@@ -239,7 +248,7 @@ export class MemoizationCache<K, V> {
    */
   set(key: K, value: V): void {
     const keyStr = this.generateKey(key);
-    
+
     // If cache is full, remove least recently used item
     if (this.cache.size >= this.maxSize && !this.cache.has(keyStr)) {
       this.evictLRU();
@@ -258,7 +267,7 @@ export class MemoizationCache<K, V> {
   has(key: K): boolean {
     const keyStr = this.generateKey(key);
     const entry = this.cache.get(keyStr);
-    
+
     if (!entry) {
       return false;
     }
@@ -300,8 +309,11 @@ export class MemoizationCache<K, V> {
     for (const [key, entry] of this.cache) {
       // First priority: least accessed
       // Second priority: oldest timestamp
-      if (entry.accessCount < lruAccessCount || 
-          (entry.accessCount === lruAccessCount && entry.timestamp < oldestTimestamp)) {
+      if (
+        entry.accessCount < lruAccessCount ||
+        (entry.accessCount === lruAccessCount &&
+          entry.timestamp < oldestTimestamp)
+      ) {
         lruKey = key;
         lruAccessCount = entry.accessCount;
         oldestTimestamp = entry.timestamp;
@@ -319,12 +331,12 @@ export class MemoizationCache<K, V> {
  */
 export function memoized(
   cacheSize = 50,
-  maxAgeMs = 5 * 60 * 1000
+  maxAgeMs = 5 * 60 * 1000,
 ) {
   return function (
     _target: any,
     _propertyKey: string,
-    descriptor: PropertyDescriptor
+    descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
     const originalMethod = descriptor.value!;
     const cache = new MemoizationCache<any[], any>(cacheSize, maxAgeMs);
@@ -338,10 +350,10 @@ export function memoized(
 
       // Execute original method
       const result = originalMethod.apply(this, args);
-      
+
       // Cache the result
       cache.set(args, result);
-      
+
       return result;
     };
 
@@ -366,18 +378,18 @@ export class BatchProcessor<T, R> {
    */
   async processBatches(items: T[]): Promise<R[]> {
     const results: R[] = [];
-    
+
     for (let i = 0; i < items.length; i += this.batchSize) {
       const batch = items.slice(i, i + this.batchSize);
       const batchResults = this.processor(batch);
       results.push(...batchResults);
-      
+
       // Yield control to prevent blocking
       if (i + this.batchSize < items.length) {
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
-    
+
     return results;
   }
 }
@@ -392,11 +404,11 @@ export class OptimizedArrayOps {
   static binarySearchInsertionPoint<T>(
     array: T[],
     item: T,
-    compareFn: (a: T, b: T) => number
+    compareFn: (a: T, b: T) => number,
   ): number {
     let left = 0;
     let right = array.length;
-    
+
     while (left < right) {
       const mid = Math.floor((left + right) / 2);
       if (compareFn(array[mid], item) < 0) {
@@ -405,7 +417,7 @@ export class OptimizedArrayOps {
         right = mid;
       }
     }
-    
+
     return left;
   }
 
@@ -416,9 +428,9 @@ export class OptimizedArrayOps {
     if (!keyFn) {
       return [...new Set(array)];
     }
-    
+
     const seen = new Set();
-    return array.filter(item => {
+    return array.filter((item) => {
       const key = keyFn(item);
       if (seen.has(key)) {
         return false;
@@ -433,10 +445,10 @@ export class OptimizedArrayOps {
    */
   static groupBy<T, K extends string | number>(
     array: T[],
-    keyFn: (item: T) => K
+    keyFn: (item: T) => K,
   ): Record<K, T[]> {
     const groups = {} as Record<K, T[]>;
-    
+
     for (const item of array) {
       const key = keyFn(item);
       if (!groups[key]) {
@@ -444,7 +456,7 @@ export class OptimizedArrayOps {
       }
       groups[key].push(item);
     }
-    
+
     return groups;
   }
 }

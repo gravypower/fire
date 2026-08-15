@@ -4,7 +4,7 @@
     {
       "name": "fire-dev",
       "runtimeExecutable": "deno",
-      "runtimeArgs": ["run", "-A", "--watch=static/,routes/", "dev.ts"],
+      "runtimeArgs": ["task", "dev"],
       "port": 8000
     }
   ]

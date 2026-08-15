@@ -13,7 +13,10 @@ import type {
   MilestoneProjection,
   TimelineProjection,
 } from "../interfaces/projections.ts";
-import type { FinancialState, SimulationResult } from "../../types/financial.ts";
+import type {
+  FinancialState,
+  SimulationResult,
+} from "../../types/financial.ts";
 import type { Milestone } from "../../types/milestones.ts";
 
 export function buildFinancialProjection(

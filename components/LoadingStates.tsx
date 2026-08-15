@@ -15,7 +15,7 @@ interface LoadingStateProps {
   /** Additional details about what's loading */
   details?: string;
   /** Size variant */
-  size?: 'small' | 'medium' | 'large';
+  size?: "small" | "medium" | "large";
   /** Whether to show a progress indicator */
   showProgress?: boolean;
 }
@@ -23,11 +23,13 @@ interface LoadingStateProps {
 /**
  * Generic loading spinner component
  */
-export function LoadingSpinner({ size = 'medium' }: { size?: 'small' | 'medium' | 'large' }) {
+export function LoadingSpinner(
+  { size = "medium" }: { size?: "small" | "medium" | "large" },
+) {
   const sizeClasses = {
-    small: 'w-4 h-4',
-    medium: 'w-6 h-6',
-    large: 'w-8 h-8',
+    small: "w-4 h-4",
+    medium: "w-6 h-6",
+    large: "w-8 h-8",
   };
 
   return (
@@ -56,11 +58,11 @@ export function LoadingSpinner({ size = 'medium' }: { size?: 'small' | 'medium' 
 /**
  * Loading state for milestone detection
  */
-export function MilestoneLoadingState({ 
-  message = "Detecting milestones...", 
+export function MilestoneLoadingState({
+  message = "Detecting milestones...",
   details = "Analyzing your financial timeline for major events",
-  size = 'medium',
-  showProgress = false 
+  size = "medium",
+  showProgress = false,
 }: LoadingStateProps) {
   return (
     <div class="card p-6 fade-in">
@@ -79,11 +81,20 @@ export function MilestoneLoadingState({
           )}
           {showProgress && (
             <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
-              <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 60%"></div>
+              <div
+                class="bg-blue-600 h-2 rounded-full animate-pulse"
+                style="width: 60%"
+              >
+              </div>
             </div>
           )}
           <div class="flex items-center justify-center gap-2 text-xs text-gray-500">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -102,11 +113,12 @@ export function MilestoneLoadingState({
 /**
  * Loading state for retirement advice generation
  */
-export function AdviceLoadingState({ 
-  message = "Generating retirement advice...", 
-  details = "Analyzing your financial situation and creating personalized recommendations",
-  size = 'medium',
-  showProgress = false 
+export function AdviceLoadingState({
+  message = "Generating retirement advice...",
+  details =
+    "Analyzing your financial situation and creating personalized recommendations",
+  size = "medium",
+  showProgress = false,
 }: LoadingStateProps) {
   return (
     <div class="card p-6 fade-in">
@@ -125,11 +137,20 @@ export function AdviceLoadingState({
           )}
           {showProgress && (
             <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
-              <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 75%"></div>
+              <div
+                class="bg-blue-600 h-2 rounded-full animate-pulse"
+                style="width: 75%"
+              >
+              </div>
             </div>
           )}
           <div class="flex items-center justify-center gap-2 text-xs text-gray-500">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -148,10 +169,10 @@ export function AdviceLoadingState({
 /**
  * Inline loading state for smaller components
  */
-export function InlineLoadingState({ 
-  message = "Loading...", 
-  size = 'small' 
-}: { message?: string; size?: 'small' | 'medium' }) {
+export function InlineLoadingState({
+  message = "Loading...",
+  size = "small",
+}: { message?: string; size?: "small" | "medium" }) {
   return (
     <div class="flex items-center gap-2 text-gray-600">
       <LoadingSpinner size={size} />
@@ -166,13 +187,15 @@ export function InlineLoadingState({
 export function MilestoneSkeletonLoader() {
   return (
     <div class="card p-6">
-      <h3 class="text-lg font-semibold text-gray-800 mb-6">Financial Milestones</h3>
+      <h3 class="text-lg font-semibold text-gray-800 mb-6">
+        Financial Milestones
+      </h3>
       <div class="space-y-6">
         {[1, 2, 3].map((index) => (
           <div key={index} class="relative">
             {/* Timeline dot */}
             <div class="absolute left-4 w-4 h-4 rounded-full bg-gray-300 animate-pulse hidden sm:block" />
-            
+
             {/* Milestone card skeleton */}
             <div class="sm:pl-12">
               <div class="border rounded-lg p-4 border-gray-200 bg-gray-50">
@@ -212,8 +235,10 @@ export function MilestoneSkeletonLoader() {
 export function AdviceSkeletonLoader() {
   return (
     <div class="card p-6">
-      <h3 class="text-lg font-semibold text-gray-800 mb-6">Retirement Advice</h3>
-      
+      <h3 class="text-lg font-semibold text-gray-800 mb-6">
+        Retirement Advice
+      </h3>
+
       {/* Overall assessment skeleton */}
       <div class="rounded-lg p-4 mb-6 bg-gray-50 border border-gray-200">
         <div class="flex items-center gap-3 mb-3">
@@ -232,7 +257,10 @@ export function AdviceSkeletonLoader() {
       {/* Advice cards skeleton */}
       <div class="space-y-4">
         {[1, 2, 3].map((index) => (
-          <div key={index} class="border rounded-lg p-4 border-gray-200 bg-gray-50">
+          <div
+            key={index}
+            class="border rounded-lg p-4 border-gray-200 bg-gray-50"
+          >
             {/* Header */}
             <div class="flex items-start justify-between mb-3">
               <div class="flex items-center gap-3">
@@ -284,13 +312,13 @@ export function AdviceSkeletonLoader() {
  */
 export function withLoadingState<T extends Record<string, any>>(
   Component: (props: T) => ComponentChildren,
-  LoadingComponent: () => ComponentChildren
+  LoadingComponent: () => ComponentChildren,
 ) {
   return function WrappedComponent(props: T & { isLoading?: boolean }) {
     if (props.isLoading) {
       return <LoadingComponent />;
     }
-    
+
     const { isLoading, ...componentProps } = props;
     return <Component {...(componentProps as T)} />;
   };

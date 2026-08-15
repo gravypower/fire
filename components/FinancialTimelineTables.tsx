@@ -380,8 +380,14 @@ export function LoansTable(
 }
 
 export function InvestmentsTable(
-  { states, transitionPoints, retirementDate, allStates, milestones = [], country }:
-    TableProps,
+  {
+    states,
+    transitionPoints,
+    retirementDate,
+    allStates,
+    milestones = [],
+    country,
+  }: TableProps,
 ) {
   const finalState = states[states.length - 1];
   const finalCashAvailable = (finalState?.cash || 0) +

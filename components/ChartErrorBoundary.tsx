@@ -17,7 +17,7 @@ interface ChartErrorBoundaryState {
 
 /**
  * ChartErrorBoundary component
- * 
+ *
  * Catches errors in chart components and displays a user-friendly
  * fallback UI with the option to retry or view data in table format.
  */
@@ -33,7 +33,9 @@ export default class ChartErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<ChartErrorBoundaryState> {
+  static getDerivedStateFromError(
+    error: Error,
+  ): Partial<ChartErrorBoundaryState> {
     return {
       hasError: true,
       error,
@@ -79,12 +81,14 @@ export default class ChartErrorBoundary extends Component<
                 {chartName} Unavailable
               </h3>
               <p class="text-sm text-orange-700 mb-4">
-                We encountered an issue while rendering the chart. This might be due to
-                browser compatibility or data formatting issues.
+                We encountered an issue while rendering the chart. This might be
+                due to browser compatibility or data formatting issues.
               </p>
               <div class="bg-orange-50 border border-orange-200 rounded-md p-3 mb-4">
                 <p class="text-xs text-orange-800">
-                  <strong>Tip:</strong> Try refreshing the page or viewing the data in table format below.
+                  <strong>Tip:</strong>{" "}
+                  Try refreshing the page or viewing the data in table format
+                  below.
                 </p>
               </div>
               <div class="flex gap-3">

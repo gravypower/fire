@@ -42,29 +42,30 @@ function createBaseParameters(): UserParameters {
 /**
  * Helper to find loan payoff date in simulation states
  */
-function findLoanPayoffDate(states: Array<{ date: Date; loanBalance: number }>): Date | null {
+function findLoanPayoffDate(
+  states: Array<{ date: Date; loanBalance: number }>,
+): Date | null {
   for (let i = 1; i < states.length; i++) {
     if (states[i - 1].loanBalance > 0 && states[i].loanBalance === 0) {
       return states[i].date;
     }
   }
   // If loan balance reaches zero at any point
-  const zeroBalanceState = states.find(s => s.loanBalance === 0);
+  const zeroBalanceState = states.find((s) => s.loanBalance === 0);
   return zeroBalanceState ? zeroBalanceState.date : null;
 }
-
-
 
 /**
  * Feature: finance-simulation, Property 14: Mortgage payment impact
  * Validates: Requirements 5.4
- * 
+ *
  * For any two simulations that differ only in mortgage payment amount,
  * the simulation with higher payments should result in an earlier loan
  * payoff date and lower total interest paid.
  */
 Deno.test({
-  name: "Property 14: Higher mortgage payments lead to earlier payoff and lower interest",
+  name:
+    "Property 14: Higher mortgage payments lead to earlier payoff and lower interest",
   fn: () => {
     fc.assert(
       fc.property(
@@ -101,9 +102,11 @@ Deno.test({
           }
 
           // Final loan balance should be lower or equal with higher payments
-          const finalBalance1 = result1.states[result1.states.length - 1].loanBalance;
-          const finalBalance2 = result2.states[result2.states.length - 1].loanBalance;
-          
+          const finalBalance1 =
+            result1.states[result1.states.length - 1].loanBalance;
+          const finalBalance2 =
+            result2.states[result2.states.length - 1].loanBalance;
+
           assertEquals(
             finalBalance2 <= finalBalance1,
             true,
@@ -119,13 +122,14 @@ Deno.test({
 /**
  * Feature: finance-simulation, Property 15: Investment contribution impact
  * Validates: Requirements 5.5
- * 
+ *
  * For any two simulations that differ only in investment contribution rate,
  * the simulation with higher contributions should result in higher final
  * investment balance and earlier retirement date (if retirement is achievable).
  */
 Deno.test({
-  name: "Property 15: Higher investment contributions lead to higher balance and earlier retirement",
+  name:
+    "Property 15: Higher investment contributions lead to higher balance and earlier retirement",
   fn: () => {
     fc.assert(
       fc.property(
@@ -151,8 +155,10 @@ Deno.test({
           const result2 = SimulationEngine.runSimulation(params2);
 
           // Higher contributions should lead to higher final investment balance
-          const finalInvestments1 = result1.states[result1.states.length - 1].investments;
-          const finalInvestments2 = result2.states[result2.states.length - 1].investments;
+          const finalInvestments1 =
+            result1.states[result1.states.length - 1].investments;
+          const finalInvestments2 =
+            result2.states[result2.states.length - 1].investments;
 
           assertEquals(
             finalInvestments2 >= finalInvestments1,
@@ -163,7 +169,8 @@ Deno.test({
           // If both achieve retirement, higher contributions should retire earlier or at same time
           if (result1.retirementDate && result2.retirementDate) {
             assertEquals(
-              result2.retirementDate.getTime() <= result1.retirementDate.getTime(),
+              result2.retirementDate.getTime() <=
+                result1.retirementDate.getTime(),
               true,
               `Higher contribution should lead to earlier or equal retirement: ${result2.retirementDate} vs ${result1.retirementDate}`,
             );
@@ -184,7 +191,7 @@ Deno.test({
 /**
  * Feature: finance-simulation, Property 17: Variable return rate support
  * Validates: Requirements 7.4
- * 
+ *
  * For any simulation with variable investment return rates specified for
  * different periods, the investment growth calculation should apply the
  * correct rate for each period rather than using a single fixed rate.
@@ -212,8 +219,10 @@ Deno.test({
           const resultFixed1 = SimulationEngine.runSimulation(paramsFixed1);
           const resultFixed2 = SimulationEngine.runSimulation(paramsFixed2);
 
-          const finalBalance1 = resultFixed1.states[resultFixed1.states.length - 1].investments;
-          const finalBalance2 = resultFixed2.states[resultFixed2.states.length - 1].investments;
+          const finalBalance1 =
+            resultFixed1.states[resultFixed1.states.length - 1].investments;
+          const finalBalance2 =
+            resultFixed2.states[resultFixed2.states.length - 1].investments;
 
           // Different rates should produce different final balances
           if (Math.abs(rate1 - rate2) > 0.01) {

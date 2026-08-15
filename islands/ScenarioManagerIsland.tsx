@@ -19,10 +19,14 @@ interface ScenarioManagerIslandProps {
 const MAX_COMPARE = 4;
 const MIN_COMPARE = 2;
 
-export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandProps) {
+export default function ScenarioManagerIsland(
+  { config }: ScenarioManagerIslandProps,
+) {
   const [scenarios, setScenarios] = useState<SavedScenario[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [comparison, setComparison] = useState<ScenarioComparisonResult | null>(null);
+  const [comparison, setComparison] = useState<ScenarioComparisonResult | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,13 +89,19 @@ export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandP
 
       const selected = scenarios.filter((s) => selectedIds.has(s.id));
       const result = await apiClient.runNamedScenarioComparison(
-        selected.map((s) => ({ id: s.id, name: s.name, configuration: s.configuration })),
+        selected.map((s) => ({
+          id: s.id,
+          name: s.name,
+          configuration: s.configuration,
+        })),
       );
 
       setComparison(result);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "An unexpected error occurred comparing scenarios",
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred comparing scenarios",
       );
       console.error("Scenario comparison error:", err);
     } finally {
@@ -99,17 +109,21 @@ export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandP
     }
   };
 
-  const canCompare = selectedIds.size >= MIN_COMPARE && selectedIds.size <= MAX_COMPARE;
+  const canCompare = selectedIds.size >= MIN_COMPARE &&
+    selectedIds.size <= MAX_COMPARE;
 
   return (
     <div class="fade-in space-y-6">
       <div class="card p-4">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h3 class="text-lg font-semibold text-gray-800 mb-1">Saved Scenarios</h3>
+            <h3 class="text-lg font-semibold text-gray-800 mb-1">
+              Saved Scenarios
+            </h3>
             <p class="text-sm text-gray-600">
-              Save your current configuration as a named scenario, then select {MIN_COMPARE}-{MAX_COMPARE}{" "}
-              to compare side by side.
+              Save your current configuration as a named scenario, then select
+              {" "}
+              {MIN_COMPARE}-{MAX_COMPARE} to compare side by side.
             </p>
           </div>
           <button
@@ -124,8 +138,8 @@ export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandP
         {scenarios.length === 0
           ? (
             <p class="text-sm text-gray-500 py-4 text-center">
-              No scenarios saved yet. Click "Save Current as Scenario" to save your current
-              configuration.
+              No scenarios saved yet. Click "Save Current as Scenario" to save
+              your current configuration.
             </p>
           )
           : (
@@ -144,14 +158,19 @@ export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandP
                       type="checkbox"
                       checked={selectedIds.has(scenario.id)}
                       onChange={() => toggleSelected(scenario.id)}
-                      disabled={!selectedIds.has(scenario.id) && selectedIds.size >= MAX_COMPARE}
+                      disabled={!selectedIds.has(scenario.id) &&
+                        selectedIds.size >= MAX_COMPARE}
                       class="mr-3 h-4 w-4"
                     />
                     <div>
-                      <div class="font-medium text-gray-800">{scenario.name}</div>
+                      <div class="font-medium text-gray-800">
+                        {scenario.name}
+                      </div>
                       <div class="text-xs text-gray-500">
-                        Retirement age {scenario.configuration.baseParameters.retirementAge} · Updated{" "}
-                        {scenario.updatedAt.toLocaleDateString()}
+                        Retirement age{" "}
+                        {scenario.configuration.baseParameters.retirementAge}
+                        {" "}
+                        · Updated {scenario.updatedAt.toLocaleDateString()}
                       </div>
                     </div>
                   </label>
@@ -199,7 +218,9 @@ export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandP
         <div class="card p-8 fade-in">
           <div class="flex flex-col items-center justify-center space-y-4">
             <div class="spinner-lg"></div>
-            <p class="text-lg font-medium text-gray-700">Running comparison...</p>
+            <p class="text-lg font-medium text-gray-700">
+              Running comparison...
+            </p>
           </div>
         </div>
       )}
@@ -207,7 +228,9 @@ export default function ScenarioManagerIsland({ config }: ScenarioManagerIslandP
       {error && (
         <div class="card p-6 fade-in">
           <div class="alert-error">
-            <h3 class="text-lg font-semibold text-red-800 mb-2">Comparison Error</h3>
+            <h3 class="text-lg font-semibold text-red-800 mb-2">
+              Comparison Error
+            </h3>
             <p class="text-sm text-red-700">{error}</p>
           </div>
         </div>

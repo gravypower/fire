@@ -2,7 +2,10 @@
  * Session management interfaces for the event-sourced financial simulation system
  */
 
-import type { SimulationResult, UserParameters } from "../../types/financial.ts";
+import type {
+  SimulationResult,
+  UserParameters,
+} from "../../types/financial.ts";
 import type { Milestone } from "../../types/milestones.ts";
 
 /**
@@ -48,7 +51,10 @@ export interface SessionConfig {
  */
 export interface SessionManager {
   /** Create a new session */
-  createSession(userId?: string, parameters?: UserParameters): Promise<SessionContext>;
+  createSession(
+    userId?: string,
+    parameters?: UserParameters,
+  ): Promise<SessionContext>;
 
   /** Get session by ID */
   getSession(sessionId: string): Promise<SessionContext | null>;
@@ -57,10 +63,17 @@ export interface SessionManager {
   touchSession(sessionId: string): Promise<void>;
 
   /** Update session parameters */
-  updateSessionParameters(sessionId: string, parameters: Partial<UserParameters>): Promise<void>;
+  updateSessionParameters(
+    sessionId: string,
+    parameters: Partial<UserParameters>,
+  ): Promise<void>;
 
   /** Cache the latest simulation result and detected milestones for a session */
-  updateSessionResult(sessionId: string, result: SimulationResult, milestones: Milestone[]): Promise<void>;
+  updateSessionResult(
+    sessionId: string,
+    result: SimulationResult,
+    milestones: Milestone[],
+  ): Promise<void>;
 
   /** Delete a session */
   deleteSession(sessionId: string): Promise<void>;

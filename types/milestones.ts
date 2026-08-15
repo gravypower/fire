@@ -2,22 +2,27 @@
  * Data models for financial milestones and retirement advice
  */
 
-import {IncomeSource, SuperAccount, UserParameters} from "./financial.ts";
+import { IncomeSource, SuperAccount, UserParameters } from "./financial.ts";
 
 /**
  * Types of milestones that can be detected during simulation
  */
-export type MilestoneType = 
-  | 'loan_payoff' 
-  | 'offset_completion' 
-  | 'retirement_eligibility' 
-  | 'parameter_transition'
-  | 'expense_expiration';
+export type MilestoneType =
+  | "loan_payoff"
+  | "offset_completion"
+  | "retirement_eligibility"
+  | "parameter_transition"
+  | "expense_expiration";
 
 /**
  * Categories for organizing milestones
  */
-export type MilestoneCategory = 'debt' | 'investment' | 'retirement' | 'transition' | 'expense';
+export type MilestoneCategory =
+  | "debt"
+  | "investment"
+  | "retirement"
+  | "transition"
+  | "expense";
 
 /**
  * Base milestone interface - common properties for all milestone types
@@ -43,8 +48,8 @@ export interface BaseMilestone {
  * Milestone for when a loan is completely paid off
  */
 export interface LoanPayoffMilestone extends BaseMilestone {
-  type: 'loan_payoff';
-  category: 'debt';
+  type: "loan_payoff";
+  category: "debt";
   /** ID of the loan that was paid off */
   loanId: string;
   /** Name/label of the loan */
@@ -61,8 +66,8 @@ export interface LoanPayoffMilestone extends BaseMilestone {
  * Milestone for when offset account balance equals or exceeds loan balance
  */
 export interface OffsetCompletionMilestone extends BaseMilestone {
-  type: 'offset_completion';
-  category: 'debt';
+  type: "offset_completion";
+  category: "debt";
   /** ID of the loan with the completed offset */
   loanId: string;
   /** Offset account balance at completion */
@@ -77,8 +82,8 @@ export interface OffsetCompletionMilestone extends BaseMilestone {
  * Milestone for when retirement becomes financially feasible
  */
 export interface RetirementMilestone extends BaseMilestone {
-  type: 'retirement_eligibility';
-  category: 'retirement';
+  type: "retirement_eligibility";
+  category: "retirement";
   /** Required assets to support desired retirement income */
   requiredAssets: number;
   /** Actual assets available at this date */
@@ -95,8 +100,8 @@ export interface RetirementMilestone extends BaseMilestone {
  * Milestone for when parameter transitions occur during simulation
  */
 export interface ParameterTransitionMilestone extends BaseMilestone {
-  type: 'parameter_transition';
-  category: 'transition';
+  type: "parameter_transition";
+  category: "transition";
   /** ID of the transition that occurred */
   transitionId: string;
   /** Summary of parameter changes that occurred */
@@ -109,8 +114,8 @@ export interface ParameterTransitionMilestone extends BaseMilestone {
  * Milestone for when an expense with an end date expires
  */
 export interface ExpenseExpirationMilestone extends BaseMilestone {
-  type: 'expense_expiration';
-  category: 'expense';
+  type: "expense_expiration";
+  category: "expense";
   /** ID of the expense that expired */
   expenseId: string;
   /** Name of the expense */
@@ -126,10 +131,10 @@ export interface ExpenseExpirationMilestone extends BaseMilestone {
 /**
  * Union type for all milestone types
  */
-export type Milestone = 
-  | LoanPayoffMilestone 
-  | OffsetCompletionMilestone 
-  | RetirementMilestone 
+export type Milestone =
+  | LoanPayoffMilestone
+  | OffsetCompletionMilestone
+  | RetirementMilestone
   | ParameterTransitionMilestone
   | ExpenseExpirationMilestone;
 
@@ -156,23 +161,26 @@ export interface MilestoneDetectionError {
   /** Context about where the error occurred */
   context?: Record<string, any>;
   /** Severity level of the error */
-  severity: 'warning' | 'error' | 'critical';
+  severity: "warning" | "error" | "critical";
 }
 
 /**
  * Categories for retirement advice
  */
-export type AdviceCategory = 'debt' | 'investment' | 'expense' | 'income';
+export type AdviceCategory = "debt" | "investment" | "expense" | "income";
 
 /**
  * Priority levels for advice items
  */
-export type AdvicePriority = 'high' | 'medium' | 'low';
+export type AdvicePriority = "high" | "medium" | "low";
 
 /**
  * Overall assessment of retirement readiness
  */
-export type RetirementAssessment = 'on_track' | 'needs_improvement' | 'critical';
+export type RetirementAssessment =
+  | "on_track"
+  | "needs_improvement"
+  | "critical";
 
 /**
  * Individual advice item with specific recommendations
@@ -216,7 +224,7 @@ export interface AdviceItem {
       /** Updates to income sources */
       incomeSources?: Array<{
         /** Action to take: 'add', 'update', or 'remove' */
-        action: 'add' | 'update' | 'remove';
+        action: "add" | "update" | "remove";
         /** Income source ID (for update/remove) */
         id?: string;
         /** Income source data (for add/update) */
@@ -225,7 +233,7 @@ export interface AdviceItem {
       /** Updates to super accounts */
       superAccounts?: Array<{
         /** Action to take: 'add', 'update', or 'remove' */
-        action: 'add' | 'update' | 'remove';
+        action: "add" | "update" | "remove";
         /** Super account ID (for update/remove) */
         id?: string;
         /** Super account data (for add/update) */
@@ -304,7 +312,7 @@ export interface AdviceGenerationError {
   /** Context about where the error occurred */
   context?: Record<string, any>;
   /** Severity level of the error */
-  severity: 'warning' | 'error' | 'critical';
+  severity: "warning" | "error" | "critical";
 }
 
 /**

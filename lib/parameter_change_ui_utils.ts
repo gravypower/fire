@@ -2,16 +2,16 @@
  * Utilities for parameter change UI - helps determine which parameters need person selection
  */
 
-import type { UserParameters, Person } from "../types/financial.ts";
-import { 
-  getParameterCategory, 
-  requiresPersonSelection, 
-  isChangeableParameter,
+import type { Person, UserParameters } from "../types/financial.ts";
+import {
   getAdvisableParameters,
-  getPersonSpecificParameters,
   getHouseholdParameters,
+  getParameterCategory,
+  getPersonSpecificParameters,
+  isChangeableParameter,
   PARAMETER_METADATA,
-  type ParameterMetadata 
+  type ParameterMetadata,
+  requiresPersonSelection,
 } from "../types/parameter_categories.ts";
 
 /**
@@ -27,11 +27,11 @@ export interface ParameterChangeOption {
   /** Whether this parameter requires person selection */
   requiresPersonSelection: boolean;
   /** Category of parameter */
-  category: 'person' | 'household' | 'flexible' | 'non-changeable';
+  category: "person" | "household" | "flexible" | "non-changeable";
   /** Description for tooltip/help */
   description: string;
   /** Data type for input validation */
-  dataType: 'number' | 'string' | 'boolean' | 'date' | 'array' | 'object';
+  dataType: "number" | "string" | "boolean" | "date" | "array" | "object";
   /** Whether this parameter is recommended for advice */
   advisable: boolean;
   /** Available people to select from (if person-specific) */
@@ -41,17 +41,22 @@ export interface ParameterChangeOption {
 /**
  * Gets all changeable parameters for the parameter change UI
  */
-export function getChangeableParameters(params: UserParameters): ParameterChangeOption[] {
+export function getChangeableParameters(
+  params: UserParameters,
+): ParameterChangeOption[] {
   const options: ParameterChangeOption[] = [];
-  
+
   for (const [key, metadata] of Object.entries(PARAMETER_METADATA)) {
     if (!metadata.isChangeable) {
       continue; // Skip non-changeable parameters
     }
-    
+
     const currentValue = getCurrentParameterValue(params, key);
-    const needsPersonSelection = requiresPersonSelection(key, params.householdMode || 'single');
-    
+    const needsPersonSelection = requiresPersonSelection(
+      key,
+      params.householdMode || "single",
+    );
+
     options.push({
       key,
       displayName: metadata.displayName,
@@ -64,11 +69,16 @@ export function getChangeableParameters(params: UserParameters): ParameterChange
       availablePeople: needsPersonSelection ? params.people : undefined,
     });
   }
-  
+
   return options.sort((a, b) => {
     // Sort by category, then by advisable, then by name
     if (a.category !== b.category) {
-      const categoryOrder = { 'person': 0, 'household': 1, 'flexible': 2, 'non-changeable': 3 };
+      const categoryOrder = {
+        "person": 0,
+        "household": 1,
+        "flexible": 2,
+        "non-changeable": 3,
+      };
       return categoryOrder[a.category] - categoryOrder[b.category];
     }
     if (a.advisable !== b.advisable) {
@@ -87,37 +97,42 @@ export function getParametersByCategory(params: UserParameters): {
   flexible: ParameterChangeOption[];
 } {
   const allParams = getChangeableParameters(params);
-  
+
   return {
-    personSpecific: allParams.filter(p => p.category === 'person'),
-    household: allParams.filter(p => p.category === 'household'),
-    flexible: allParams.filter(p => p.category === 'flexible'),
+    personSpecific: allParams.filter((p) => p.category === "person"),
+    household: allParams.filter((p) => p.category === "household"),
+    flexible: allParams.filter((p) => p.category === "flexible"),
   };
 }
 
 /**
  * Gets only the most commonly advised parameters for simplified UI
  */
-export function getRecommendedParameters(params: UserParameters): ParameterChangeOption[] {
-  return getChangeableParameters(params).filter(p => p.advisable);
+export function getRecommendedParameters(
+  params: UserParameters,
+): ParameterChangeOption[] {
+  return getChangeableParameters(params).filter((p) => p.advisable);
 }
 
 /**
  * Gets current value of a parameter from UserParameters
  */
-function getCurrentParameterValue(params: UserParameters, parameterKey: string): any {
+function getCurrentParameterValue(
+  params: UserParameters,
+  parameterKey: string,
+): any {
   // Handle nested parameter access
-  const keys = parameterKey.split('.');
+  const keys = parameterKey.split(".");
   let value: any = params;
-  
+
   for (const key of keys) {
-    if (value && typeof value === 'object' && key in value) {
+    if (value && typeof value === "object" && key in value) {
       value = value[key];
     } else {
       return undefined;
     }
   }
-  
+
   return value;
 }
 
@@ -125,48 +140,69 @@ function getCurrentParameterValue(params: UserParameters, parameterKey: string):
  * Validates a parameter change value
  */
 export function validateParameterValue(
-  parameterKey: string, 
-  value: any, 
-  params: UserParameters
+  parameterKey: string,
+  value: any,
+  params: UserParameters,
 ): { isValid: boolean; error?: string } {
   const metadata = PARAMETER_METADATA[parameterKey];
   if (!metadata) {
     return { isValid: false, error: `Unknown parameter: ${parameterKey}` };
   }
-  
+
   // Type validation
   switch (metadata.dataType) {
-    case 'number':
-      if (typeof value !== 'number' || isNaN(value)) {
-        return { isValid: false, error: `${metadata.displayName} must be a valid number` };
+    case "number":
+      if (typeof value !== "number" || isNaN(value)) {
+        return {
+          isValid: false,
+          error: `${metadata.displayName} must be a valid number`,
+        };
       }
       // Additional number validations
-      if (parameterKey.includes('Rate') && (value < 0 || value > 100)) {
-        return { isValid: false, error: `${metadata.displayName} must be between 0 and 100` };
+      if (parameterKey.includes("Rate") && (value < 0 || value > 100)) {
+        return {
+          isValid: false,
+          error: `${metadata.displayName} must be between 0 and 100`,
+        };
       }
-      if (parameterKey.includes('Age') && (value < 0 || value > 120)) {
-        return { isValid: false, error: `${metadata.displayName} must be between 0 and 120` };
+      if (parameterKey.includes("Age") && (value < 0 || value > 120)) {
+        return {
+          isValid: false,
+          error: `${metadata.displayName} must be between 0 and 120`,
+        };
       }
-      if (parameterKey.includes('Amount') || parameterKey.includes('Balance') || parameterKey.includes('Salary')) {
+      if (
+        parameterKey.includes("Amount") || parameterKey.includes("Balance") ||
+        parameterKey.includes("Salary")
+      ) {
         if (value < 0) {
-          return { isValid: false, error: `${metadata.displayName} cannot be negative` };
+          return {
+            isValid: false,
+            error: `${metadata.displayName} cannot be negative`,
+          };
         }
       }
       break;
-      
-    case 'string':
-      if (typeof value !== 'string') {
-        return { isValid: false, error: `${metadata.displayName} must be text` };
+
+    case "string":
+      if (typeof value !== "string") {
+        return {
+          isValid: false,
+          error: `${metadata.displayName} must be text`,
+        };
       }
       break;
-      
-    case 'boolean':
-      if (typeof value !== 'boolean') {
-        return { isValid: false, error: `${metadata.displayName} must be true or false` };
+
+    case "boolean":
+      if (typeof value !== "boolean") {
+        return {
+          isValid: false,
+          error: `${metadata.displayName} must be true or false`,
+        };
       }
       break;
   }
-  
+
   return { isValid: true };
 }
 
@@ -177,85 +213,89 @@ export function createPersonParameterChange(
   parameterKey: string,
   value: any,
   personId: string,
-  params: UserParameters
-): { parameterChanges?: Partial<UserParameters>; personSpecificChanges?: any; error?: string } {
+  params: UserParameters,
+): {
+  parameterChanges?: Partial<UserParameters>;
+  personSpecificChanges?: any;
+  error?: string;
+} {
   const metadata = PARAMETER_METADATA[parameterKey];
   if (!metadata) {
     return { error: `Unknown parameter: ${parameterKey}` };
   }
-  
+
   // Validate the value
   const validation = validateParameterValue(parameterKey, value, params);
   if (!validation.isValid) {
     return { error: validation.error };
   }
-  
+
   // Check if person exists (only for person-specific parameters)
-  if (metadata.category === 'person' && personId) {
-    const person = params.people?.find(p => p.id === personId);
+  if (metadata.category === "person" && personId) {
+    const person = params.people?.find((p) => p.id === personId);
     if (!person) {
       return { error: `Person with ID ${personId} not found` };
     }
-  } else if (metadata.category === 'person' && !personId) {
+  } else if (metadata.category === "person" && !personId) {
     return { error: `Person ID required for ${metadata.displayName}` };
   }
-  
+
   // Handle person-specific parameters
-  if (metadata.category === 'person') {
+  if (metadata.category === "person") {
     switch (parameterKey) {
-      case 'annualSalary': {
-        const person = params.people?.find(p => p.id === personId);
+      case "annualSalary": {
+        const person = params.people?.find((p) => p.id === personId);
         return {
           personSpecificChanges: {
             personId,
             changes: {
               incomeSources: [{
-                action: 'update',
+                action: "update",
                 id: person?.incomeSources[0]?.id,
-                data: { amount: value }
-              }]
-            }
-          }
+                data: { amount: value },
+              }],
+            },
+          },
         };
       }
-        
-      case 'superContributionRate': {
-        const person = params.people?.find(p => p.id === personId);
+
+      case "superContributionRate": {
+        const person = params.people?.find((p) => p.id === personId);
         return {
           personSpecificChanges: {
             personId,
             changes: {
               superAccounts: [{
-                action: 'update',
+                action: "update",
                 id: person?.superAccounts[0]?.id,
-                data: { contributionRate: value }
-              }]
-            }
-          }
+                data: { contributionRate: value },
+              }],
+            },
+          },
         };
       }
-        
-      case 'retirementAge':
+
+      case "retirementAge":
         return {
           personSpecificChanges: {
             personId,
             changes: {
-              personUpdates: { retirementAge: value }
-            }
-          }
+              personUpdates: { retirementAge: value },
+            },
+          },
         };
-        
+
       default:
         // For other person-specific parameters, update the legacy fields
         return {
-          parameterChanges: { [parameterKey]: value }
+          parameterChanges: { [parameterKey]: value },
         };
     }
   }
-  
+
   // Handle household-level parameters (no person ID needed)
   return {
-    parameterChanges: { [parameterKey]: value }
+    parameterChanges: { [parameterKey]: value },
   };
 }
 
@@ -266,34 +306,39 @@ export function getParameterChangeDescription(
   parameterKey: string,
   currentValue: any,
   newValue: any,
-  personName?: string
+  personName?: string,
 ): string {
   const metadata = PARAMETER_METADATA[parameterKey];
   if (!metadata) {
     return `Change ${parameterKey} from ${currentValue} to ${newValue}`;
   }
-  
-  const target = personName ? `${personName}'s` : 'household';
+
+  const target = personName ? `${personName}'s` : "household";
   const displayName = metadata.displayName.toLowerCase();
-  
+
   // Format values for display
   const formatValue = (value: any) => {
-    if (typeof value === 'number') {
-      if (parameterKey.includes('Rate')) {
+    if (typeof value === "number") {
+      if (parameterKey.includes("Rate")) {
         return `${value}%`;
       }
-      if (parameterKey.includes('Amount') || parameterKey.includes('Balance') || parameterKey.includes('Salary')) {
+      if (
+        parameterKey.includes("Amount") || parameterKey.includes("Balance") ||
+        parameterKey.includes("Salary")
+      ) {
         return `$${value.toLocaleString()}`;
       }
-      if (parameterKey.includes('Age')) {
+      if (parameterKey.includes("Age")) {
         return `${value} years old`;
       }
       return value.toLocaleString();
     }
     return String(value);
   };
-  
-  return `Change ${target} ${displayName} from ${formatValue(currentValue)} to ${formatValue(newValue)}`;
+
+  return `Change ${target} ${displayName} from ${
+    formatValue(currentValue)
+  } to ${formatValue(newValue)}`;
 }
 
 /**
@@ -317,44 +362,48 @@ export interface ParameterChangeFormData {
  */
 export function validateParameterChangeForm(
   formData: ParameterChangeFormData,
-  params: UserParameters
+  params: UserParameters,
 ): { isValid: boolean; errors: string[] } {
   const errors: string[] = [];
-  
+
   // Validate parameter exists and is changeable
   const metadata = PARAMETER_METADATA[formData.parameterKey];
   if (!metadata) {
     errors.push(`Unknown parameter: ${formData.parameterKey}`);
     return { isValid: false, errors };
   }
-  
+
   if (!metadata.isChangeable) {
     errors.push(`Parameter '${metadata.displayName}' cannot be changed`);
   }
-  
+
   // Validate person selection for person-specific parameters
-  if (metadata.requiresPersonSelection && params.householdMode === 'couple') {
+  if (metadata.requiresPersonSelection && params.householdMode === "couple") {
     if (!formData.personId) {
       errors.push(`Person selection required for ${metadata.displayName}`);
     } else {
-      const person = params.people?.find(p => p.id === formData.personId);
+      const person = params.people?.find((p) => p.id === formData.personId);
       if (!person) {
         errors.push(`Selected person not found`);
       }
     }
   }
-  
+
   // Validate the new value
-  const valueValidation = validateParameterValue(formData.parameterKey, formData.newValue, params);
+  const valueValidation = validateParameterValue(
+    formData.parameterKey,
+    formData.newValue,
+    params,
+  );
   if (!valueValidation.isValid) {
     errors.push(valueValidation.error!);
   }
-  
+
   // Validate transition date
   if (!formData.transitionDate || formData.transitionDate <= new Date()) {
-    errors.push('Transition date must be in the future');
+    errors.push("Transition date must be in the future");
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors,

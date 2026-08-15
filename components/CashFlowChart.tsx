@@ -14,17 +14,19 @@ interface CashFlowChartProps {
 
 /**
  * CashFlowChart component
- * 
+ *
  * Displays a bar chart showing cash flow (income - expenses) over time.
  * Positive cash flow is shown in green, negative in red.
- * 
+ *
  * Requirements 6.1: Visual chart format
  * Requirements 6.2: Time on x-axis, monetary values on y-axis
  * Requirements 6.3: Distinct colors for different metrics
  * Requirements 6.4: Hover tooltips with exact values and dates
  * Requirements 4.1, 4.2, 4.3, 4.4: Transition markers and visualization
  */
-export default function CashFlowChart({ states, transitionPoints = [] }: CashFlowChartProps) {
+export default function CashFlowChart(
+  { states, transitionPoints = [] }: CashFlowChartProps,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 
@@ -153,12 +155,14 @@ export default function CashFlowChart({ states, transitionPoints = [] }: CashFlo
                   const dateLabel = context[0].label;
                   // Check if this index corresponds to a transition
                   const transitionAtIndex = transitionPoints.find(
-                    (tp) => tp.stateIndex === context[0].dataIndex
+                    (tp) => tp.stateIndex === context[0].dataIndex,
                   );
                   if (transitionAtIndex) {
                     return [
                       dateLabel,
-                      `🔄 ${transitionAtIndex.transition.label || "Transition"}`,
+                      `🔄 ${
+                        transitionAtIndex.transition.label || "Transition"
+                      }`,
                       transitionAtIndex.changesSummary,
                     ];
                   }
@@ -237,16 +241,38 @@ export default function CashFlowChart({ states, transitionPoints = [] }: CashFlo
     return (
       <div class="card p-8 fade-in">
         <div class="text-center">
-          <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          <svg
+            class="mx-auto h-16 w-16 text-gray-400 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+            />
           </svg>
-          <h3 class="text-lg font-semibold text-gray-700 mb-2">No Data Available</h3>
+          <h3 class="text-lg font-semibold text-gray-700 mb-2">
+            No Data Available
+          </h3>
           <p class="text-sm text-gray-500 mb-4">
             Run a simulation to see your cash flow projection over time.
           </p>
           <div class="inline-flex items-center px-4 py-2 bg-blue-50 rounded-lg">
-            <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              class="w-5 h-5 text-blue-600 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <span class="text-sm text-blue-700 font-medium">
               Enter your financial parameters to begin

@@ -1,31 +1,29 @@
 {
-  "lock": false,
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check **/*.ts && deno check **/*.tsx",
-    "cli": "echo \"import '\\$fresh/src/dev/cli.ts'\" | deno run --unstable -A -",
-    "manifest": "deno task cli manifest $(pwd)",
-    "start": "deno run -A --watch=static/,routes/ dev.ts",
-    "build": "deno run -A dev.ts build",
-    "preview": "deno run -A main.ts",
-    "update": "deno run -A -r https://fresh.deno.dev/update .",
+    "check": "deno fmt --check && deno lint && deno check",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "deno serve -A _fresh/server/server-entry.mjs",
+    "update": "deno run -A -r jsr:@fresh/update .",
     "test": "deno test -A"
   },
   "lint": { "rules": { "tags": ["fresh", "recommended"] } },
   "exclude": ["**/_fresh/*"],
   "imports": {
-    "$fresh/": "https://deno.land/x/fresh@1.7.3/",
-    "preact": "https://esm.sh/preact@10.22.0",
-    "preact/": "https://esm.sh/preact@10.22.0/",
-    "@preact/signals": "https://esm.sh/*@preact/signals@1.2.2",
-    "@preact/signals-core": "https://esm.sh/*@preact/signals-core@1.5.1",
-    "tailwindcss": "npm:tailwindcss@3.4.1",
-    "tailwindcss/": "npm:/tailwindcss@3.4.1/",
-    "tailwindcss/plugin": "npm:/tailwindcss@3.4.1/plugin.js",
+    "preact": "npm:preact@^10.29.1",
+    "preact/": "npm:/preact@^10.29.1/",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
     "$std/": "https://deno.land/std@0.216.0/",
     "fast-check": "npm:fast-check@3.15.0",
     "chart.js": "npm:chart.js@4.4.1",
     "chart.js/auto": "npm:chart.js@4.4.1/auto",
-    "chartjs-plugin-annotation": "npm:chartjs-plugin-annotation@3.0.1"
+    "chartjs-plugin-annotation": "npm:chartjs-plugin-annotation@3.0.1",
+    "fresh": "jsr:@fresh/core@^2.3.3",
+    "@fresh/plugin-vite": "jsr:@fresh/plugin-vite@^1.1.2",
+    "vite": "npm:vite@^7.1.4",
+    "@types/babel__core": "npm:@types/babel__core@^7.20.5",
+    "tailwindcss": "npm:tailwindcss@^4.3.3",
+    "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.3.3"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -41,7 +39,8 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "lib": ["deno.window", "esnext"]
+    "lib": ["deno.window", "esnext"],
+    "types": ["vite/client"]
   },
   "nodeModulesDir": "auto"
 }

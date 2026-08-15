@@ -3,12 +3,15 @@
  */
 
 import type {
-  SessionManager,
-  SessionContext,
   SessionConfig,
-  SessionStats
+  SessionContext,
+  SessionManager,
+  SessionStats,
 } from "../interfaces/session.ts";
-import type { SimulationResult, UserParameters } from "../../types/financial.ts";
+import type {
+  SimulationResult,
+  UserParameters,
+} from "../../types/financial.ts";
 import type { Milestone } from "../../types/milestones.ts";
 
 /**
@@ -33,18 +36,21 @@ export class InMemorySessionManager implements SessionManager {
     this.startCleanupTimer();
   }
 
-  async createSession(userId?: string, parameters?: UserParameters): Promise<SessionContext> {
+  async createSession(
+    userId?: string,
+    parameters?: UserParameters,
+  ): Promise<SessionContext> {
     // Check session limit
     if (this.sessions.size >= this.config.maxSessions) {
       await this.cleanupExpiredSessions();
       if (this.sessions.size >= this.config.maxSessions) {
-        throw new Error('Maximum number of sessions reached');
+        throw new Error("Maximum number of sessions reached");
       }
     }
 
     const sessionId = this.generateSessionId();
     const now = new Date();
-    
+
     const session: SessionContext = {
       sessionId,
       userId,
@@ -84,7 +90,10 @@ export class InMemorySessionManager implements SessionManager {
     }
   }
 
-  async updateSessionParameters(sessionId: string, parameters: Partial<UserParameters>): Promise<void> {
+  async updateSessionParameters(
+    sessionId: string,
+    parameters: Partial<UserParameters>,
+  ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.parameters = { ...session.parameters, ...parameters };
@@ -92,7 +101,11 @@ export class InMemorySessionManager implements SessionManager {
     }
   }
 
-  async updateSessionResult(sessionId: string, result: SimulationResult, milestones: Milestone[]): Promise<void> {
+  async updateSessionResult(
+    sessionId: string,
+    result: SimulationResult,
+    milestones: Milestone[],
+  ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.result = result;
@@ -132,16 +145,17 @@ export class InMemorySessionManager implements SessionManager {
 
   async getStats(): Promise<SessionStats> {
     await this.cleanupExpiredSessions();
-    
+
     const sessions = Array.from(this.sessions.values());
     const now = new Date();
-    
+
     let oldestAge = 0;
     if (sessions.length > 0) {
-      const oldestSession = sessions.reduce((oldest, session) => 
+      const oldestSession = sessions.reduce((oldest, session) =>
         session.createdAt < oldest.createdAt ? session : oldest
       );
-      oldestAge = (now.getTime() - oldestSession.createdAt.getTime()) / (1000 * 60);
+      oldestAge = (now.getTime() - oldestSession.createdAt.getTime()) /
+        (1000 * 60);
     }
 
     return {
@@ -158,14 +172,14 @@ export class InMemorySessionManager implements SessionManager {
   private getDefaultParameters(): UserParameters {
     return {
       annualSalary: 80000,
-      salaryFrequency: 'fortnightly',
+      salaryFrequency: "fortnightly",
       incomeTaxRate: 30,
       monthlyLivingExpenses: 3000,
       monthlyRentOrMortgage: 2000,
       loanPrincipal: 400000,
       loanInterestRate: 6.5,
       loanPaymentAmount: 2500,
-      loanPaymentFrequency: 'monthly',
+      loanPaymentFrequency: "monthly",
       useOffsetAccount: true,
       currentOffsetBalance: 50000,
       monthlyInvestmentContribution: 1000,

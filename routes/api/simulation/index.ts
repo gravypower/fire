@@ -1,12 +1,8 @@
-/**
- * API documentation and health check endpoint
- */
-
-import { Handlers } from "$fresh/server.ts";
+import { Handlers } from "fresh/compat";
 
 export const handler: Handlers = {
   // GET /api/simulation - API documentation and health check
-  async GET(_req) {
+  async GET() {
     try {
       const apiDocumentation = {
         name: "Financial Simulation API",
@@ -136,25 +132,32 @@ export const handler: Handlers = {
         },
         authentication: {
           type: "Session-based",
-          description: "All requests (except session creation) require a valid sessionId",
+          description:
+            "All requests (except session creation) require a valid sessionId",
         },
       };
 
-      return new Response(JSON.stringify({
-        success: true,
-        data: apiDocumentation,
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: apiDocumentation,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } catch (error) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
   },
 };

@@ -15,7 +15,11 @@ Deno.test("TransitionManagerIsland - component structure is valid", () => {
     "onConfigChange", // Callback function
   ];
 
-  assertEquals(requiredProps.length, 2, "Component should accept 2 required props");
+  assertEquals(
+    requiredProps.length,
+    2,
+    "Component should accept 2 required props",
+  );
 });
 
 Deno.test("TransitionManagerIsland - form data structure is complete", () => {
@@ -54,6 +58,13 @@ Deno.test("TransitionManagerIsland - template categories are supported", () => {
   ];
 
   // All categories should be valid strings
-  assertEquals(supportedCategories.every((cat) => typeof cat === "string"), true);
-  assertEquals(supportedCategories.length >= 3, true, "Should support at least 3 categories");
+  assertEquals(
+    supportedCategories.every((cat) => typeof cat === "string"),
+    true,
+  );
+  assertEquals(
+    supportedCategories.length >= 3,
+    true,
+    "Should support at least 3 categories",
+  );
 });

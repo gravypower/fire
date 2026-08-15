@@ -69,8 +69,9 @@ Deno.test("Warning integration - generates cash flow alert for negative periods"
   const result = SimulationEngine.runSimulation(params);
 
   // Should have warnings about negative cash flow
-  const hasCashFlowAlert = result.warnings.some(w => 
-    w.toLowerCase().includes("negative cash flow") || w.toLowerCase().includes("cash flow")
+  const hasCashFlowAlert = result.warnings.some((w) =>
+    w.toLowerCase().includes("negative cash flow") ||
+    w.toLowerCase().includes("cash flow")
   );
   assertEquals(hasCashFlowAlert, true);
   assertEquals(result.isSustainable, false);
@@ -138,8 +139,8 @@ Deno.test("Warning integration - detects net worth decline", () => {
   const result = SimulationEngine.runSimulation(params);
 
   // Should have warnings about declining net worth or unsustainability
-  const hasNetWorthWarning = result.warnings.some(w => 
-    w.toLowerCase().includes("declining") || 
+  const hasNetWorthWarning = result.warnings.some((w) =>
+    w.toLowerCase().includes("declining") ||
     w.toLowerCase().includes("net worth") ||
     w.toLowerCase().includes("unsustainable")
   );

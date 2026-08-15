@@ -4,8 +4,8 @@
  */
 
 import type {
-  ParameterTransition,
   ParameterPeriod,
+  ParameterTransition,
   SimulationConfiguration,
   UserParameters,
   ValidationResult,
@@ -217,16 +217,14 @@ export function validateTransition(
   if (transition.transitionDate <= startDate) {
     return {
       isValid: false,
-      error:
-        "Transition date must be after the simulation start date",
+      error: "Transition date must be after the simulation start date",
     };
   }
 
   if (transition.transitionDate >= endDate) {
     return {
       isValid: false,
-      error:
-        "Transition date must be before the simulation end date",
+      error: "Transition date must be before the simulation end date",
     };
   }
 

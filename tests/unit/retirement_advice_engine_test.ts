@@ -314,7 +314,9 @@ Deno.test("RetirementAdviceEngine - offset advice reserves an emergency buffer i
   }));
 
   const debtAdvice = engine.analyzeDebtStrategy(states, params);
-  const offsetAdvice = debtAdvice.find((a) => a.id === "offset-optimization-cash");
+  const offsetAdvice = debtAdvice.find((a) =>
+    a.id === "offset-optimization-cash"
+  );
 
   assertExists(offsetAdvice, "Should generate offset advice");
   // Should recommend sweeping cash minus the buffer ($38,000), not all $50,000
@@ -329,7 +331,10 @@ Deno.test("RetirementAdviceEngine - handles errors gracefully", () => {
 
   // Force an error by passing an invalid result, to exercise the error boundary
   try {
-    const advice = engine.generateAdvice({} as unknown as SimulationResult, params);
+    const advice = engine.generateAdvice(
+      {} as unknown as SimulationResult,
+      params,
+    );
     // Should return error structure
     assertEquals(advice.errors.length > 0, true);
     assertEquals(advice.advice.overallAssessment, "critical");

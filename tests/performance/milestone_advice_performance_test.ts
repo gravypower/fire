@@ -4,12 +4,12 @@
  * Validates: Requirements 1.1, 2.1, 5.1
  */
 
-import { assertEquals, assert } from "$std/assert/mod.ts";
+import { assert, assertEquals } from "$std/assert/mod.ts";
 import { MilestoneDetector } from "../../lib/milestone_detector.ts";
 import { RetirementAdviceEngine } from "../../lib/retirement_advice_engine.ts";
 import { SimulationEngine } from "../../lib/simulation_engine.ts";
 import { globalPerformanceMonitor } from "../../lib/performance_utils.ts";
-import type { UserParameters, FinancialState } from "../../types/financial.ts";
+import type { FinancialState, UserParameters } from "../../types/financial.ts";
 
 /**
  * Helper to create large-scale test parameters with multiple loans and investments
@@ -38,7 +38,7 @@ function createLargeScaleParameters(years: number): UserParameters {
     currentAge: 35,
     simulationYears: years,
     startDate: new Date("2024-01-01"),
-    
+
     // Multiple loans for complex scenarios
     loans: [
       {
@@ -136,35 +136,55 @@ function generateLargeSimulationStates(years: number): FinancialState[] {
  * Performance test for milestone detection with large datasets
  */
 Deno.test({
-  name: "Performance: Milestone detection with 30-year simulation (360+ states)",
+  name:
+    "Performance: Milestone detection with 30-year simulation (360+ states)",
   fn: () => {
     globalPerformanceMonitor.clearMetrics();
-    
+
     const params = createLargeScaleParameters(30);
     const states = generateLargeSimulationStates(30);
-    
-    console.log(`Generated ${states.length} financial states for 30-year simulation`);
-    
+
+    console.log(
+      `Generated ${states.length} financial states for 30-year simulation`,
+    );
+
     // Test milestone detection performance
     const detector = new MilestoneDetector();
-    
+
     const startTime = performance.now();
     const result = detector.detectMilestones(states, params);
     const endTime = performance.now();
-    
+
     const duration = endTime - startTime;
-    console.log(`Milestone detection took ${duration.toFixed(2)}ms for ${states.length} states`);
+    console.log(
+      `Milestone detection took ${
+        duration.toFixed(2)
+      }ms for ${states.length} states`,
+    );
     console.log(`Found ${result.milestones.length} milestones`);
-    console.log(`Performance: ${(duration / states.length).toFixed(4)}ms per state`);
-    
+    console.log(
+      `Performance: ${(duration / states.length).toFixed(4)}ms per state`,
+    );
+
     // Performance assertions
-    assert(duration < 1000, `Milestone detection should complete within 1 second, took ${duration}ms`);
-    assert(duration / states.length < 2, `Should process each state in under 2ms, actual: ${(duration / states.length).toFixed(4)}ms`);
-    
+    assert(
+      duration < 1000,
+      `Milestone detection should complete within 1 second, took ${duration}ms`,
+    );
+    assert(
+      duration / states.length < 2,
+      `Should process each state in under 2ms, actual: ${
+        (duration / states.length).toFixed(4)
+      }ms`,
+    );
+
     // Verify milestones were found
-    assert(result.milestones.length > 0, "Should detect milestones in 30-year simulation");
+    assert(
+      result.milestones.length > 0,
+      "Should detect milestones in 30-year simulation",
+    );
     assertEquals(result.errors.length, 0, "Should not have errors");
-    
+
     // Print performance report
     console.log("\nPerformance Report:");
     console.log(globalPerformanceMonitor.generateReport());
@@ -178,30 +198,38 @@ Deno.test({
   name: "Performance: Advice generation with 30-year simulation",
   fn: () => {
     globalPerformanceMonitor.clearMetrics();
-    
+
     const params = createLargeScaleParameters(30);
     const result = SimulationEngine.runSimulation(params);
-    
+
     console.log(`Generated simulation with ${result.states.length} states`);
-    
+
     // Test advice generation performance
     const adviceEngine = new RetirementAdviceEngine();
-    
+
     const startTime = performance.now();
     const adviceResult = adviceEngine.generateAdvice(result, params);
     const endTime = performance.now();
-    
+
     const duration = endTime - startTime;
     console.log(`Advice generation took ${duration.toFixed(2)}ms`);
-    console.log(`Generated ${adviceResult.advice.recommendations.length} recommendations`);
-    
+    console.log(
+      `Generated ${adviceResult.advice.recommendations.length} recommendations`,
+    );
+
     // Performance assertions
-    assert(duration < 500, `Advice generation should complete within 500ms, took ${duration}ms`);
-    
+    assert(
+      duration < 500,
+      `Advice generation should complete within 500ms, took ${duration}ms`,
+    );
+
     // Verify advice was generated
-    assert(adviceResult.advice.recommendations.length > 0, "Should generate recommendations");
+    assert(
+      adviceResult.advice.recommendations.length > 0,
+      "Should generate recommendations",
+    );
     assertEquals(adviceResult.errors.length, 0, "Should not have errors");
-    
+
     // Print performance report
     console.log("\nPerformance Report:");
     console.log(globalPerformanceMonitor.generateReport());
@@ -215,37 +243,43 @@ Deno.test({
   name: "Performance: Cached advice generation performance",
   fn: () => {
     globalPerformanceMonitor.clearMetrics();
-    
+
     const params = createLargeScaleParameters(20);
     const result = SimulationEngine.runSimulation(params);
-    
+
     const adviceEngine = new RetirementAdviceEngine();
-    
+
     // First call (cold cache)
     const startTime1 = performance.now();
     const adviceResult1 = adviceEngine.generateAdvice(result, params);
     const endTime1 = performance.now();
     const duration1 = endTime1 - startTime1;
-    
+
     // Second call (warm cache)
     const startTime2 = performance.now();
     const adviceResult2 = adviceEngine.generateAdvice(result, params);
     const endTime2 = performance.now();
     const duration2 = endTime2 - startTime2;
-    
+
     console.log(`First call (cold cache): ${duration1.toFixed(2)}ms`);
     console.log(`Second call (warm cache): ${duration2.toFixed(2)}ms`);
     console.log(`Cache speedup: ${(duration1 / duration2).toFixed(2)}x`);
-    
+
     // Cache should provide significant speedup
-    assert(duration2 < duration1, "Cached call should be faster than initial call");
-    assert(duration2 < duration1 * 0.8, "Cache should provide at least 20% speedup");
-    
+    assert(
+      duration2 < duration1,
+      "Cached call should be faster than initial call",
+    );
+    assert(
+      duration2 < duration1 * 0.8,
+      "Cache should provide at least 20% speedup",
+    );
+
     // Results should be identical
     assertEquals(
       adviceResult1.advice.recommendations.length,
       adviceResult2.advice.recommendations.length,
-      "Cached results should match original results"
+      "Cached results should match original results",
     );
   },
 });
@@ -257,10 +291,10 @@ Deno.test({
   name: "Performance: Milestone detection with multiple loans (stress test)",
   fn: () => {
     globalPerformanceMonitor.clearMetrics();
-    
+
     // Create scenario with many loans
     const params = createLargeScaleParameters(25);
-    
+
     // Add more loans for stress testing
     params.loans!.push(
       {
@@ -286,31 +320,43 @@ Deno.test({
         offsetBalance: 5000,
         autoPayoutWhenOffsetFull: true,
         isDebtRecycling: false,
-      }
+      },
     );
-    
+
     const states = generateLargeSimulationStates(25);
-    console.log(`Testing with ${params.loans!.length} loans and ${states.length} states`);
-    
+    console.log(
+      `Testing with ${params.loans!.length} loans and ${states.length} states`,
+    );
+
     const detector = new MilestoneDetector();
-    
+
     const startTime = performance.now();
     const result = detector.detectMilestones(states, params);
     const endTime = performance.now();
-    
+
     const duration = endTime - startTime;
     console.log(`Multi-loan milestone detection took ${duration.toFixed(2)}ms`);
-    console.log(`Found ${result.milestones.length} milestones across ${params.loans!.length} loans`);
-    
+    console.log(
+      `Found ${result.milestones.length} milestones across ${
+        params.loans!.length
+      } loans`,
+    );
+
     // Performance should scale reasonably with number of loans
     const expectedMaxDuration = params.loans!.length * 200; // 200ms per loan max
-    assert(duration < expectedMaxDuration, 
-      `Detection should complete within ${expectedMaxDuration}ms for ${params.loans!.length} loans, took ${duration}ms`);
-    
+    assert(
+      duration < expectedMaxDuration,
+      `Detection should complete within ${expectedMaxDuration}ms for ${
+        params.loans!.length
+      } loans, took ${duration}ms`,
+    );
+
     // Should find at least some milestones in a 25-year simulation
-    assert(result.milestones.length >= 1, 
-      "Should find at least one milestone in 25-year simulation with multiple loans");
-    
+    assert(
+      result.milestones.length >= 1,
+      "Should find at least one milestone in 25-year simulation with multiple loans",
+    );
+
     console.log("\nPerformance Report:");
     console.log(globalPerformanceMonitor.generateReport());
   },
@@ -323,47 +369,86 @@ Deno.test({
   name: "Performance: Batch processing with 50-year simulation",
   fn: () => {
     globalPerformanceMonitor.clearMetrics();
-    
+
     const params = createLargeScaleParameters(50); // Very long simulation
-    
+
     console.log("Running 50-year simulation for batch processing test...");
     const startSimTime = performance.now();
     const result = SimulationEngine.runSimulation(params);
     const endSimTime = performance.now();
-    
-    console.log(`Simulation took ${(endSimTime - startSimTime).toFixed(2)}ms for ${result.states.length} states`);
-    
+
+    console.log(
+      `Simulation took ${
+        (endSimTime - startSimTime).toFixed(2)
+      }ms for ${result.states.length} states`,
+    );
+
     // Test both milestone detection and advice generation
     const detector = new MilestoneDetector();
     const adviceEngine = new RetirementAdviceEngine();
-    
+
     const startTime = performance.now();
-    
+
     // Run milestone detection
     const milestoneResult = detector.detectMilestones(result.states, params);
-    
+
     // Run advice generation
-    const adviceResult = adviceEngine.generateAdvice(result, params, milestoneResult.milestones);
-    
+    const adviceResult = adviceEngine.generateAdvice(
+      result,
+      params,
+      milestoneResult.milestones,
+    );
+
     const endTime = performance.now();
     const totalDuration = endTime - startTime;
-    
-    console.log(`Total processing took ${totalDuration.toFixed(2)}ms for ${result.states.length} states`);
+
+    console.log(
+      `Total processing took ${
+        totalDuration.toFixed(2)
+      }ms for ${result.states.length} states`,
+    );
     console.log(`Found ${milestoneResult.milestones.length} milestones`);
-    console.log(`Generated ${adviceResult.advice.recommendations.length} recommendations`);
-    console.log(`Performance: ${(totalDuration / result.states.length).toFixed(4)}ms per state`);
-    
+    console.log(
+      `Generated ${adviceResult.advice.recommendations.length} recommendations`,
+    );
+    console.log(
+      `Performance: ${
+        (totalDuration / result.states.length).toFixed(4)
+      }ms per state`,
+    );
+
     // Performance assertions for very large datasets
-    assert(totalDuration < 5000, `Total processing should complete within 5 seconds, took ${totalDuration}ms`);
-    assert(totalDuration / result.states.length < 5, 
-      `Should process each state in under 5ms, actual: ${(totalDuration / result.states.length).toFixed(4)}ms`);
-    
+    assert(
+      totalDuration < 5000,
+      `Total processing should complete within 5 seconds, took ${totalDuration}ms`,
+    );
+    assert(
+      totalDuration / result.states.length < 5,
+      `Should process each state in under 5ms, actual: ${
+        (totalDuration / result.states.length).toFixed(4)
+      }ms`,
+    );
+
     // Verify results
-    assert(milestoneResult.milestones.length > 0, "Should detect milestones in 50-year simulation");
-    assert(adviceResult.advice.recommendations.length > 0, "Should generate advice recommendations");
-    assertEquals(milestoneResult.errors.length, 0, "Should not have milestone errors");
-    assertEquals(adviceResult.errors.length, 0, "Should not have advice errors");
-    
+    assert(
+      milestoneResult.milestones.length > 0,
+      "Should detect milestones in 50-year simulation",
+    );
+    assert(
+      adviceResult.advice.recommendations.length > 0,
+      "Should generate advice recommendations",
+    );
+    assertEquals(
+      milestoneResult.errors.length,
+      0,
+      "Should not have milestone errors",
+    );
+    assertEquals(
+      adviceResult.errors.length,
+      0,
+      "Should not have advice errors",
+    );
+
     console.log("\nFinal Performance Report:");
     console.log(globalPerformanceMonitor.generateReport());
   },
@@ -376,33 +461,41 @@ Deno.test({
   name: "Performance: Memory usage monitoring",
   fn: () => {
     globalPerformanceMonitor.clearMetrics();
-    
+
     const params = createLargeScaleParameters(30);
-    
+
     // Monitor memory usage during processing
     const initialMemory = (performance as any).memory?.usedJSHeapSize || 0;
-    
+
     const result = SimulationEngine.runSimulation(params);
     const detector = new MilestoneDetector();
     const adviceEngine = new RetirementAdviceEngine();
-    
+
     // Process multiple times to test for memory leaks
     for (let i = 0; i < 5; i++) {
       detector.detectMilestones(result.states, params);
       adviceEngine.generateAdvice(result, params);
     }
-    
+
     const finalMemory = (performance as any).memory?.usedJSHeapSize || 0;
     const memoryIncrease = finalMemory - initialMemory;
-    
-    console.log(`Memory usage increased by ${(memoryIncrease / 1024 / 1024).toFixed(2)}MB during processing`);
-    
+
+    console.log(
+      `Memory usage increased by ${
+        (memoryIncrease / 1024 / 1024).toFixed(2)
+      }MB during processing`,
+    );
+
     // Memory increase should be reasonable (less than 50MB for this test)
     if (initialMemory > 0) {
-      assert(memoryIncrease < 50 * 1024 * 1024, 
-        `Memory increase should be less than 50MB, actual: ${(memoryIncrease / 1024 / 1024).toFixed(2)}MB`);
+      assert(
+        memoryIncrease < 50 * 1024 * 1024,
+        `Memory increase should be less than 50MB, actual: ${
+          (memoryIncrease / 1024 / 1024).toFixed(2)
+        }MB`,
+      );
     }
-    
+
     console.log("\nPerformance Report:");
     console.log(globalPerformanceMonitor.generateReport());
   },

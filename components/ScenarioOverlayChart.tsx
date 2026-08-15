@@ -40,7 +40,9 @@ function toElapsedYearsSeries(states: FinancialState[]) {
   }));
 }
 
-export default function ScenarioOverlayChart({ scenarios }: ScenarioOverlayChartProps) {
+export default function ScenarioOverlayChart(
+  { scenarios }: ScenarioOverlayChartProps,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 

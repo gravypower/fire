@@ -1,8 +1,16 @@
 import { assert, assertEquals, assertThrows } from "$std/assert/mod.ts";
-import { sellFromPurchases, totalRealizedGainLoss } from "../../lib/investment_ledger_utils.ts";
-import type { InvestmentPurchase, InvestmentSale } from "../../types/investments.ts";
+import {
+  sellFromPurchases,
+  totalRealizedGainLoss,
+} from "../../lib/investment_ledger_utils.ts";
+import type {
+  InvestmentPurchase,
+  InvestmentSale,
+} from "../../types/investments.ts";
 
-function makePurchase(overrides: Partial<InvestmentPurchase>): InvestmentPurchase {
+function makePurchase(
+  overrides: Partial<InvestmentPurchase>,
+): InvestmentPurchase {
   return {
     id: `purchase-${Math.random()}`,
     date: "2024-01-01",
@@ -14,9 +22,22 @@ function makePurchase(overrides: Partial<InvestmentPurchase>): InvestmentPurchas
 }
 
 Deno.test("sellFromPurchases - selling less than one lot leaves it partially consumed", () => {
-  const purchases = [makePurchase({ id: "p1", date: "2024-01-01", units: 100, pricePerUnit: 10, totalCost: 1000 })];
+  const purchases = [
+    makePurchase({
+      id: "p1",
+      date: "2024-01-01",
+      units: 100,
+      pricePerUnit: 10,
+      totalCost: 1000,
+    }),
+  ];
 
-  const { remainingPurchases, sale } = sellFromPurchases(purchases, 40, 15, "2024-06-01");
+  const { remainingPurchases, sale } = sellFromPurchases(
+    purchases,
+    40,
+    15,
+    "2024-06-01",
+  );
 
   assertEquals(remainingPurchases.length, 1);
   assertEquals(remainingPurchases[0].units, 60);
@@ -31,11 +52,28 @@ Deno.test("sellFromPurchases - selling less than one lot leaves it partially con
 
 Deno.test("sellFromPurchases - selling exactly one lot removes it entirely", () => {
   const purchases = [
-    makePurchase({ id: "p1", date: "2024-01-01", units: 50, pricePerUnit: 10, totalCost: 500 }),
-    makePurchase({ id: "p2", date: "2024-02-01", units: 50, pricePerUnit: 12, totalCost: 600 }),
+    makePurchase({
+      id: "p1",
+      date: "2024-01-01",
+      units: 50,
+      pricePerUnit: 10,
+      totalCost: 500,
+    }),
+    makePurchase({
+      id: "p2",
+      date: "2024-02-01",
+      units: 50,
+      pricePerUnit: 12,
+      totalCost: 600,
+    }),
   ];
 
-  const { remainingPurchases, sale } = sellFromPurchases(purchases, 50, 20, "2024-06-01");
+  const { remainingPurchases, sale } = sellFromPurchases(
+    purchases,
+    50,
+    20,
+    "2024-06-01",
+  );
 
   assertEquals(remainingPurchases.length, 1);
   assertEquals(remainingPurchases[0].id, "p2");
@@ -44,13 +82,36 @@ Deno.test("sellFromPurchases - selling exactly one lot removes it entirely", () 
 
 Deno.test("sellFromPurchases - selling across multiple lots consumes FIFO (oldest first)", () => {
   const purchases = [
-    makePurchase({ id: "p2", date: "2024-03-01", units: 30, pricePerUnit: 20, totalCost: 600 }),
-    makePurchase({ id: "p1", date: "2024-01-01", units: 20, pricePerUnit: 10, totalCost: 200 }),
-    makePurchase({ id: "p3", date: "2024-05-01", units: 30, pricePerUnit: 25, totalCost: 750 }),
+    makePurchase({
+      id: "p2",
+      date: "2024-03-01",
+      units: 30,
+      pricePerUnit: 20,
+      totalCost: 600,
+    }),
+    makePurchase({
+      id: "p1",
+      date: "2024-01-01",
+      units: 20,
+      pricePerUnit: 10,
+      totalCost: 200,
+    }),
+    makePurchase({
+      id: "p3",
+      date: "2024-05-01",
+      units: 30,
+      pricePerUnit: 25,
+      totalCost: 750,
+    }),
   ];
 
   // Sell 40 units - should consume all of p1 (20 units, oldest) then 20 of p2 (next oldest)
-  const { remainingPurchases, sale } = sellFromPurchases(purchases, 40, 30, "2024-06-01");
+  const { remainingPurchases, sale } = sellFromPurchases(
+    purchases,
+    40,
+    30,
+    "2024-06-01",
+  );
 
   const remainingIds = remainingPurchases.map((p) => p.id).sort();
   assertEquals(remainingIds, ["p2", "p3"]);
@@ -64,7 +125,15 @@ Deno.test("sellFromPurchases - selling across multiple lots consumes FIFO (oldes
 });
 
 Deno.test("sellFromPurchases - realized loss is negative", () => {
-  const purchases = [makePurchase({ id: "p1", date: "2024-01-01", units: 100, pricePerUnit: 50, totalCost: 5000 })];
+  const purchases = [
+    makePurchase({
+      id: "p1",
+      date: "2024-01-01",
+      units: 100,
+      pricePerUnit: 50,
+      totalCost: 5000,
+    }),
+  ];
 
   const { sale } = sellFromPurchases(purchases, 100, 30, "2024-06-01");
 
@@ -75,7 +144,15 @@ Deno.test("sellFromPurchases - realized loss is negative", () => {
 });
 
 Deno.test("sellFromPurchases - fees reduce proceeds and therefore realized gain", () => {
-  const purchases = [makePurchase({ id: "p1", date: "2024-01-01", units: 10, pricePerUnit: 100, totalCost: 1000 })];
+  const purchases = [
+    makePurchase({
+      id: "p1",
+      date: "2024-01-01",
+      units: 10,
+      pricePerUnit: 100,
+      totalCost: 1000,
+    }),
+  ];
 
   const { sale } = sellFromPurchases(purchases, 10, 150, "2024-06-01", 20);
 
@@ -103,8 +180,24 @@ Deno.test("sellFromPurchases - throws for non-positive units", () => {
 
 Deno.test("totalRealizedGainLoss - sums across sales, empty/undefined yields 0", () => {
   const sales: InvestmentSale[] = [
-    { id: "s1", date: "2024-01-01", units: 1, pricePerUnit: 1, totalProceeds: 100, costBasis: 60, realizedGainLoss: 40 },
-    { id: "s2", date: "2024-02-01", units: 1, pricePerUnit: 1, totalProceeds: 50, costBasis: 80, realizedGainLoss: -30 },
+    {
+      id: "s1",
+      date: "2024-01-01",
+      units: 1,
+      pricePerUnit: 1,
+      totalProceeds: 100,
+      costBasis: 60,
+      realizedGainLoss: 40,
+    },
+    {
+      id: "s2",
+      date: "2024-02-01",
+      units: 1,
+      pricePerUnit: 1,
+      totalProceeds: 50,
+      costBasis: 80,
+      realizedGainLoss: -30,
+    },
   ];
 
   assertEquals(totalRealizedGainLoss(sales), 10);

@@ -1,10 +1,6 @@
-/**
- * API route to serve tax configuration for the active country
- */
-
-import { Handlers } from "$fresh/server.ts";
 import { getCountryModule } from "../../lib/tax_modules/index.ts";
 import type { CountryCode } from "../../types/country_module.ts";
+import { Handlers } from "fresh/compat";
 
 const CONFIG_FILES: Record<CountryCode, string> = {
   AU: "tax_brackets_au.json",
@@ -16,7 +12,8 @@ function isCountryCode(value: string): value is CountryCode {
 }
 
 export const handler: Handlers = {
-  GET(req) {
+  GET(ctx) {
+    const req = ctx.req;
     const url = new URL(req.url);
     const requestedCountry = url.searchParams.get("country")?.toUpperCase() ??
       "AU";
@@ -24,10 +21,7 @@ export const handler: Handlers = {
       ? requestedCountry
       : "AU";
 
-    const configPath = new URL(
-      `../../config/${CONFIG_FILES[country]}`,
-      import.meta.url,
-    );
+    const configPath = `${Deno.cwd()}/config/${CONFIG_FILES[country]}`;
 
     try {
       const configText = Deno.readTextFileSync(configPath);
