@@ -11,7 +11,6 @@ import type {
   SimulationConfiguration,
 } from "../types/financial.ts";
 import type { ExpenseItem } from "../types/expenses.ts";
-import InputIsland from "./InputIsland.tsx";
 import VisualizationIsland from "./VisualizationIsland.tsx";
 import ComparisonIsland from "./ComparisonIsland.tsx";
 import TransitionManagerIsland from "./TransitionManagerIsland.tsx";
@@ -1438,13 +1437,6 @@ export default function MainIsland() {
                     />
                   </ErrorBoundary>
                 )}
-
-                <ErrorBoundary>
-                  <InputIsland
-                    config={config}
-                    onConfigurationChange={handleConfigurationChange}
-                  />
-                </ErrorBoundary>
 
                 {/* Expense Manager - Only show if config exists */}
                 {config && (

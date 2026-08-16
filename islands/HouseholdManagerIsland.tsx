@@ -494,6 +494,35 @@ export default function HouseholdManagerIsland(
         </div>
       )}
 
+      {/* Retirement Goal */}
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Desired Annual Retirement Income
+        </label>
+        <div class="relative">
+          <span class="absolute left-3 top-2 text-gray-500 font-medium">
+            $
+          </span>
+          <input
+            type="number"
+            value={config.baseParameters.desiredAnnualRetirementIncome}
+            onInput={(e) => {
+              const value =
+                parseFloat((e.target as HTMLInputElement).value) || 0;
+              onConfigChange({
+                ...config,
+                baseParameters: {
+                  ...config.baseParameters,
+                  desiredAnnualRetirementIncome: value,
+                },
+              });
+            }}
+            step="1000"
+            class="input-field pl-8"
+          />
+        </div>
+      </div>
+
       {/* People Configuration (Couple Mode) */}
       {householdMode === "couple" && config.baseParameters.people && (
         <div class="space-y-6">
