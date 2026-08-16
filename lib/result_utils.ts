@@ -391,6 +391,7 @@ export function findLoanPayoffDate(states: FinancialState[]): Date | null {
  */
 export function generateWarnings(
   states: FinancialState[],
+  retirementDate: Date | null = null,
 ): FinancialWarning[] {
   const warnings: FinancialWarning[] = [];
 
@@ -414,8 +415,14 @@ export function generateWarnings(
     });
   }
 
-  // Check for consecutive negative cash flow (Requirements 10.4)
-  const cashFlowResult = detectNegativeCashFlow(states, 3);
+  // Check for consecutive negative cash flow while still working
+  // (Requirements 10.4) - once retired, cashFlow is expected to run
+  // negative every period since it doesn't account for the withdrawals
+  // that cover the gap, so periods after retirement are excluded here.
+  const preRetirementStates = retirementDate
+    ? states.filter((s) => s.date < retirementDate)
+    : states;
+  const cashFlowResult = detectNegativeCashFlow(preRetirementStates, 3);
   if (cashFlowResult.detected) {
     warnings.push({
       message:

@@ -203,6 +203,25 @@ export const SimulationEngine = {
       )
       : undefined;
 
+    // A house purchased before the simulation start (e.g. a primary home
+    // already owned) needs its value credited from the very first state,
+    // matching how its mortgage's principal is already seeded above via
+    // loanInitialBalance - otherwise net worth understates by the full
+    // house price until the first PROPERTY phase tick runs.
+    const initialHouseValues = params.housePurchases &&
+        params.housePurchases.length > 0
+      ? params.housePurchases.reduce(
+        (acc, house) => ({
+          ...acc,
+          [house.id]: house.purchaseDate <= params.startDate ? house.price : 0,
+        }),
+        {} as { [houseId: string]: number },
+      )
+      : undefined;
+    const initialPropertyValue = initialHouseValues
+      ? Object.values(initialHouseValues).reduce((sum, v) => sum + v, 0)
+      : 0;
+
     let currentState: FinancialState = {
       date: new Date(params.startDate),
       cash: 0, // Starting with zero cash
@@ -219,7 +238,8 @@ export const SimulationEngine = {
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
-      propertyValue: 0,
+      propertyValue: initialPropertyValue,
+      houseValues: initialHouseValues,
     };
 
     // Calculate initial net worth
@@ -258,7 +278,7 @@ export const SimulationEngine = {
     );
 
     // Generate warnings and alerts for unsustainable scenarios
-    const financialWarnings = generateWarnings(states);
+    const financialWarnings = generateWarnings(states, retirement.date);
     const warningMessages = financialWarnings.map((w) => w.message);
 
     // Add warning if retirement is not achievable at desired age
@@ -288,7 +308,11 @@ export const SimulationEngine = {
     }
 
     // Check sustainability (basic check)
-    const isSustainable = this.checkSustainability(states, warnings);
+    const isSustainable = this.checkSustainability(
+      states,
+      warnings,
+      retirement.date,
+    );
 
     // Detect milestones from simulation results
     const milestoneResult = detectMilestonesFromSimulation(states, params);
@@ -1315,6 +1339,7 @@ export const SimulationEngine = {
   checkSustainability(
     states: FinancialState[],
     warnings: string[],
+    retirementDate: Date | null = null,
   ): boolean {
     if (states.length < 2) {
       return true;
@@ -1330,9 +1355,16 @@ export const SimulationEngine = {
       isSustainable = false;
     }
 
-    // Check for consecutive negative cash flow
+    // Check for consecutive negative cash flow while still working. Once
+    // retired, cashFlow (income minus expenses/loans/contributions) is
+    // expected to run negative every period - it doesn't account for the
+    // retirement withdrawals that cover the gap - so counting those periods
+    // here would flag a fully-funded, on-track retirement as unsustainable.
+    const preRetirementStates = retirementDate
+      ? states.filter((s) => s.date < retirementDate)
+      : states;
     let consecutiveNegative = 0;
-    for (const state of states) {
+    for (const state of preRetirementStates) {
       if (state.cashFlow < 0) {
         consecutiveNegative++;
         if (consecutiveNegative >= 3) {
@@ -1456,6 +1488,27 @@ export const SimulationEngine = {
         )
         : undefined;
 
+    // A house purchased before the simulation start (e.g. a primary home
+    // already owned) needs its value credited from the very first state,
+    // matching how its mortgage's principal is already seeded above via
+    // loanInitialBalance - otherwise net worth understates by the full
+    // house price until the first PROPERTY phase tick runs.
+    const initialHouseValues = currentParams.housePurchases &&
+        currentParams.housePurchases.length > 0
+      ? currentParams.housePurchases.reduce(
+        (acc, house) => ({
+          ...acc,
+          [house.id]: house.purchaseDate <= config.baseParameters.startDate
+            ? house.price
+            : 0,
+        }),
+        {} as { [houseId: string]: number },
+      )
+      : undefined;
+    const initialPropertyValue = initialHouseValues
+      ? Object.values(initialHouseValues).reduce((sum, v) => sum + v, 0)
+      : 0;
+
     let currentState: FinancialState = {
       date: new Date(config.baseParameters.startDate),
       cash: 0,
@@ -1472,7 +1525,8 @@ export const SimulationEngine = {
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
-      propertyValue: 0,
+      propertyValue: initialPropertyValue,
+      houseValues: initialHouseValues,
     };
 
     // Calculate initial net worth
@@ -1550,7 +1604,7 @@ export const SimulationEngine = {
     );
 
     // Generate warnings
-    const financialWarnings = generateWarnings(states);
+    const financialWarnings = generateWarnings(states, retirement.date);
     const warningMessages = financialWarnings.map((w) => w.message);
 
     // Add warning if retirement is not achievable at desired age
@@ -1582,7 +1636,11 @@ export const SimulationEngine = {
     }
 
     // Check sustainability
-    const isSustainable = this.checkSustainability(states, warnings);
+    const isSustainable = this.checkSustainability(
+      states,
+      warnings,
+      retirement.date,
+    );
 
     // Detect milestones from simulation results, including parameter transitions
     const milestoneResult = detectMilestonesFromSimulation(
