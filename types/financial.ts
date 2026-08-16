@@ -169,6 +169,21 @@ export interface FinancialState {
   propertyValue: number;
   /** Individual house values by house purchase ID */
   houseValues?: { [houseId: string]: number };
+  /** Dividend/distribution cash income received this period (taxable) */
+  dividendIncome?: number;
+  /** Realized capital gains from investment sales this period (taxable,
+   *  after any long-term discount is applied) */
+  realizedCapitalGains?: number;
+  /** Tax paid this period attributable to dividends, realized capital
+   *  gains, and taxable retirement-account withdrawals - a breakdown of
+   *  taxPaid, not an amount in addition to it */
+  investmentTaxPaid?: number;
+  /** Running cost basis of the legacy aggregate investment balance (used
+   *  when investmentHoldings isn't provided), for capital gains tracking */
+  investmentCostBasis?: number;
+  /** Running cost basis per holding ID (parallels investmentBalances), for
+   *  capital gains tracking */
+  investmentCostBases?: { [holdingId: string]: number };
 }
 
 /**
@@ -247,6 +262,11 @@ export interface UserParameters {
   currentInvestmentBalance: number;
   /** Individual investment holdings (optional, falls back to legacy fields if not provided) */
   investmentHoldings?: InvestmentHolding[];
+  /** Portion of investmentReturnRate paid out as taxable cash dividends each
+   *  period (e.g., 4 for 4%) when using the legacy single-balance investment
+   *  model - DEPRECATED: use investmentHoldings[].dividendYieldRate instead.
+   *  Defaults to 0 (no distributions) if omitted. */
+  investmentDividendYieldRate?: number;
 
   // Superannuation
   /** Percentage of salary contributed to super (e.g., 11 for 11%) - DEPRECATED: Use superAccounts instead */

@@ -29,6 +29,18 @@ export const auTaxModule: CountryTaxModule = {
     earlyWithdrawalPenaltyRate: 0,
     pensionAge: 67,
   },
+  capitalGainsRule: {
+    longTermThresholdDays: 365,
+    // AU 50% CGT discount for assets held over 12 months, then the
+    // discounted gain stacks on ordinary taxable income (no separate rate).
+    longTermDiscount: 0.5,
+    longTermFlatRate: 0,
+  },
+  dividendsTaxedAsOrdinaryIncome: true,
+  // AU superannuation withdrawals (pension or lump sum) are tax-free once
+  // the preservation age/condition of release is met - already reflected by
+  // the hard gate above, so nothing further to tax here.
+  retirementWithdrawalsTaxedAsIncome: false,
   calculateTax(
     taxableIncome: number,
     brackets: TaxBracket[],

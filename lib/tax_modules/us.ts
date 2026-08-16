@@ -29,6 +29,19 @@ export const usTaxModule: CountryTaxModule = {
     earlyWithdrawalPenaltyRate: 0.10,
     pensionAge: 59.5,
   },
+  capitalGainsRule: {
+    longTermThresholdDays: 365,
+    // US long-term capital gains use a separate preferential rate instead
+    // of stacking on ordinary brackets - simplified here to a single
+    // representative rate rather than the real 0/15/20% bracket structure.
+    longTermDiscount: 0,
+    longTermFlatRate: 0.15,
+  },
+  dividendsTaxedAsOrdinaryIncome: true,
+  // Traditional 401k/IRA withdrawals are ordinary taxable income regardless
+  // of age, on top of the early-withdrawal penalty modeled by
+  // retirementAccessRule above.
+  retirementWithdrawalsTaxedAsIncome: true,
   calculateTax(
     taxableIncome: number,
     brackets: TaxBracket[],

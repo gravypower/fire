@@ -20,6 +20,7 @@ import {
   ExpenseProcessor,
   IncomeProcessor,
   InvestmentProcessor,
+  InvestmentTaxProcessor,
   LoanProcessor,
   peopleHaveIncomeSources,
   peopleHaveSuperAccounts,
@@ -390,6 +391,45 @@ export const SimulationEngine = {
     let deductibleInterest = 0;
     let netIncome = 0;
 
+    // Investment cost-basis tracking (for realized capital gains on sales)
+    // and per-holding balances, kept live through the whole step so a
+    // withdrawal earlier in the period (Phase 2b/6b) is reflected by the
+    // growth phase (Phase 4) later in the same period, rather than being
+    // silently overwritten. Cost basis defaults to the opening balance
+    // (assumes zero unrealized gain at the point tracking starts) since the
+    // engine has no earlier record of what was actually paid for it.
+    let investmentBalances: { [holdingId: string]: number } =
+      params.investmentHoldings && params.investmentHoldings.length > 0
+        ? params.investmentHoldings.reduce(
+          (acc, h) => ({
+            ...acc,
+            [h.id]: currentState.investmentBalances?.[h.id] ?? h.currentValue,
+          }),
+          {} as { [holdingId: string]: number },
+        )
+        : {};
+    let investmentCostBases: { [holdingId: string]: number } =
+      params.investmentHoldings && params.investmentHoldings.length > 0
+        ? params.investmentHoldings.reduce(
+          (acc, h) => ({
+            ...acc,
+            [h.id]: currentState.investmentCostBases?.[h.id] ??
+              (currentState.investmentBalances?.[h.id] ?? h.currentValue),
+          }),
+          {} as { [holdingId: string]: number },
+        )
+        : {};
+    let investmentCostBasis = currentState.investmentCostBasis ??
+      params.currentInvestmentBalance;
+
+    // Accumulates this period's dividend income and realized capital gains
+    // (from retirement-income/deficit withdrawals), and any taxable
+    // retirement-account withdrawal amount (US 401k/IRA), for the tax phase.
+    let dividendIncome = 0;
+    let shortTermGain = 0;
+    let longTermGain = 0;
+    let taxableRetirementWithdrawal = 0;
+
     // Phase 1: Income - Add salary income (tax will be calculated later after we know deductible interest)
     eventCollector.emit({
       type: SimulationEventType.PHASE_START,
@@ -550,6 +590,9 @@ export const SimulationEngine = {
           params,
           yearsElapsed,
           currentState,
+          investmentBalances,
+          investmentCostBases,
+          investmentCostBasis,
         );
 
         // Emit withdrawal event
@@ -573,6 +616,12 @@ export const SimulationEngine = {
         investments = withdrawalResult.newInvestments;
         superannuation = withdrawalResult.newSuperannuation;
         cash += withdrawalResult.withdrawnAmount;
+        investmentBalances = withdrawalResult.newInvestmentBalances;
+        investmentCostBases = withdrawalResult.newInvestmentCostBases;
+        investmentCostBasis = withdrawalResult.newInvestmentCostBasis;
+        shortTermGain += withdrawalResult.shortTermGain;
+        longTermGain += withdrawalResult.longTermGain;
+        taxableRetirementWithdrawal += withdrawalResult.taxableSuperWithdrawal;
       }
     } else {
       eventCollector.emit({
@@ -823,9 +872,33 @@ export const SimulationEngine = {
       totalLoanPayment = 0;
     }
 
+    const periodsPerYear = intervalToPeriodsPerYear(interval);
+
+    // Phase 3a: Dividend Income - cash distributions paid on the opening
+    // investment balance (after any Phase 2b withdrawal), before growth is
+    // applied. Runs before the tax phase so dividends are included in this
+    // period's taxable income.
+    if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+      for (const holding of params.investmentHoldings) {
+        const holdingBalance = investmentBalances[holding.id] ??
+          holding.currentValue;
+        dividendIncome += InvestmentProcessor.calculateDividendIncome(
+          holdingBalance,
+          holding.dividendYieldRate,
+          interval,
+        );
+      }
+    } else {
+      dividendIncome += InvestmentProcessor.calculateDividendIncome(
+        investments,
+        params.investmentDividendYieldRate,
+        interval,
+      );
+    }
+    cash += dividendIncome;
+
     // Now calculate tax with deductible interest deduction
     // Convert deductible interest to annual amount for tax calculation
-    const periodsPerYear = intervalToPeriodsPerYear(interval);
     const annualDeductibleInterest = deductibleInterest * periodsPerYear;
 
     // Calculate taxable income (gross income minus deductible interest)
@@ -840,9 +913,36 @@ export const SimulationEngine = {
 
     // Calculate tax on taxable income
     const annualTax = IncomeProcessor.calculateAnnualTax(params, taxableIncome);
-    taxPaid = annualTax / periodsPerYear;
+    const periodSalaryTax = annualTax / periodsPerYear;
 
-    // Subtract tax from cash (we already added gross income earlier)
+    // Investment-related tax (dividends, realized capital gains from any
+    // Phase 2b withdrawal above, and taxable retirement-account withdrawals
+    // e.g. US 401k/IRA) stacks on top of ordinary taxable income at the
+    // marginal rate, using the active country module's capital gains rule.
+    const cgRule = getCountryModule(params.country).capitalGainsRule;
+    const annualDividendIncome = dividendIncome * periodsPerYear;
+    const annualShortTermGain = shortTermGain * periodsPerYear;
+    const annualLongTermGain = longTermGain * periodsPerYear;
+    const annualTaxableRetirementWithdrawal = taxableRetirementWithdrawal *
+      periodsPerYear;
+    const discountedLongTermGain = cgRule.longTermFlatRate > 0
+      ? 0
+      : annualLongTermGain * (1 - cgRule.longTermDiscount);
+    const flatRateGains = cgRule.longTermFlatRate > 0 ? annualLongTermGain : 0;
+    const additionalOrdinaryIncome = annualDividendIncome +
+      annualShortTermGain + discountedLongTermGain +
+      annualTaxableRetirementWithdrawal;
+    const annualInvestmentTax = InvestmentTaxProcessor.calculateInvestmentTax(
+      params,
+      taxableIncome,
+      additionalOrdinaryIncome,
+      flatRateGains,
+    );
+    const periodInvestmentTax = annualInvestmentTax / periodsPerYear;
+
+    taxPaid = periodSalaryTax + periodInvestmentTax;
+
+    // Subtract tax from cash (we already added gross income/dividends earlier)
     cash -= taxPaid;
     netIncome = grossIncome - taxPaid;
 
@@ -863,8 +963,10 @@ export const SimulationEngine = {
       data: { phase: SimulationPhase.INVESTMENT },
     });
 
-    // Handle individual investment holdings if provided
-    let investmentBalances: { [holdingId: string]: number } = {};
+    // Investment growth/contributions build on investmentBalances /
+    // investmentCostBasis(es) as they stand after any Phase 2b withdrawal
+    // and the dividend phase above - not the prior period's stored state -
+    // so a withdrawal earlier this period is actually reflected here.
     let actualInvestmentContribution = 0;
 
     // Only make investment contributions if someone is still working
@@ -875,13 +977,15 @@ export const SimulationEngine = {
           .calculateInvestmentHoldings(
             params,
             currentState.date,
-            currentState.investmentBalances,
+            investmentBalances,
             interval,
             cash,
+            investmentCostBases,
           );
 
         investments = investmentResult.totalBalance;
         investmentBalances = investmentResult.holdingBalances;
+        investmentCostBases = investmentResult.holdingCostBases;
         actualInvestmentContribution = investmentResult.cashUsed;
         cash -= actualInvestmentContribution;
       } else {
@@ -899,12 +1003,15 @@ export const SimulationEngine = {
           actualInvestmentContribution = 0;
         }
 
+        const netGrowthRate = (params.investmentReturnRate -
+          (params.investmentDividendYieldRate ?? 0)) / 100;
         investments = InvestmentProcessor.calculateInvestmentGrowth(
           investments,
           actualInvestmentContribution,
-          params.investmentReturnRate / 100, // Convert percentage to decimal
+          netGrowthRate,
           interval,
         );
+        investmentCostBasis += actualInvestmentContribution;
       }
     } else {
       // Retired - no new contributions, just apply growth to existing investments
@@ -913,18 +1020,22 @@ export const SimulationEngine = {
           .calculateInvestmentHoldings(
             params,
             currentState.date,
-            currentState.investmentBalances,
+            investmentBalances,
             interval,
             0, // No cash available for contributions
+            investmentCostBases,
           );
 
         investments = investmentResult.totalBalance;
         investmentBalances = investmentResult.holdingBalances;
+        investmentCostBases = investmentResult.holdingCostBases;
       } else {
+        const netGrowthRate = (params.investmentReturnRate -
+          (params.investmentDividendYieldRate ?? 0)) / 100;
         investments = InvestmentProcessor.calculateInvestmentGrowth(
           investments,
           0, // No contributions
-          params.investmentReturnRate / 100,
+          netGrowthRate,
           interval,
         );
       }
@@ -933,9 +1044,15 @@ export const SimulationEngine = {
     // Apply any planned sale rules due this period (one-off or recurring
     // drawdowns configured on an individual holding). Only meaningful for
     // the individual-holdings model, since that's the only place a planned
-    // sale can be attached to a specific balance.
+    // sale can be attached to a specific balance. Runs after this period's
+    // tax phase already ran, so any realized gain's tax is deducted
+    // immediately below rather than folded into taxPaid above.
+    let plannedSaleShortTermGain = 0;
+    let plannedSaleLongTermGain = 0;
+
     if (params.investmentHoldings && params.investmentHoldings.length > 0) {
       const periodEnd = advanceDate(currentState.date, interval);
+      const longTermThresholdDays = cgRule.longTermThresholdDays;
 
       for (const holding of params.investmentHoldings) {
         if (!holding.plannedSales || holding.plannedSales.length === 0) {
@@ -945,6 +1062,8 @@ export const SimulationEngine = {
         let holdingBalance = investmentBalances[holding.id] ??
           holding.currentValue;
         const balanceBefore = holdingBalance;
+        let holdingCostBasis = investmentCostBases[holding.id] ??
+          holdingBalance;
         let totalSold = 0;
 
         for (const plannedSale of holding.plannedSales) {
@@ -955,13 +1074,30 @@ export const SimulationEngine = {
             periodEnd,
           );
           if (soldAmount > 0) {
+            const costBasisFraction = holdingBalance > 0
+              ? Math.min(1, holdingCostBasis / holdingBalance)
+              : 1;
+            const costBasisOfSale = soldAmount * costBasisFraction;
+            const gain = soldAmount - costBasisOfSale;
+            const acquisitionDate = holding.startDate ?? params.startDate;
+            const daysHeld =
+              (currentState.date.getTime() - acquisitionDate.getTime()) /
+              (1000 * 60 * 60 * 24);
+            if (daysHeld >= longTermThresholdDays) {
+              plannedSaleLongTermGain += gain;
+            } else {
+              plannedSaleShortTermGain += gain;
+            }
+
             holdingBalance -= soldAmount;
+            holdingCostBasis = Math.max(0, holdingCostBasis - costBasisOfSale);
             totalSold += soldAmount;
           }
         }
 
         if (totalSold > 0) {
           investmentBalances[holding.id] = holdingBalance;
+          investmentCostBases[holding.id] = holdingCostBasis;
           investments -= totalSold;
           cash += totalSold;
 
@@ -982,6 +1118,29 @@ export const SimulationEngine = {
           });
         }
       }
+    }
+
+    // Tax on planned-sale gains, deducted immediately since it's realized
+    // after this period's main tax phase already ran.
+    if (plannedSaleShortTermGain > 0 || plannedSaleLongTermGain > 0) {
+      const discountedPlannedLongTermGain = cgRule.longTermFlatRate > 0
+        ? 0
+        : plannedSaleLongTermGain * (1 - cgRule.longTermDiscount);
+      const plannedFlatRateGains = cgRule.longTermFlatRate > 0
+        ? plannedSaleLongTermGain
+        : 0;
+      const plannedSaleTax = InvestmentTaxProcessor.calculateInvestmentTax(
+        params,
+        taxableIncome + additionalOrdinaryIncome,
+        plannedSaleShortTermGain * periodsPerYear +
+          discountedPlannedLongTermGain * periodsPerYear,
+        plannedFlatRateGains * periodsPerYear,
+      ) / periodsPerYear;
+
+      taxPaid += plannedSaleTax;
+      cash -= plannedSaleTax;
+      shortTermGain += plannedSaleShortTermGain;
+      longTermGain += plannedSaleLongTermGain;
     }
 
     eventCollector.emit({
@@ -1260,6 +1419,9 @@ export const SimulationEngine = {
         params,
         yearsElapsed,
         currentState,
+        investmentBalances,
+        investmentCostBases,
+        investmentCostBasis,
       );
 
       // Apply results
@@ -1268,10 +1430,43 @@ export const SimulationEngine = {
 
       investments = withdrawalResult.newInvestments;
       superannuation = withdrawalResult.newSuperannuation;
+      investmentBalances = withdrawalResult.newInvestmentBalances;
+      investmentCostBases = withdrawalResult.newInvestmentCostBases;
+      investmentCostBasis = withdrawalResult.newInvestmentCostBasis;
       const totalWithdrawn = withdrawalResult.withdrawnAmount;
 
       // Add withdrawn funds to cash to cover deficit
       cash += totalWithdrawn;
+
+      // Tax on this withdrawal's realized gains and any taxable
+      // retirement-account portion, deducted immediately since it's
+      // realized after this period's main tax phase already ran.
+      shortTermGain += withdrawalResult.shortTermGain;
+      longTermGain += withdrawalResult.longTermGain;
+      taxableRetirementWithdrawal += withdrawalResult.taxableSuperWithdrawal;
+      if (
+        withdrawalResult.shortTermGain > 0 ||
+        withdrawalResult.longTermGain > 0 ||
+        withdrawalResult.taxableSuperWithdrawal > 0
+      ) {
+        const discountedGain = cgRule.longTermFlatRate > 0
+          ? 0
+          : withdrawalResult.longTermGain * (1 - cgRule.longTermDiscount);
+        const flatGain = cgRule.longTermFlatRate > 0
+          ? withdrawalResult.longTermGain
+          : 0;
+        const deficitInvestmentTax =
+          InvestmentTaxProcessor.calculateInvestmentTax(
+            params,
+            taxableIncome + additionalOrdinaryIncome,
+            (withdrawalResult.shortTermGain + discountedGain +
+              withdrawalResult.taxableSuperWithdrawal) * periodsPerYear,
+            flatGain * periodsPerYear,
+          ) / periodsPerYear;
+
+        taxPaid += deficitInvestmentTax;
+        cash -= deficitInvestmentTax;
+      }
 
       eventCollector.emit({
         type: SimulationEventType.RETIREMENT_WITHDRAWAL,
@@ -1347,6 +1542,17 @@ export const SimulationEngine = {
       houseValues: params.housePurchases && params.housePurchases.length > 0
         ? houseValues
         : undefined,
+      dividendIncome,
+      realizedCapitalGains: shortTermGain + longTermGain,
+      investmentTaxPaid: taxPaid - periodSalaryTax,
+      investmentCostBasis:
+        params.investmentHoldings && params.investmentHoldings.length > 0
+          ? undefined
+          : investmentCostBasis,
+      investmentCostBases:
+        params.investmentHoldings && params.investmentHoldings.length > 0
+          ? investmentCostBases
+          : undefined,
     };
   },
 
@@ -1811,15 +2017,78 @@ export const SimulationEngine = {
     params: UserParameters,
     yearsElapsed: number,
     _currentState: FinancialState,
+    currentInvestmentBalances: { [holdingId: string]: number },
+    currentInvestmentCostBases: { [holdingId: string]: number },
+    currentInvestmentCostBasis: number,
   ): {
     newInvestments: number;
     newSuperannuation: number;
     withdrawnAmount: number;
+    newInvestmentBalances: { [holdingId: string]: number };
+    newInvestmentCostBases: { [holdingId: string]: number };
+    newInvestmentCostBasis: number;
+    shortTermGain: number;
+    longTermGain: number;
+    taxableSuperWithdrawal: number;
   } {
     let investments = currentInvestments;
     let superannuation = currentSuperannuation;
     let withdrawnAmount = 0;
     let remainingShortfall = shortfall;
+
+    // Selling down investments to fund a withdrawal realizes a capital gain
+    // against cost basis, tracked (and taxed later, by the caller) alongside
+    // the plain balance reduction below.
+    let investmentBalances = { ...currentInvestmentBalances };
+    let investmentCostBases = { ...currentInvestmentCostBases };
+    let investmentCostBasis = currentInvestmentCostBasis;
+    let shortTermGain = 0;
+    let longTermGain = 0;
+    let taxableSuperWithdrawal = 0;
+
+    const countryModule = getCountryModule(params.country);
+    const longTermThresholdDays =
+      countryModule.capitalGainsRule.longTermThresholdDays;
+
+    const sellInvestments = (amount: number) => {
+      if (amount <= 0) return;
+      if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+        const result = InvestmentProcessor.sellFromHoldings(
+          params.investmentHoldings,
+          investmentBalances,
+          investmentCostBases,
+          amount,
+          _currentState.date,
+          params.startDate,
+          longTermThresholdDays,
+        );
+        investmentBalances = result.newHoldingBalances;
+        investmentCostBases = result.newHoldingCostBases;
+        shortTermGain += result.shortTermGain;
+        longTermGain += result.longTermGain;
+      } else {
+        const result = InvestmentProcessor.sellFromAggregate(
+          investments,
+          investmentCostBasis,
+          amount,
+          _currentState.date,
+          params.startDate,
+          longTermThresholdDays,
+        );
+        investmentCostBasis = result.newCostBasis;
+        shortTermGain += result.shortTermGain;
+        longTermGain += result.longTermGain;
+      }
+    };
+
+    // US 401k/IRA-style modules tax the whole withdrawal as ordinary
+    // income (on top of any early-withdrawal penalty already applied by
+    // evaluateRetirementAccountWithdrawal); AU superannuation does not.
+    const recordSuperWithdrawal = (amountReceived: number) => {
+      if (countryModule.retirementWithdrawalsTaxedAsIncome) {
+        taxableSuperWithdrawal += amountReceived;
+      }
+    };
 
     // Determine ages for withdrawal eligibility. The retirement account is
     // treated as a single pooled fund (not per-person), so - consistent with
@@ -1852,11 +2121,13 @@ export const SimulationEngine = {
         superannuation -= result.amountReceived + result.penaltyPaid;
         withdrawnAmount += result.amountReceived;
         remainingShortfall -= result.amountReceived;
+        recordSuperWithdrawal(result.amountReceived);
       }
 
       // 2. Withdraw from investments if still short
       if (remainingShortfall > 0 && investments > 0) {
         const investmentWithdrawal = Math.min(remainingShortfall, investments);
+        sellInvestments(investmentWithdrawal);
         investments -= investmentWithdrawal;
         withdrawnAmount += investmentWithdrawal;
         remainingShortfall -= investmentWithdrawal;
@@ -1890,9 +2161,11 @@ export const SimulationEngine = {
           superannuation,
         );
         superannuation -= superResult.amountReceived + superResult.penaltyPaid;
+        sellInvestments(investmentWithdrawal);
         investments -= investmentWithdrawal;
         withdrawnAmount += superResult.amountReceived + investmentWithdrawal;
         remainingShortfall -= superResult.amountReceived + investmentWithdrawal;
+        recordSuperWithdrawal(superResult.amountReceived);
       }
     } else {
       // STRATEGY: Investments First (Default)
@@ -1901,6 +2174,7 @@ export const SimulationEngine = {
       // 1. Withdraw from investments (always accessible)
       if (remainingShortfall > 0 && investments > 0) {
         const investmentWithdrawal = Math.min(remainingShortfall, investments);
+        sellInvestments(investmentWithdrawal);
         investments -= investmentWithdrawal;
         withdrawnAmount += investmentWithdrawal;
         remainingShortfall -= investmentWithdrawal;
@@ -1917,6 +2191,7 @@ export const SimulationEngine = {
         superannuation -= result.amountReceived + result.penaltyPaid;
         withdrawnAmount += result.amountReceived;
         remainingShortfall -= result.amountReceived;
+        recordSuperWithdrawal(result.amountReceived);
       }
     }
 
@@ -1931,12 +2206,19 @@ export const SimulationEngine = {
       superannuation -= emergencyWithdrawal;
       withdrawnAmount += emergencyWithdrawal;
       remainingShortfall -= emergencyWithdrawal;
+      recordSuperWithdrawal(emergencyWithdrawal);
     }
 
     return {
       newInvestments: investments,
       newSuperannuation: superannuation,
       withdrawnAmount,
+      newInvestmentBalances: investmentBalances,
+      newInvestmentCostBases: investmentCostBases,
+      newInvestmentCostBasis: investmentCostBasis,
+      shortTermGain,
+      longTermGain,
+      taxableSuperWithdrawal,
     };
   },
 
