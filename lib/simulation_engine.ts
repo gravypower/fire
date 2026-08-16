@@ -170,9 +170,16 @@ export const SimulationEngine = {
     const allSuperAccounts: SuperAccount[] = [];
 
     if (peopleHaveSuperAccounts(params)) {
-      // Collect super accounts from all people
+      // Collect super accounts from all people - backfilling personId from
+      // the owning person when the account itself doesn't have one set, so
+      // contribution attribution below always has an owner to check against.
       for (const person of params.people!) {
-        allSuperAccounts.push(...person.superAccounts);
+        allSuperAccounts.push(
+          ...person.superAccounts.map((acc) => ({
+            ...acc,
+            personId: acc.personId ?? person.id,
+          })),
+        );
       }
     } else if (params.superAccounts && params.superAccounts.length > 0) {
       // Use top-level super accounts (legacy or single mode)
@@ -1001,9 +1008,20 @@ export const SimulationEngine = {
     const allSuperAccounts: SuperAccount[] = [];
 
     if (peopleHaveSuperAccounts(params)) {
-      // Collect super accounts from all people
+      // Collect super accounts from all people - backfilling personId from
+      // the owning person when the account itself doesn't have one set, so
+      // the per-person contribution logic below always has an owner to
+      // check against. Without this, an account missing personId fell into
+      // the "legacy household" branch and kept accruing contributions off
+      // the whole household's income - including after its own owner
+      // retired, as long as anyone else was still working.
       for (const person of params.people!) {
-        allSuperAccounts.push(...person.superAccounts);
+        allSuperAccounts.push(
+          ...person.superAccounts.map((acc) => ({
+            ...acc,
+            personId: acc.personId ?? person.id,
+          })),
+        );
       }
     } else if (params.superAccounts && params.superAccounts.length > 0) {
       // Use top-level super accounts (legacy or single mode)
@@ -1446,9 +1464,16 @@ export const SimulationEngine = {
     const allSuperAccountsTransitions: SuperAccount[] = [];
 
     if (peopleHaveSuperAccounts(currentParams)) {
-      // Collect super accounts from all people
+      // Collect super accounts from all people - backfilling personId from
+      // the owning person when the account itself doesn't have one set (see
+      // the matching comment in runSimulation for why this matters).
       for (const person of currentParams.people!) {
-        allSuperAccountsTransitions.push(...person.superAccounts);
+        allSuperAccountsTransitions.push(
+          ...person.superAccounts.map((acc) => ({
+            ...acc,
+            personId: acc.personId ?? person.id,
+          })),
+        );
       }
     } else if (
       currentParams.superAccounts && currentParams.superAccounts.length > 0
