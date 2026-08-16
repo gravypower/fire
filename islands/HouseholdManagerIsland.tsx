@@ -494,6 +494,38 @@ export default function HouseholdManagerIsland(
         </div>
       )}
 
+      {/* Cash on Hand */}
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Current Cash Balance
+        </label>
+        <div class="relative">
+          <span class="absolute left-3 top-2 text-gray-500 font-medium">
+            $
+          </span>
+          <input
+            type="number"
+            value={config.baseParameters.currentCashBalance ?? 0}
+            onInput={(e) => {
+              const value =
+                parseFloat((e.target as HTMLInputElement).value) || 0;
+              onConfigChange({
+                ...config,
+                baseParameters: {
+                  ...config.baseParameters,
+                  currentCashBalance: value,
+                },
+              });
+            }}
+            step="1000"
+            class="input-field pl-8"
+          />
+        </div>
+        <p class="text-xs text-gray-500 mt-1">
+          Savings sitting outside any loan's offset account.
+        </p>
+      </div>
+
       {/* Retirement Goal */}
       <div class="mb-6">
         <label class="block text-sm font-medium text-gray-700 mb-1">

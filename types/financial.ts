@@ -192,6 +192,11 @@ export interface UserParameters {
   /** People in the household (for couple mode) */
   people?: Person[];
 
+  // Cash
+  /** Cash on hand at the simulation's start date (savings account, sitting
+   *  outside any loan's offset). Defaults to 0 if not set. */
+  currentCashBalance?: number;
+
   // Income (Legacy - for backward compatibility)
   /** Annual salary amount - DEPRECATED: Use incomeSources or people instead */
   annualSalary: number;

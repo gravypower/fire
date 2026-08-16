@@ -89,6 +89,7 @@ export default function HousePurchaseIsland(
       mortgagePaymentAmount,
       mortgagePaymentFrequency,
       hasOffset,
+      offsetBalance,
       isDebtRecycling,
       monthlyHoldingCosts,
       notes,
@@ -131,6 +132,7 @@ export default function HousePurchaseIsland(
       mortgagePaymentAmount: mortgagePaymentAmount ?? 0,
       mortgagePaymentFrequency: mortgagePaymentFrequency ?? "monthly",
       hasOffset,
+      offsetBalance: hasOffset ? offsetBalance ?? 0 : undefined,
       isDebtRecycling,
       monthlyHoldingCosts: monthlyHoldingCosts ?? 0,
       notes: notes || undefined,
@@ -165,11 +167,14 @@ export default function HousePurchaseIsland(
   const describeHouse = (house: HousePurchase): string => {
     const loanPrincipal = Math.max(0, house.price - house.depositAmount);
     const dateLabel = new Date(house.purchaseDate).toLocaleDateString();
+    const offsetLabel = house.hasOffset
+      ? ` · Offset: ${formatCurrency(house.offsetBalance ?? 0)}`
+      : "";
     return `${formatCurrency(house.price)} on ${dateLabel} · Deposit ${
       formatCurrency(house.depositAmount)
     } + ${formatCurrency(house.buyingCosts)} costs · Mortgage ${
       formatCurrency(loanPrincipal)
-    } @ ${house.mortgageInterestRate}%`;
+    } @ ${house.mortgageInterestRate}%${offsetLabel}`;
   };
 
   return (
@@ -469,6 +474,26 @@ export default function HousePurchaseIsland(
               />
               <span class="ml-2 text-sm text-gray-700">Use Offset Account</span>
             </label>
+            {formData.hasOffset && (
+              <div class="mb-2 ml-6">
+                <label class="block text-xs font-medium text-gray-700 mb-1">
+                  Current Offset Balance ($)
+                </label>
+                <input
+                  type="number"
+                  value={formData.offsetBalance ?? 0}
+                  onInput={(e) =>
+                    setFormData({
+                      ...formData,
+                      offsetBalance: parseFloat(
+                        (e.target as HTMLInputElement).value,
+                      ) || 0,
+                    })}
+                  class="input-field text-sm"
+                  step="1000"
+                />
+              </div>
+            )}
             <label class="flex items-center cursor-pointer">
               <input
                 type="checkbox"

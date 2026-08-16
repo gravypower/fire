@@ -48,6 +48,7 @@ export function resolveHousePurchaseEffects(
       paymentAmount: house.mortgagePaymentAmount,
       paymentFrequency: house.mortgagePaymentFrequency,
       hasOffset: house.hasOffset,
+      offsetBalance: house.offsetBalance,
       isDebtRecycling: house.isDebtRecycling,
       startDate: house.purchaseDate,
     });

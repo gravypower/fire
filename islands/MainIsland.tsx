@@ -416,6 +416,7 @@ export default function MainIsland() {
 
     const dummyConfig: SimulationConfiguration = {
       baseParameters: {
+        currentCashBalance: 5000,
         annualSalary: 130000,
         salaryFrequency: "monthly",
         incomeTaxRate: 32.5,
@@ -586,6 +587,7 @@ export default function MainIsland() {
             mortgagePaymentAmount: 2800,
             mortgagePaymentFrequency: "monthly",
             hasOffset: true,
+            offsetBalance: 20000,
             isDebtRecycling: false,
             monthlyHoldingCosts: 350,
           },

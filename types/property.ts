@@ -50,6 +50,10 @@ export interface HousePurchase {
   /** Whether the mortgage has an offset account attached */
   hasOffset?: boolean;
 
+  /** Current balance already sitting in the offset account, as of the
+   *  simulation's start date. Only meaningful when hasOffset is true. */
+  offsetBalance?: number;
+
   /** Whether the mortgage is used for debt recycling (interest tax deductible) */
   isDebtRecycling?: boolean;
 

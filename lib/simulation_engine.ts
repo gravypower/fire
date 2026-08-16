@@ -224,7 +224,7 @@ export const SimulationEngine = {
 
     let currentState: FinancialState = {
       date: new Date(params.startDate),
-      cash: 0, // Starting with zero cash
+      cash: params.currentCashBalance ?? 0,
       investments: params.currentInvestmentBalance,
       superannuation: initialSuperBalance,
       loanBalance: initialLoanBalance,
@@ -1511,7 +1511,7 @@ export const SimulationEngine = {
 
     let currentState: FinancialState = {
       date: new Date(config.baseParameters.startDate),
-      cash: 0,
+      cash: currentParams.currentCashBalance ?? 0,
       investments: currentParams.currentInvestmentBalance,
       superannuation: initialSuperBalance,
       loanBalance: initialLoanBalance,
