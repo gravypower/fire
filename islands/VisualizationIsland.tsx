@@ -278,16 +278,34 @@ export default function VisualizationIsland({
 
   // Pin the events most likely to explain a jump in cash flow or net worth:
   // house purchases (a one-off deposit/costs outflow, then a new mortgage
-  // payment), the actual retirement date (income stops), and debt/expense
-  // milestones. Parameter transitions and "eligible to retire" milestones
-  // are deliberately left out - transitions already get their own
-  // annotation, and eligibility is a distinct concept from actually
-  // retiring.
+  // payment), each person's actual retirement date (their income stops),
+  // and debt/expense milestones. Parameter transitions get their own
+  // annotation already, so they're left out here. The milestone detector
+  // reuses the "retirement_eligibility" type for three different things -
+  // a person reaching their stated retirement age (personId set, id
+  // "retirement-{personId}-..."), the whole household being retired (id
+  // "retirement-household-...", same date as whichever person retires
+  // last - redundant with that person's own pin), and a generic "financial
+  // independence achieved" milestone with no personId (id
+  // "retirement-eligibility-..."). Only the first is a real day-you-stop-
+  // earning event per person, so that's the only one pinned here; the
+  // household-level date is still shown separately via result.retirementDate.
   const milestoneMarkerColors: Partial<Record<Milestone["type"], string>> = {
     loan_payoff: "rgba(59, 130, 246, 0.85)",
     offset_completion: "rgba(20, 184, 166, 0.85)",
     expense_expiration: "rgba(107, 114, 128, 0.85)",
   };
+  const personRetirementMarkers: ChartEventMarker[] = milestones
+    .filter((m) =>
+      m.type === "retirement_eligibility" &&
+      "personId" in m && m.personId !== undefined
+    )
+    .map((m) => ({
+      date: m.date,
+      label: m.title,
+      description: m.description,
+      color: "rgba(234, 88, 12, 0.85)",
+    }));
   const chartEventMarkers: ChartEventMarker[] = [
     ...milestones
       .filter((m) => m.type in milestoneMarkerColors)
@@ -297,6 +315,7 @@ export default function VisualizationIsland({
         description: m.description,
         color: milestoneMarkerColors[m.type]!,
       })),
+    ...personRetirementMarkers,
     ...(userParameters?.housePurchases ?? []).map((house) => ({
       date: house.purchaseDate,
       label: `${house.name} Purchased`,
@@ -307,8 +326,9 @@ export default function VisualizationIsland({
     ...(result.retirementDate
       ? [{
         date: result.retirementDate,
-        label: "Retirement",
-        description: "Income stops; expenses now funded by withdrawals",
+        label: "Financially Independent",
+        description:
+          "Assets can now safely fund the full household retirement income target",
         color: "rgba(34, 197, 94, 0.85)",
       }]
       : []),
