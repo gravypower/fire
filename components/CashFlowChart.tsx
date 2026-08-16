@@ -5,7 +5,11 @@
 
 import { useEffect, useRef } from "preact/hooks";
 import type { FinancialState, TransitionPoint } from "../types/financial.ts";
-import { formatCurrency } from "../lib/result_utils.ts";
+import {
+  type ChartEventMarker,
+  findStateIndexForDate,
+  formatCurrency,
+} from "../lib/result_utils.ts";
 
 interface CashFlowChartProps {
   /** States for the selected time granularity. When a state carries a
@@ -17,6 +21,9 @@ interface CashFlowChartProps {
    *  every other period reading zero. */
   states: (FinancialState & { periodCashFlow?: number })[];
   transitionPoints?: TransitionPoint[];
+  /** Point-in-time events (house purchases, retirement, loan payoffs, ...)
+   *  pinned on the chart so a jump in cash flow has a visible explanation. */
+  eventMarkers?: ChartEventMarker[];
 }
 
 /**
@@ -32,7 +39,7 @@ interface CashFlowChartProps {
  * Requirements 4.1, 4.2, 4.3, 4.4: Transition markers and visualization
  */
 export default function CashFlowChart(
-  { states, transitionPoints = [] }: CashFlowChartProps,
+  { states, transitionPoints = [], eventMarkers = [] }: CashFlowChartProps,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
@@ -105,6 +112,40 @@ export default function CashFlowChart(
         };
       });
 
+      // Prepare event marker annotations (house purchases, retirement, loan
+      // payoffs, ...) - resolved to a stateIndex on this chart's own
+      // (possibly time-granularity-filtered) x-axis.
+      const resolvedEventMarkers = eventMarkers
+        .map((marker) => ({
+          marker,
+          stateIndex: findStateIndexForDate(states, marker.date),
+        }))
+        .filter(({ stateIndex }) => stateIndex >= 0);
+
+      resolvedEventMarkers.forEach(({ marker, stateIndex }, index) => {
+        annotations[`event-marker-${index}`] = {
+          type: "line",
+          xMin: stateIndex,
+          xMax: stateIndex,
+          borderColor: marker.color,
+          borderWidth: 2,
+          borderDash: [2, 2],
+          label: {
+            display: true,
+            content: `📌 ${marker.label}`,
+            position: "end",
+            backgroundColor: marker.color,
+            color: "white",
+            font: {
+              size: 10,
+              weight: "bold",
+            },
+            padding: 4,
+            rotation: 0,
+          },
+        };
+      });
+
       // Create chart
       chartRef.current = new Chart(ctx, {
         type: "bar",
@@ -162,20 +203,35 @@ export default function CashFlowChart(
                 },
                 title: function (context) {
                   const dateLabel = context[0].label;
+                  const lines = [dateLabel];
+
                   // Check if this index corresponds to a transition
                   const transitionAtIndex = transitionPoints.find(
                     (tp) => tp.stateIndex === context[0].dataIndex,
                   );
                   if (transitionAtIndex) {
-                    return [
-                      dateLabel,
+                    lines.push(
                       `🔄 ${
                         transitionAtIndex.transition.label || "Transition"
                       }`,
                       transitionAtIndex.changesSummary,
-                    ];
+                    );
                   }
-                  return dateLabel;
+
+                  // Check if this index corresponds to one or more event
+                  // markers (house purchase, retirement, loan payoff, ...)
+                  resolvedEventMarkers
+                    .filter(({ stateIndex }) =>
+                      stateIndex === context[0].dataIndex
+                    )
+                    .forEach(({ marker }) => {
+                      lines.push(`📌 ${marker.label}`);
+                      if (marker.description) {
+                        lines.push(marker.description);
+                      }
+                    });
+
+                  return lines;
                 },
               },
             },
@@ -243,7 +299,7 @@ export default function CashFlowChart(
         chartRef.current.destroy();
       }
     };
-  }, [states, transitionPoints]);
+  }, [states, transitionPoints, eventMarkers]);
 
   // No data available state
   if (!states || states.length === 0) {

@@ -7,6 +7,39 @@
 import type { FinancialState, TimeInterval } from "../types/financial.ts";
 
 /**
+ * A labeled point-in-time event (house purchase, retirement, loan payoff,
+ * etc.) to pin on a chart so a sudden jump has an explanation attached
+ * instead of leaving the viewer to guess.
+ */
+export interface ChartEventMarker {
+  date: Date;
+  label: string;
+  description?: string;
+  color: string;
+}
+
+/**
+ * Finds the index of the state closest to (at or after) the given date,
+ * falling back to the last state if the date is beyond the simulation's
+ * range. Used to place a ChartEventMarker on a chart's (possibly
+ * time-granularity-filtered) x-axis, which is indexed by state position
+ * rather than by date directly.
+ */
+export function findStateIndexForDate(
+  states: { date: Date }[],
+  date: Date,
+): number {
+  if (states.length === 0) return -1;
+  const target = date.getTime();
+  for (let i = 0; i < states.length; i++) {
+    if (states[i].date.getTime() >= target) {
+      return i;
+    }
+  }
+  return states.length - 1;
+}
+
+/**
  * Groups simulation states by the specified time interval
  * Validates: Requirements 3.1
  *

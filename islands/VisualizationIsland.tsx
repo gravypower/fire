@@ -13,6 +13,7 @@ import type {
 } from "../types/financial.ts";
 import type { Milestone, RetirementAdvice } from "../types/milestones.ts";
 import {
+  type ChartEventMarker,
   findLoanPayoffDate,
   formatCurrency,
   groupByTimeInterval,
@@ -275,6 +276,43 @@ export default function VisualizationIsland({
     }
   }
 
+  // Pin the events most likely to explain a jump in cash flow or net worth:
+  // house purchases (a one-off deposit/costs outflow, then a new mortgage
+  // payment), the actual retirement date (income stops), and debt/expense
+  // milestones. Parameter transitions and "eligible to retire" milestones
+  // are deliberately left out - transitions already get their own
+  // annotation, and eligibility is a distinct concept from actually
+  // retiring.
+  const milestoneMarkerColors: Partial<Record<Milestone["type"], string>> = {
+    loan_payoff: "rgba(59, 130, 246, 0.85)",
+    offset_completion: "rgba(20, 184, 166, 0.85)",
+    expense_expiration: "rgba(107, 114, 128, 0.85)",
+  };
+  const chartEventMarkers: ChartEventMarker[] = [
+    ...milestones
+      .filter((m) => m.type in milestoneMarkerColors)
+      .map((m) => ({
+        date: m.date,
+        label: m.title,
+        description: m.description,
+        color: milestoneMarkerColors[m.type]!,
+      })),
+    ...(userParameters?.housePurchases ?? []).map((house) => ({
+      date: house.purchaseDate,
+      label: `${house.name} Purchased`,
+      description:
+        `$${house.price.toLocaleString()} - $${house.depositAmount.toLocaleString()} deposit + $${house.buyingCosts.toLocaleString()} buying costs paid from cash`,
+      color: "rgba(249, 115, 22, 0.85)",
+    })),
+    ...(result.retirementDate
+      ? [{
+        date: result.retirementDate,
+        label: "Retirement",
+        description: "Income stops; expenses now funded by withdrawals",
+        color: "rgba(34, 197, 94, 0.85)",
+      }]
+      : []),
+  ];
   return (
     <div class="card p-6 fade-in">
       <h2 class="text-2xl font-bold mb-6 text-gray-800">
@@ -468,11 +506,13 @@ export default function VisualizationIsland({
           <NetWorthChart
             states={statesWithPeriodTotals}
             transitionPoints={effectiveTransitionPoints}
+            eventMarkers={chartEventMarkers}
           />
         </ChartErrorBoundary>
         <ChartErrorBoundary chartName="Cash Flow Chart">
           <CashFlowChart
             states={statesWithPeriodTotals}
+            eventMarkers={chartEventMarkers}
             transitionPoints={effectiveTransitionPoints}
           />
         </ChartErrorBoundary>

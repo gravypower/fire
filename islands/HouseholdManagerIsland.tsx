@@ -636,6 +636,12 @@ export default function HouseholdManagerIsland(
                         </select>
                       </div>
                     </div>
+                    <p class="text-xs text-gray-500 mb-2">
+                      Pick whichever matches how you'd normally state it -
+                      e.g. select "Yearly" and enter your annual salary. The
+                      simulation spreads it evenly across every pay period;
+                      it's not paid out as a single lump sum.
+                    </p>
 
                     <div class="mb-2">
                       <label class="flex items-center cursor-pointer text-xs">
@@ -1201,6 +1207,12 @@ export default function HouseholdManagerIsland(
                         </select>
                       </div>
                     </div>
+                    <p class="text-xs text-gray-500 mb-2">
+                      Pick whichever matches how you'd normally state it -
+                      e.g. select "Yearly" and enter your annual salary. The
+                      simulation spreads it evenly across every pay period;
+                      it's not paid out as a single lump sum.
+                    </p>
 
                     <div class="mb-2">
                       <label class="flex items-center cursor-pointer text-xs">

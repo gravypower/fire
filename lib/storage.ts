@@ -212,7 +212,8 @@ function convertNestedDates(obj: any): any {
     for (const [key, value] of Object.entries(obj)) {
       // Convert known date fields
       if (
-        (key === "startDate" || key === "endDate" || key === "oneOffDate") &&
+        (key === "startDate" || key === "endDate" || key === "oneOffDate" ||
+          key === "purchaseDate") &&
         typeof value === "string"
       ) {
         converted[key] = new Date(value);
