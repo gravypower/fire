@@ -93,8 +93,23 @@ export const IncomeProcessor = {
   ): number {
     // If any person has explicit income sources, sum income from all people
     if (peopleHaveIncomeSources(params)) {
+      const yearsElapsed = currentDate
+        ? (currentDate.getTime() - params.startDate.getTime()) /
+          (1000 * 60 * 60 * 24 * 365.25)
+        : 0;
+
       let totalAnnual = 0;
       for (const person of params.people!) {
+        // A retired person earns no income - matching the same
+        // currentAge < retirementAge check the simulation's income phase
+        // applies when actually crediting cash. Without this, a retired
+        // person's stopped salary was still counted as taxable household
+        // income, so tax was computed on money nobody was receiving.
+        const personCurrentAge = person.currentAge + yearsElapsed;
+        if (personCurrentAge >= person.retirementAge) {
+          continue;
+        }
+
         if (person.incomeSources && person.incomeSources.length > 0) {
           for (const source of person.incomeSources) {
             if (source.isBeforeTax) {
@@ -305,8 +320,23 @@ export const IncomeProcessor = {
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     let totalTax = 0;
 
+    const yearsElapsed = currentDate
+      ? (currentDate.getTime() - params.startDate.getTime()) /
+        (1000 * 60 * 60 * 24 * 365.25)
+      : 0;
+
     // Calculate tax for each person separately
     for (const person of params.people) {
+      // A retired person earns no income, so nothing to tax - matching the
+      // same currentAge < retirementAge check the income phase already
+      // applies. Without this, a retired person's stopped salary was still
+      // being taxed as household income, so their still-working partner
+      // ended up absorbing tax on money nobody was actually receiving.
+      const personCurrentAge = person.currentAge + yearsElapsed;
+      if (personCurrentAge >= person.retirementAge) {
+        continue;
+      }
+
       // Calculate this person's annual income
       let personAnnualIncome = 0;
 
