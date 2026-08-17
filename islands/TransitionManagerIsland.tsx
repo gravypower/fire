@@ -28,6 +28,7 @@ import {
 } from "../lib/parameter_change_ui_utils.ts";
 import {
   getParameterCategory,
+  PERSON_SPECIFIC_PARAMETERS,
   requiresPersonSelection,
 } from "../types/parameter_categories.ts";
 
@@ -58,6 +59,28 @@ export default function TransitionManagerIsland({
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  // Which template (if any) generated the current parameterValues - lets
+  // handlePersonSelectionChange recompute a salary-based value once the
+  // user picks who it's for, instead of leaving whatever number the
+  // template guessed before that was known.
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(
+    null,
+  );
+  // Params whose current value still came straight from activeTemplateId
+  // (not yet manually overridden) - only these get silently recomputed
+  // when the person selection changes, so an edit the user already made
+  // by hand is never clobbered.
+  const [templateGeneratedParams, setTemplateGeneratedParams] = useState<
+    Set<string>
+  >(new Set());
+
+  const isPersonSpecificParam = (param: string) =>
+    (PERSON_SPECIFIC_PARAMETERS as readonly string[]).includes(param);
+
+  const soleHouseholdPersonId = (): string | undefined =>
+    config.baseParameters.householdMode !== "couple"
+      ? config.baseParameters.people?.[0]?.id
+      : undefined;
 
   /**
    * Creates empty form data
@@ -84,9 +107,17 @@ export default function TransitionManagerIsland({
       Object.keys(transition.parameterChanges) as (keyof UserParameters)[],
     );
 
-    // For existing transitions, we can't determine person selections from the data
-    // This is a limitation of the current storage format
+    // A transition has a single personId covering all of its person-specific
+    // fields (see handleSave), so every such field re-selects that same
+    // person when editing.
     const personSelections: Record<string, string> = {};
+    if (transition.personId) {
+      for (const param of selectedParams) {
+        if (isPersonSpecificParam(param)) {
+          personSelections[param] = transition.personId;
+        }
+      }
+    }
 
     setFormData({
       id: transition.id,
@@ -96,6 +127,8 @@ export default function TransitionManagerIsland({
       parameterValues: { ...transition.parameterChanges },
       personSelections,
     });
+    setActiveTemplateId(null);
+    setTemplateGeneratedParams(new Set());
   }
 
   /**
@@ -107,6 +140,8 @@ export default function TransitionManagerIsland({
     setIsAddingTransition(true);
     setEditingTransitionId(null);
     setShowTemplateSelector(false);
+    setActiveTemplateId(null);
+    setTemplateGeneratedParams(new Set());
   }
 
   /**
@@ -129,6 +164,8 @@ export default function TransitionManagerIsland({
     setFormData(getEmptyFormData());
     setValidationError(null);
     setShowTemplateSelector(false);
+    setActiveTemplateId(null);
+    setTemplateGeneratedParams(new Set());
   }
 
   /**
@@ -158,42 +195,52 @@ export default function TransitionManagerIsland({
       return;
     }
 
-    // Build the transition object with person-specific handling
-    let parameterChanges: Partial<UserParameters> = {};
-
-    // For now, we'll store the changes in the legacy format
-    // TODO: Enhance storage format to support person-specific changes
-    for (const [param, value] of Object.entries(formData.parameterValues)) {
-      const paramKey = param as keyof UserParameters;
-      const personId = formData.personSelections[param];
-
-      if (
-        personId &&
-        requiresPersonSelection(
-          paramKey,
-          config.baseParameters.householdMode || "single",
-        )
-      ) {
-        // For person-specific parameters, we need to store them in a way that indicates which person
-        // For now, we'll add a comment in the label to indicate the person
-        const person = config.baseParameters.people?.find((p) =>
-          p.id === personId
-        );
-        if (person && !formData.label.includes(person.name)) {
-          formData.label = formData.label
-            ? `${formData.label} (${person.name})`
-            : `Parameter change for ${person.name}`;
-        }
-      }
-
-      parameterChanges[paramKey] = value as any;
+    // A transition can only route its person-specific fields to one person
+    // (see applyParameterChanges in transition_manager.ts) - if the user
+    // picked different people for different fields in the same transition,
+    // that's a mistake, not something to silently resolve one way.
+    const personSpecificParams = [...formData.selectedParams].filter(
+      isPersonSpecificParam,
+    );
+    const chosenPersonIds = new Set(
+      personSpecificParams
+        .map((param) => formData.personSelections[param])
+        .filter((id): id is string => !!id),
+    );
+    if (chosenPersonIds.size > 1) {
+      setValidationError(
+        "All person-specific changes in one transition must be for the " +
+          "same person - split them into separate transitions.",
+      );
+      return;
     }
+
+    const transitionPersonId = chosenPersonIds.size === 1
+      ? [...chosenPersonIds][0]
+      : personSpecificParams.length > 0
+      ? soleHouseholdPersonId() // single-person household - nothing to ask
+      : undefined;
+
+    let label = formData.label;
+    if (transitionPersonId) {
+      const person = config.baseParameters.people?.find((p) =>
+        p.id === transitionPersonId
+      );
+      if (person && !label.includes(person.name)) {
+        label = label ? `${label} (${person.name})` : `${person.name}`;
+      }
+    }
+
+    const parameterChanges: Partial<UserParameters> = {
+      ...formData.parameterValues,
+    };
 
     const transition: ParameterTransition = {
       id: formData.id,
       transitionDate: new Date(formData.transitionDate),
-      label: formData.label || undefined,
+      label: label || undefined,
       parameterChanges,
+      personId: transitionPersonId,
     };
 
     // Create a copy of config for modification
@@ -253,26 +300,21 @@ export default function TransitionManagerIsland({
     const newSelectedParams = new Set(formData.selectedParams);
     const newParamValues = { ...formData.parameterValues };
     const newPersonSelections = { ...formData.personSelections };
+    const newTemplateGeneratedParams = new Set(templateGeneratedParams);
 
     if (newSelectedParams.has(param)) {
       newSelectedParams.delete(param);
       delete newParamValues[param];
       delete newPersonSelections[param];
+      newTemplateGeneratedParams.delete(param);
     } else {
       newSelectedParams.add(param);
-      // Initialize with current base parameter value
+      // Initialize with current base parameter value. In couple mode a
+      // person-specific param is deliberately left without a default
+      // person here - requiresPersonSelection() then forces the user to
+      // pick one explicitly rather than silently applying to whoever
+      // happens to be listed first.
       newParamValues[param] = config.baseParameters[param] as any;
-
-      // If this parameter requires person selection and we have people, select the first one
-      if (
-        requiresPersonSelection(
-          param,
-          config.baseParameters.householdMode || "single",
-        ) &&
-        config.baseParameters.people && config.baseParameters.people.length > 0
-      ) {
-        newPersonSelections[param] = config.baseParameters.people[0].id;
-      }
     }
 
     setFormData({
@@ -281,6 +323,7 @@ export default function TransitionManagerIsland({
       parameterValues: newParamValues,
       personSelections: newPersonSelections,
     });
+    setTemplateGeneratedParams(newTemplateGeneratedParams);
     setValidationError(null);
   }
 
@@ -298,6 +341,13 @@ export default function TransitionManagerIsland({
       ...formData,
       parameterValues: newParamValues,
     });
+    // A manual edit overrides whatever the template guessed - stop
+    // recomputing this one when the person selection changes.
+    if (templateGeneratedParams.has(param)) {
+      const next = new Set(templateGeneratedParams);
+      next.delete(param);
+      setTemplateGeneratedParams(next);
+    }
     setValidationError(null);
   }
 
@@ -311,9 +361,25 @@ export default function TransitionManagerIsland({
     const newPersonSelections = { ...formData.personSelections };
     newPersonSelections[param] = personId;
 
+    const newParamValues = { ...formData.parameterValues };
+    // Recompute this param from the active template using the
+    // now-known person's actual current value (e.g. their real salary),
+    // rather than leaving the guess made before anyone was selected.
+    if (activeTemplateId && templateGeneratedParams.has(param)) {
+      const recomputed = applyTemplate(
+        activeTemplateId,
+        config.baseParameters,
+        personId,
+      );
+      if (recomputed && param in recomputed) {
+        newParamValues[param] = recomputed[param] as any;
+      }
+    }
+
     setFormData({
       ...formData,
       personSelections: newPersonSelections,
+      parameterValues: newParamValues,
     });
     setValidationError(null);
   }
@@ -322,22 +388,42 @@ export default function TransitionManagerIsland({
    * Handles applying a template
    */
   function handleApplyTemplate(template: TransitionTemplate) {
+    // No personId yet - single-person households don't need one, and
+    // couple households will get an accurate recompute once the person
+    // dropdown (shown for any person-specific param below) is used. This
+    // first pass gives single-person households the right number
+    // immediately, and couple households a reasonable placeholder.
     const changes = applyTemplate(template.id, config.baseParameters);
     if (!changes) {
       return;
     }
 
-    // Update form with template changes
     const selectedParams = new Set(
       Object.keys(changes) as (keyof UserParameters)[],
     );
+
+    // Single-person households have no one to ask - silently target the
+    // one person that exists so the person-specific fields still route
+    // correctly instead of falling back to the dead legacy fields.
+    const solePersonId = soleHouseholdPersonId();
+    const personSelections: Record<string, string> = {};
+    if (solePersonId) {
+      for (const param of selectedParams) {
+        if (isPersonSpecificParam(param)) {
+          personSelections[param] = solePersonId;
+        }
+      }
+    }
 
     setFormData({
       ...formData,
       label: formData.label || template.name,
       selectedParams,
       parameterValues: changes,
+      personSelections,
     });
+    setActiveTemplateId(template.id);
+    setTemplateGeneratedParams(new Set(Object.keys(changes)));
 
     setShowTemplateSelector(false);
     setValidationError(null);

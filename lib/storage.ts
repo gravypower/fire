@@ -156,6 +156,7 @@ interface SerializableParameterTransition {
   transitionDate: string; // ISO date string
   label?: string;
   parameterChanges: Partial<SerializableUserParameters>;
+  personId?: string;
 }
 
 /**
@@ -309,6 +310,7 @@ function transitionToSerializable(
     transitionDate: transition.transitionDate.toISOString(),
     label: transition.label,
     parameterChanges: toSerializablePartial(transition.parameterChanges),
+    personId: transition.personId,
   };
 }
 
@@ -325,6 +327,7 @@ function transitionFromSerializable(
     transitionDate: new Date(serializable.transitionDate),
     label: serializable.label,
     parameterChanges: fromSerializablePartial(serializable.parameterChanges),
+    personId: serializable.personId,
   };
 }
 

@@ -381,6 +381,15 @@ export interface ParameterTransition {
   /** Parameters that change at this transition (partial UserParameters) */
   /** Only specified fields will change; others carry forward */
   parameterChanges: Partial<UserParameters>;
+
+  /** Which household member parameterChanges' person-specific fields
+   *  (annualSalary, superContributionRate, retirementAge, ...) apply to.
+   *  Required for those fields to take effect once a person has real
+   *  incomeSources/superAccounts configured - the legacy top-level fields
+   *  they'd otherwise be merged onto are ignored by the simulation engine
+   *  in that case. Undefined for transitions that only touch
+   *  household-level fields. */
+  personId?: string;
 }
 
 /**
@@ -610,8 +619,46 @@ export interface TransitionTemplate {
   /** Category (e.g., "career", "lifestyle", "retirement") */
   category: string;
 
-  /** Function that generates parameter changes based on current params */
-  generateChanges: (currentParams: UserParameters) => Partial<UserParameters>;
+  /** Function that generates parameter changes based on current params.
+   *  personId identifies which household member the change is for - pass
+   *  it through to resolveCurrentAnnualSalary (or read currentParams.people
+   *  directly) for any template whose math depends on that person's actual
+   *  current income rather than the household's legacy annualSalary field. */
+  generateChanges: (
+    currentParams: UserParameters,
+    personId?: string,
+  ) => Partial<UserParameters>;
+}
+
+/**
+ * A person's current annual salary, preferring their actual configured
+ * income source (what the simulation engine actually uses once someone has
+ * added income via the UI) over the legacy household-level annualSalary
+ * field, which is ignored in that case. Falls back to the household's
+ * first person when no personId is given (e.g. a template preview before
+ * the user has picked who it applies to).
+ */
+export function resolveCurrentAnnualSalary(
+  current: UserParameters,
+  personId?: string,
+): number {
+  const person = personId
+    ? current.people?.find((p) => p.id === personId)
+    : current.people?.[0];
+  const incomeSource = person?.incomeSources?.[0];
+  if (!incomeSource) {
+    return current.annualSalary;
+  }
+  switch (incomeSource.frequency) {
+    case "weekly":
+      return incomeSource.amount * 52;
+    case "fortnightly":
+      return incomeSource.amount * 26;
+    case "monthly":
+      return incomeSource.amount * 12;
+    case "yearly":
+      return incomeSource.amount;
+  }
 }
 
 /**
@@ -623,8 +670,8 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     name: "Semi-Retirement",
     description: "Reduce work hours and income, lower expenses",
     category: "retirement",
-    generateChanges: (current) => ({
-      annualSalary: current.annualSalary * 0.5,
+    generateChanges: (current, personId) => ({
+      annualSalary: resolveCurrentAnnualSalary(current, personId) * 0.5,
       monthlyLivingExpenses: current.monthlyLivingExpenses * 0.8,
     }),
   },
@@ -669,8 +716,8 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     name: "Career Change (Higher Income)",
     description: "Switch to higher-paying career",
     category: "career",
-    generateChanges: (current) => ({
-      annualSalary: current.annualSalary * 1.3,
+    generateChanges: (current, personId) => ({
+      annualSalary: resolveCurrentAnnualSalary(current, personId) * 1.3,
     }),
   },
   {
@@ -678,8 +725,8 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     name: "Career Change (Lower Income)",
     description: "Switch to lower-paying but more fulfilling career",
     category: "career",
-    generateChanges: (current) => ({
-      annualSalary: current.annualSalary * 0.7,
+    generateChanges: (current, personId) => ({
+      annualSalary: resolveCurrentAnnualSalary(current, personId) * 0.7,
     }),
   },
   {
@@ -689,10 +736,10 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
       "Cut back to working one less day a week (~20% less income), same job " +
       "and expenses otherwise",
     category: "career",
-    generateChanges: (current) => ({
+    generateChanges: (current, personId) => ({
       // Assumes a standard 5-day week - edit the value afterward if your
       // current arrangement is different (e.g. already 4 days -> 3).
-      annualSalary: current.annualSalary * 0.8,
+      annualSalary: resolveCurrentAnnualSalary(current, personId) * 0.8,
     }),
   },
   {

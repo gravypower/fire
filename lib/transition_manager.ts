@@ -6,10 +6,144 @@
 import type {
   ParameterPeriod,
   ParameterTransition,
+  PaymentFrequency,
+  Person,
   SimulationConfiguration,
   UserParameters,
   ValidationResult,
 } from "../types/financial.ts";
+
+/**
+ * Person-specific fields that get routed into the target person's own
+ * record (transition.personId) rather than merged onto the household-level
+ * UserParameters - those legacy fields are ignored by the simulation engine
+ * once a person has real incomeSources/superAccounts configured, which is
+ * the normal case via the Configure UI.
+ */
+const PERSON_ROUTED_FIELDS = new Set([
+  "annualSalary",
+  "salaryFrequency",
+  "superContributionRate",
+  "superReturnRate",
+  "currentSuperBalance",
+  "retirementAge",
+  "name",
+]);
+
+function annualToFrequencyAmount(
+  annualAmount: number,
+  frequency: PaymentFrequency,
+): number {
+  switch (frequency) {
+    case "weekly":
+      return annualAmount / 52;
+    case "fortnightly":
+      return annualAmount / 26;
+    case "monthly":
+      return annualAmount / 12;
+    case "yearly":
+      return annualAmount;
+  }
+}
+
+/**
+ * Applies a transition's parameter changes onto a parameter snapshot,
+ * routing person-specific fields into transition.personId's own record
+ * instead of the (otherwise-ignored) legacy top-level fields. Falls back
+ * to a plain top-level merge when there's no personId or matching person -
+ * e.g. a household-level transition, or a legacy setup with no people[]
+ * configured at all.
+ */
+function applyParameterChanges(
+  activeParams: UserParameters,
+  transition: ParameterTransition,
+): UserParameters {
+  const changes = transition.parameterChanges;
+  const targetPerson = transition.personId
+    ? activeParams.people?.find((p) => p.id === transition.personId)
+    : undefined;
+
+  if (!targetPerson) {
+    return { ...activeParams, ...changes };
+  }
+
+  const remainingChanges: Partial<UserParameters> = {};
+  let updatedPerson: Person = { ...targetPerson };
+
+  for (const [key, value] of Object.entries(changes)) {
+    if (!PERSON_ROUTED_FIELDS.has(key)) {
+      (remainingChanges as Record<string, unknown>)[key] = value;
+      continue;
+    }
+
+    switch (key) {
+      case "annualSalary": {
+        const incomeSource = updatedPerson.incomeSources[0];
+        if (incomeSource) {
+          updatedPerson = {
+            ...updatedPerson,
+            incomeSources: [
+              {
+                ...incomeSource,
+                amount: annualToFrequencyAmount(
+                  value as number,
+                  incomeSource.frequency,
+                ),
+              },
+              ...updatedPerson.incomeSources.slice(1),
+            ],
+          };
+        }
+        break;
+      }
+      case "salaryFrequency": {
+        const incomeSource = updatedPerson.incomeSources[0];
+        if (incomeSource) {
+          updatedPerson = {
+            ...updatedPerson,
+            incomeSources: [
+              { ...incomeSource, frequency: value as PaymentFrequency },
+              ...updatedPerson.incomeSources.slice(1),
+            ],
+          };
+        }
+        break;
+      }
+      case "superContributionRate":
+      case "superReturnRate":
+      case "currentSuperBalance": {
+        const superAccount = updatedPerson.superAccounts[0];
+        if (superAccount) {
+          const field = key === "currentSuperBalance" ? "balance" : key;
+          updatedPerson = {
+            ...updatedPerson,
+            superAccounts: [
+              { ...superAccount, [field]: value },
+              ...updatedPerson.superAccounts.slice(1),
+            ],
+          };
+        }
+        break;
+      }
+      case "retirementAge":
+        updatedPerson = { ...updatedPerson, retirementAge: value as number };
+        break;
+      case "name":
+        updatedPerson = { ...updatedPerson, name: value as string };
+        break;
+    }
+  }
+
+  const updatedPeople = activeParams.people?.map((p) =>
+    p.id === updatedPerson.id ? updatedPerson : p
+  );
+
+  return {
+    ...activeParams,
+    ...remainingChanges,
+    people: updatedPeople,
+  };
+}
 
 /**
  * Adds a new parameter transition to the configuration
@@ -117,11 +251,7 @@ export function resolveParametersForDate(
     .sort((a, b) => a.transitionDate.getTime() - b.transitionDate.getTime());
 
   for (const transition of applicableTransitions) {
-    // Merge parameter changes
-    activeParams = {
-      ...activeParams,
-      ...transition.parameterChanges,
-    };
+    activeParams = applyParameterChanges(activeParams, transition);
   }
 
   return activeParams;
