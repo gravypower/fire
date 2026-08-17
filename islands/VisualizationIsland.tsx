@@ -175,6 +175,22 @@ export default function VisualizationIsland({
       (sum, s) => sum + (s.cashFlow || 0),
       0,
     );
+    const periodNetIncome = periodStates.reduce(
+      (sum, s) => sum + (s.netIncome || 0),
+      0,
+    );
+    const periodRetirementWithdrawal = periodStates.reduce(
+      (sum, s) => sum + (s.retirementWithdrawal || 0),
+      0,
+    );
+    const periodLoanPayment = periodStates.reduce(
+      (sum, s) => sum + (s.loanPayment || 0),
+      0,
+    );
+    const periodInvestmentContribution = periodStates.reduce(
+      (sum, s) => sum + (s.investmentContribution || 0),
+      0,
+    );
 
     return {
       ...state,
@@ -183,6 +199,10 @@ export default function VisualizationIsland({
       periodInterestSaved,
       periodDeductibleInterest,
       periodCashFlow,
+      periodNetIncome,
+      periodRetirementWithdrawal,
+      periodLoanPayment,
+      periodInvestmentContribution,
     };
   });
 
@@ -568,6 +588,8 @@ export default function VisualizationIsland({
             states={statesWithPeriodTotals}
             eventMarkers={chartEventMarkers}
             transitionPoints={effectiveTransitionPoints}
+            expenseItems={userParameters?.expenseItems}
+            granularity={selectedGranularity}
           />
         </ChartErrorBoundary>
       </div>

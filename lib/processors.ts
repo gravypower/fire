@@ -448,6 +448,79 @@ export const ExpenseProcessor = {
   },
 
   /**
+   * Amount a single expense item contributes for the target interval, given
+   * the current simulation date - or null if the item is disabled, hasn't
+   * started, has already ended, or (for one-off items) isn't due this
+   * period. Shared by calculateExpensesFromItems (sums these) and
+   * getActiveExpenseBreakdown (lists them), so the two stay consistent.
+   */
+  getActiveExpenseAmount(
+    item: ExpenseItem,
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): number | null {
+    // Explicitly skip only if enabled is false (treat undefined/missing as true for better UX)
+    if (item.enabled === false) return null;
+
+    const current = currentDate ? new Date(currentDate) : null;
+
+    // Check if this is a one-off expense
+    if (item.isOneOff && item.oneOffDate && current) {
+      const itemDate = new Date(item.oneOffDate);
+      // One-off expenses only apply on their specific date (within the same month)
+      // This matches the income source logic for consistency
+      const sameMonth = current.getFullYear() === itemDate.getFullYear() &&
+        current.getMonth() === itemDate.getMonth();
+
+      return sameMonth ? (item.amount || 0) : null;
+    }
+
+    // Check date range for recurring expenses
+    if (current) {
+      // Check if expense has started
+      if (item.startDate) {
+        const startDate = new Date(item.startDate);
+        if (current < startDate) {
+          return null; // Expense hasn't started yet
+        }
+      }
+
+      // Check if expense has ended (inclusive of end date, matching income logic)
+      if (item.endDate) {
+        const endDate = new Date(item.endDate);
+        if (current > endDate) {
+          return null; // Expense has ended
+        }
+      }
+    }
+
+    // Convert item frequency to annual amount
+    let annualAmount: number;
+    const amount = item.amount || 0;
+
+    switch (item.frequency) {
+      case "weekly":
+        annualAmount = amount * 52;
+        break;
+      case "fortnightly":
+        annualAmount = amount * 26;
+        break;
+      case "monthly":
+        annualAmount = amount * 12;
+        break;
+      case "yearly":
+        annualAmount = amount;
+        break;
+      default:
+        annualAmount = amount * 12; // Default to monthly
+    }
+
+    // Convert annual to target interval
+    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+    return annualAmount / intervalPeriodsPerYear;
+  },
+
+  /**
    * Calculates expenses from individual expense items
    * @param items Array of expense items
    * @param interval Target time interval
@@ -459,75 +532,48 @@ export const ExpenseProcessor = {
     interval: TimeInterval,
     currentDate?: Date,
   ): number {
-    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     let totalExpenses = 0;
 
     for (const item of items) {
-      // Explicitly skip only if enabled is false (treat undefined/missing as true for better UX)
-      if (item.enabled === false) continue;
-
-      const current = currentDate ? new Date(currentDate) : null;
-
-      // Check if this is a one-off expense
-      if (item.isOneOff && item.oneOffDate && current) {
-        const itemDate = new Date(item.oneOffDate);
-        // One-off expenses only apply on their specific date (within the same month)
-        // This matches the income source logic for consistency
-        const sameMonth = current.getFullYear() === itemDate.getFullYear() &&
-          current.getMonth() === itemDate.getMonth();
-
-        if (sameMonth) {
-          totalExpenses += item.amount || 0;
-        }
-        continue;
+      const amount = this.getActiveExpenseAmount(item, interval, currentDate);
+      if (amount !== null) {
+        totalExpenses += amount;
       }
-
-      // Check date range for recurring expenses
-      if (current) {
-        // Check if expense has started
-        if (item.startDate) {
-          const startDate = new Date(item.startDate);
-          if (current < startDate) {
-            continue; // Expense hasn't started yet
-          }
-        }
-
-        // Check if expense has ended (inclusive of end date, matching income logic)
-        if (item.endDate) {
-          const endDate = new Date(item.endDate);
-          if (current > endDate) {
-            continue; // Expense has ended
-          }
-        }
-      }
-
-      // Convert item frequency to annual amount
-      let annualAmount: number;
-      const amount = item.amount || 0;
-
-      switch (item.frequency) {
-        case "weekly":
-          annualAmount = amount * 52;
-          break;
-        case "fortnightly":
-          annualAmount = amount * 26;
-          break;
-        case "monthly":
-          annualAmount = amount * 12;
-          break;
-        case "yearly":
-          annualAmount = amount;
-          break;
-        default:
-          annualAmount = amount * 12; // Default to monthly
-      }
-
-      // Convert annual to target interval
-      const intervalAmount = annualAmount / intervalPeriodsPerYear;
-      totalExpenses += intervalAmount;
     }
 
     return totalExpenses;
+  },
+
+  /**
+   * Lists which expense items are active for the given date/interval and
+   * how much each contributes - the per-item breakdown behind
+   * calculateExpensesFromItems' total, for display (e.g. a chart tooltip).
+   */
+  getActiveExpenseBreakdown(
+    items: ExpenseItem[],
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): { id: string; name: string; category: ExpenseItem["category"]; amount: number }[] {
+    const breakdown: {
+      id: string;
+      name: string;
+      category: ExpenseItem["category"];
+      amount: number;
+    }[] = [];
+
+    for (const item of items) {
+      const amount = this.getActiveExpenseAmount(item, interval, currentDate);
+      if (amount !== null && amount > 0) {
+        breakdown.push({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          amount,
+        });
+      }
+    }
+
+    return breakdown.sort((a, b) => b.amount - a.amount);
   },
 
   /**

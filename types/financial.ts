@@ -166,6 +166,19 @@ export interface FinancialState {
    *  specifically - use the first period with a non-zero value to find
    *  when the retirement account itself starts being drawn down. */
   superWithdrawal?: number;
+  /** Net income this period (gross salary/wages plus dividends, minus tax) -
+   *  the other input, alongside retirementWithdrawal, that cashFlow nets
+   *  against expenses/loan payments/investment contributions. Zero once
+   *  retired, since retirement income shows up as retirementWithdrawal
+   *  instead. */
+  netIncome?: number;
+  /** Total loan repayment(s) made this period (interest + principal, across
+   *  all loans), one of the outflows cashFlow nets out. */
+  loanPayment?: number;
+  /** Actual cash put into investments this period (may be less than the
+   *  configured contribution if cash was short), another of the outflows
+   *  cashFlow nets out. */
+  investmentContribution?: number;
   /** Individual loan balances by loan ID (optional, falls back to loanBalance) */
   loanBalances?: { [loanId: string]: number };
   /** Individual super balances by super ID (optional, falls back to superannuation) */

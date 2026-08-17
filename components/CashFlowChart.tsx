@@ -4,26 +4,47 @@
  */
 
 import { useEffect, useRef } from "preact/hooks";
-import type { FinancialState, TransitionPoint } from "../types/financial.ts";
+import type {
+  FinancialState,
+  TimeInterval,
+  TransitionPoint,
+} from "../types/financial.ts";
+import type { ExpenseItem } from "../types/expenses.ts";
+import { CATEGORY_INFO } from "../types/expenses.ts";
 import {
   type ChartEventMarker,
   findStateIndexForDate,
   formatCurrency,
 } from "../lib/result_utils.ts";
+import { ExpenseProcessor } from "../lib/processors.ts";
+
+/** A state augmented with the period-aggregated figures the tooltip's cash
+ *  flow breakdown is built from - summed across every simulation tick in
+ *  that display period, rather than just the tick landed on when sampling,
+ *  so a lumpy income/expense (e.g. an annual salary or yearly bill) reads
+ *  correctly instead of appearing as a single spike with every other
+ *  period reading zero. */
+type StateWithPeriodTotals = FinancialState & {
+  periodCashFlow?: number;
+  periodNetIncome?: number;
+  periodRetirementWithdrawal?: number;
+  periodExpenses?: number;
+  periodLoanPayment?: number;
+  periodInvestmentContribution?: number;
+};
 
 interface CashFlowChartProps {
-  /** States for the selected time granularity. When a state carries a
-   *  `periodCashFlow` (the cash flow summed across every simulation tick in
-   *  that display period, rather than just the tick landed on when
-   *  sampling), that aggregated figure is used instead of the raw
-   *  point-in-time `cashFlow` - otherwise a lumpy income/expense (e.g. an
-   *  annual salary or yearly bill) would appear as a single spike with
-   *  every other period reading zero. */
-  states: (FinancialState & { periodCashFlow?: number })[];
+  states: StateWithPeriodTotals[];
   transitionPoints?: TransitionPoint[];
   /** Point-in-time events (house purchases, retirement, loan payoffs, ...)
    *  pinned on the chart so a jump in cash flow has a visible explanation. */
   eventMarkers?: ChartEventMarker[];
+  /** Configured expense items - used to list which expenses were active in
+   *  the hovered period and how much each contributed, in the tooltip. */
+  expenseItems?: ExpenseItem[];
+  /** Display granularity the expense breakdown should be scaled to (should
+   *  match whatever granularity `states` was grouped at). */
+  granularity?: TimeInterval;
 }
 
 /**
@@ -39,7 +60,13 @@ interface CashFlowChartProps {
  * Requirements 4.1, 4.2, 4.3, 4.4: Transition markers and visualization
  */
 export default function CashFlowChart(
-  { states, transitionPoints = [], eventMarkers = [] }: CashFlowChartProps,
+  {
+    states,
+    transitionPoints = [],
+    eventMarkers = [],
+    expenseItems = [],
+    granularity = "month",
+  }: CashFlowChartProps,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
@@ -191,15 +218,92 @@ export default function CashFlowChart(
               padding: 12,
               cornerRadius: 8,
               callbacks: {
+                // Breaks the single "Cash Flow" figure down into the income
+                // and outflow components it's netted from (returning an
+                // array from `label` renders one line per entry).
                 label: function (context) {
-                  let label = context.dataset.label || "";
-                  if (label) {
-                    label += ": ";
+                  const state = states[context.dataIndex];
+                  if (!state) {
+                    return context.parsed.y !== null
+                      ? formatCurrency(context.parsed.y)
+                      : "";
                   }
-                  if (context.parsed.y !== null) {
-                    label += formatCurrency(context.parsed.y);
+
+                  const netIncome = state.periodNetIncome ??
+                    state.netIncome ?? 0;
+                  const retirementWithdrawal =
+                    state.periodRetirementWithdrawal ??
+                    state.retirementWithdrawal ?? 0;
+                  const expensesAmount = state.periodExpenses ??
+                    state.expenses ?? 0;
+                  const loanPayment = state.periodLoanPayment ??
+                    state.loanPayment ?? 0;
+                  const investmentContribution =
+                    state.periodInvestmentContribution ??
+                    state.investmentContribution ?? 0;
+
+                  const lines: string[] = [];
+                  if (netIncome !== 0) {
+                    lines.push(`Income: ${formatCurrency(netIncome)}`);
                   }
-                  return label;
+                  if (retirementWithdrawal !== 0) {
+                    lines.push(
+                      `+ Retirement Withdrawal: ${
+                        formatCurrency(retirementWithdrawal)
+                      }`,
+                    );
+                  }
+                  if (expensesAmount !== 0) {
+                    lines.push(
+                      `− Expenses: ${formatCurrency(expensesAmount)}`,
+                    );
+                  }
+                  if (loanPayment !== 0) {
+                    lines.push(
+                      `− Loan Payment: ${formatCurrency(loanPayment)}`,
+                    );
+                  }
+                  if (investmentContribution !== 0) {
+                    lines.push(
+                      `− Investment Contribution: ${
+                        formatCurrency(investmentContribution)
+                      }`,
+                    );
+                  }
+                  lines.push(
+                    `= Net Cash Flow: ${formatCurrency(context.parsed.y)}`,
+                  );
+
+                  return lines;
+                },
+                // Lists which configured expenses were active this period
+                // and how much each contributed, under the breakdown above.
+                afterBody: function (context) {
+                  if (!expenseItems.length || context.length === 0) return [];
+
+                  const state = states[context[0].dataIndex];
+                  if (!state) return [];
+
+                  const breakdown = ExpenseProcessor.getActiveExpenseBreakdown(
+                    expenseItems,
+                    granularity,
+                    state.date,
+                  );
+                  if (breakdown.length === 0) return [];
+
+                  const maxLines = 8;
+                  const lines = ["", "Expenses:"];
+                  breakdown.slice(0, maxLines).forEach((item) => {
+                    const icon = CATEGORY_INFO[item.category]?.icon ?? "";
+                    lines.push(
+                      `${icon} ${item.name}: ${formatCurrency(item.amount)}`,
+                    );
+                  });
+                  if (breakdown.length > maxLines) {
+                    lines.push(`+ ${breakdown.length - maxLines} more`);
+                  }
+
+                  return lines;
                 },
                 title: function (context) {
                   const dateLabel = context[0].label;
@@ -299,7 +403,7 @@ export default function CashFlowChart(
         chartRef.current.destroy();
       }
     };
-  }, [states, transitionPoints, eventMarkers]);
+  }, [states, transitionPoints, eventMarkers, expenseItems, granularity]);
 
   // No data available state
   if (!states || states.length === 0) {
