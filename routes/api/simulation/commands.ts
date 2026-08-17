@@ -13,7 +13,10 @@ import { detectMilestonesFromSimulation } from "../../../lib/milestone_detector.
 import { ScenarioComparisonEngine } from "../../../lib/scenario_comparison_engine.ts";
 import { SimulationEngine } from "../../../lib/simulation_engine.ts";
 import { assessSustainability } from "../../../server/projections/projection-builder.ts";
-import type { SimulationConfiguration } from "../../../types/financial.ts";
+import type {
+  EnhancedSimulationResult,
+  SimulationConfiguration,
+} from "../../../types/financial.ts";
 import { Handlers } from "fresh/compat";
 
 interface CommandResponse {
@@ -37,6 +40,9 @@ async function runAndCacheSimulation(
   const milestoneResult = detectMilestonesFromSimulation(
     result.states,
     configuration.baseParameters,
+    hasTransitions
+      ? (result as EnhancedSimulationResult).transitionPoints
+      : undefined,
   );
 
   await sessionManager.updateSessionParameters(
@@ -200,6 +206,9 @@ async function handleCompareNamedScenarios(
     const milestoneResult = detectMilestonesFromSimulation(
       result.states,
       configuration.baseParameters,
+      hasTransitions
+        ? (result as EnhancedSimulationResult).transitionPoints
+        : undefined,
     );
 
     return { id, name, result, milestones: milestoneResult.milestones };
