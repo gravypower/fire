@@ -53,6 +53,10 @@ export type ExpenseCategory =
   | "healthcare"
   | "personal"
   | "education"
+  | "charity"
+  | "pets"
+  | "subscriptions"
+  | "travel"
   | "other";
 
 /**
@@ -137,6 +141,38 @@ export const EXPENSE_TEMPLATES: Partial<ExpenseItem>[] = [
   { name: "Tutoring", category: "education", frequency: "weekly" },
   { name: "School Supplies", category: "education", frequency: "yearly" },
   { name: "Childcare", category: "education", frequency: "weekly" },
+
+  // Charity & Giving
+  { name: "Charitable Donations", category: "charity", frequency: "monthly" },
+  {
+    name: "Religious Tithe/Offering",
+    category: "charity",
+    frequency: "monthly",
+  },
+  { name: "Child Sponsorship", category: "charity", frequency: "monthly" },
+
+  // Pets
+  { name: "Pet Food & Supplies", category: "pets", frequency: "monthly" },
+  { name: "Vet Bills", category: "pets", frequency: "yearly" },
+  { name: "Pet Insurance", category: "pets", frequency: "monthly" },
+  { name: "Grooming", category: "pets", frequency: "monthly" },
+
+  // Subscriptions
+  {
+    name: "Software/App Subscriptions",
+    category: "subscriptions",
+    frequency: "monthly",
+  },
+  { name: "Cloud Storage", category: "subscriptions", frequency: "monthly" },
+  {
+    name: "News/Magazine Subscriptions",
+    category: "subscriptions",
+    frequency: "monthly",
+  },
+
+  // Travel & Holidays
+  { name: "Annual Holiday", category: "travel", frequency: "yearly" },
+  { name: "Weekend Trips", category: "travel", frequency: "monthly" },
 ];
 
 /**
@@ -155,5 +191,9 @@ export const CATEGORY_INFO: Record<
   healthcare: { label: "Healthcare", icon: "⚕️", color: "red" },
   personal: { label: "Personal Care", icon: "💇", color: "orange" },
   education: { label: "Education", icon: "🎓", color: "teal" },
+  charity: { label: "Charity & Giving", icon: "🤝", color: "rose" },
+  pets: { label: "Pets", icon: "🐾", color: "amber" },
+  subscriptions: { label: "Subscriptions", icon: "💳", color: "cyan" },
+  travel: { label: "Travel & Holidays", icon: "✈️", color: "lime" },
   other: { label: "Other", icon: "📦", color: "gray" },
 };
