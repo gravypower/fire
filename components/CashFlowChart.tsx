@@ -114,6 +114,15 @@ export default function CashFlowChart(
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // The zoom/pan window the user is currently looking at, in bar-index
+  // terms - kept in sync with the zoom plugin's own state via
+  // onZoomComplete/onPanComplete below, and restored after the chart is
+  // rebuilt (e.g. new milestones landing) so a click or an unrelated data
+  // refresh never silently resets what the user was looking at. Only an
+  // actual granularity change (a different bar-per-period scale entirely)
+  // deliberately recomputes it.
+  const zoomRangeRef = useRef<{ min: number; max: number } | null>(null);
+  const prevGranularityRef = useRef<TimeInterval | null>(null);
 
   // Resolved once per render so both the chart's annotations and the
   // details panel agree on which markers land on which bar.
@@ -127,12 +136,21 @@ export default function CashFlowChart(
   useEffect(() => {
     if (!canvasRef.current || states.length === 0) return;
 
+    // Guards the async continuation below against running after this
+    // effect has already been cleaned up (e.g. a fast granularity switch
+    // firing another update while the dynamic import is still in flight) -
+    // without it, canvasRef.current can go null out from under
+    // getContext() by the time the import resolves.
+    let cancelled = false;
+
     // Dynamically import Chart.js and plugins only on the client side
     Promise.all([
       import("chart.js/auto"),
       import("chartjs-plugin-annotation"),
       import("chartjs-plugin-zoom"),
     ]).then(([ChartModule, AnnotationModule, ZoomModule]) => {
+      if (cancelled || !canvasRef.current) return;
+
       const Chart = ChartModule.default;
       Chart.register(AnnotationModule.default);
       // deno-lint-ignore no-explicit-any
@@ -142,7 +160,7 @@ export default function CashFlowChart(
         chartRef.current.destroy();
       }
 
-      const ctx = canvasRef.current!.getContext("2d");
+      const ctx = canvasRef.current.getContext("2d");
       if (!ctx) return;
 
       const labels = states.map((state) => state.date.toLocaleDateString());
@@ -241,19 +259,6 @@ export default function CashFlowChart(
         };
       });
 
-      if (selectedIndex !== null && selectedIndex < states.length) {
-        annotations["selected-bar"] = {
-          type: "box",
-          xMin: selectedIndex - 0.5,
-          xMax: selectedIndex + 0.5,
-          backgroundColor: "rgba(59, 130, 246, 0.12)",
-          borderColor: "rgba(59, 130, 246, 0.6)",
-          borderWidth: 2,
-          borderDash: [4, 2],
-          drawTime: "beforeDatasetsDraw",
-        };
-      }
-
       chartRef.current = new Chart(ctx, {
         type: "bar",
         data: { labels, datasets },
@@ -286,11 +291,26 @@ export default function CashFlowChart(
               labels: { boxWidth: 12, padding: 12, font: { size: 11 } },
             },
             zoom: {
-              pan: { enabled: true, mode: "x" },
+              pan: {
+                enabled: true,
+                mode: "x",
+                onPanComplete: ({ chart }) => {
+                  zoomRangeRef.current = {
+                    min: chart.scales.x.min,
+                    max: chart.scales.x.max,
+                  };
+                },
+              },
               zoom: {
                 wheel: { enabled: true },
                 pinch: { enabled: true },
                 mode: "x",
+                onZoomComplete: ({ chart }) => {
+                  zoomRangeRef.current = {
+                    min: chart.scales.x.min,
+                    max: chart.scales.x.max,
+                  };
+                },
               },
               limits: { x: { minRange: 3 } },
             },
@@ -389,21 +409,86 @@ export default function CashFlowChart(
           },
         },
       });
+
+      // Stashed on the instance (not React state) so the selection-only
+      // effect below can rebuild the annotations map - transitions/markers
+      // plus whichever bar is selected - without needing to redo all this
+      // setup itself.
+      chartRef.current.__baseAnnotations = annotations;
+
+      // A granularity switch changes how many bars exist per unit of time
+      // (e.g. weekly vs yearly), so the previous zoom window's index range
+      // no longer means the same thing - recompute a readable default
+      // instead. Anything else that triggered a rebuild (new milestones,
+      // an edited expense, ...) keeps the window the user was already on.
+      const granularityChanged = prevGranularityRef.current !== null &&
+        prevGranularityRef.current !== granularity;
+      prevGranularityRef.current = granularity;
+
+      const DEFAULT_WINDOW: Record<TimeInterval, number> = {
+        week: 52,
+        fortnight: 26,
+        month: 24,
+        year: Infinity,
+      };
+
+      let targetRange = zoomRangeRef.current;
+      if (!targetRange || granularityChanged) {
+        const windowSize = Math.min(
+          DEFAULT_WINDOW[granularity],
+          states.length,
+        );
+        targetRange = windowSize < states.length
+          ? { min: 0, max: windowSize - 1 }
+          : null;
+      } else {
+        // Clamp a restored range to the (possibly shorter/longer) new data.
+        targetRange = {
+          min: Math.max(0, targetRange.min),
+          max: Math.min(states.length - 1, targetRange.max),
+        };
+      }
+
+      zoomRangeRef.current = targetRange;
+      if (targetRange) {
+        chartRef.current.zoomScale("x", targetRange, "default");
+      }
     });
 
     return () => {
+      cancelled = true;
       if (chartRef.current) {
         chartRef.current.destroy();
+        chartRef.current = null;
       }
     };
-  }, [
-    states,
-    transitionPoints,
-    eventMarkers,
-    expenseItems,
-    granularity,
-    selectedIndex,
-  ]);
+  }, [states, transitionPoints, eventMarkers, expenseItems, granularity]);
+
+  // Highlighting the selected bar is a pure annotation-plugin update on
+  // the existing chart instance, deliberately kept out of the rebuild
+  // effect above - recreating the whole Chart.js instance on every click
+  // would reset the zoom/pan window the user was looking at.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const base = chart.__baseAnnotations ?? {};
+    const annotations = { ...base };
+    if (selectedIndex !== null && selectedIndex < states.length) {
+      annotations["selected-bar"] = {
+        type: "box",
+        xMin: selectedIndex - 0.5,
+        xMax: selectedIndex + 0.5,
+        backgroundColor: "rgba(59, 130, 246, 0.12)",
+        borderColor: "rgba(59, 130, 246, 0.6)",
+        borderWidth: 2,
+        borderDash: [4, 2],
+        drawTime: "beforeDatasetsDraw",
+      };
+    }
+    chart.options.plugins.annotation.annotations = annotations;
+    chart.update("none");
+  }, [selectedIndex, states.length]);
 
   const resetZoom = () => {
     chartRef.current?.resetZoom?.();
@@ -478,7 +563,7 @@ export default function CashFlowChart(
         <div style={{ height: "400px" }} class="flex-1 min-w-0">
           <canvas ref={canvasRef}></canvas>
         </div>
-        <div class="lg:w-72 shrink-0 lg:border-l lg:pl-4">
+        <div class="lg:w-72 shrink-0 lg:border-l lg:pl-4 lg:h-[400px] lg:overflow-y-auto lg:pr-1">
           {selectedState
             ? (
               <CashFlowDetailsPanel
@@ -655,7 +740,7 @@ function CashFlowDetailsPanel({
           <h5 class="text-xs font-semibold text-gray-600 uppercase mb-1.5">
             Expenses
           </h5>
-          <div class="space-y-1 max-h-56 overflow-y-auto pr-1">
+          <div class="space-y-1">
             {expenseBreakdown.map((item) => (
               <div
                 key={item.id}
