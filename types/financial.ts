@@ -683,6 +683,19 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     }),
   },
   {
+    id: "four-day-week",
+    name: "Drop to 4-Day Week",
+    description:
+      "Cut back to working one less day a week (~20% less income), same job " +
+      "and expenses otherwise",
+    category: "career",
+    generateChanges: (current) => ({
+      // Assumes a standard 5-day week - edit the value afterward if your
+      // current arrangement is different (e.g. already 4 days -> 3).
+      annualSalary: current.annualSalary * 0.8,
+    }),
+  },
+  {
     id: "increase-savings",
     name: "Increase Savings Rate",
     description: "Boost investment contributions",
