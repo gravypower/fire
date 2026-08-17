@@ -9,6 +9,7 @@ import {
   type ChartEventMarker,
   findStateIndexForDate,
   formatCurrency,
+  wrapTooltipText,
 } from "../lib/result_utils.ts";
 
 interface NetWorthChartProps {
@@ -242,7 +243,7 @@ export default function NetWorthChart(
                       `🔄 ${
                         transitionAtIndex.transition.label || "Transition"
                       }`,
-                      transitionAtIndex.changesSummary,
+                      ...wrapTooltipText(transitionAtIndex.changesSummary),
                     );
                   }
 
@@ -255,7 +256,7 @@ export default function NetWorthChart(
                     .forEach(({ marker }) => {
                       lines.push(`📌 ${marker.label}`);
                       if (marker.description) {
-                        lines.push(marker.description);
+                        lines.push(...wrapTooltipText(marker.description));
                       }
                     });
 

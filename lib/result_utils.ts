@@ -19,6 +19,37 @@ export interface ChartEventMarker {
 }
 
 /**
+ * Breaks a long line of text into shorter ones at word boundaries, each no
+ * longer than maxCharsPerLine. Chart.js tooltips size their box to the
+ * widest line, and a paragraph-length milestone description (or several,
+ * when multiple events land on the same bar) can otherwise blow the
+ * tooltip out far wider than the chart itself.
+ */
+export function wrapTooltipText(
+  text: string,
+  maxCharsPerLine: number = 50,
+): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxCharsPerLine && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines;
+}
+
+/**
  * Finds the index of the state closest to (at or after) the given date,
  * falling back to the last state if the date is beyond the simulation's
  * range. Used to place a ChartEventMarker on a chart's (possibly

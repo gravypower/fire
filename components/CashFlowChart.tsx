@@ -15,6 +15,7 @@ import {
   type ChartEventMarker,
   findStateIndexForDate,
   formatCurrency,
+  wrapTooltipText,
 } from "../lib/result_utils.ts";
 import { ExpenseProcessor } from "../lib/processors.ts";
 
@@ -318,7 +319,7 @@ export default function CashFlowChart(
                       `🔄 ${
                         transitionAtIndex.transition.label || "Transition"
                       }`,
-                      transitionAtIndex.changesSummary,
+                      ...wrapTooltipText(transitionAtIndex.changesSummary),
                     );
                   }
 
@@ -331,7 +332,7 @@ export default function CashFlowChart(
                     .forEach(({ marker }) => {
                       lines.push(`📌 ${marker.label}`);
                       if (marker.description) {
-                        lines.push(marker.description);
+                        lines.push(...wrapTooltipText(marker.description));
                       }
                     });
 
