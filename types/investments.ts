@@ -141,8 +141,17 @@ export interface InvestmentHolding {
   /** Current value/balance */
   currentValue: number;
 
-  /** Expected annual return rate as percentage (e.g., 7 for 7%) */
+  /** Expected annual return rate as percentage (e.g., 7 for 7%) - this is
+   *  the TOTAL return, including any dividendYieldRate below. */
   returnRate: number;
+
+  /** Portion of returnRate paid out as cash distributions/dividends each
+   *  period (e.g., 4 for 4%) rather than compounding into currentValue.
+   *  Taxable as income in the period received. The remainder
+   *  (returnRate - dividendYieldRate) compounds as capital growth.
+   *  Defaults to 0 (no distributions, full return compounds) if omitted -
+   *  matching prior behavior for existing holdings. */
+  dividendYieldRate?: number;
 
   /** Regular contribution amount (optional) */
   contributionAmount?: number;

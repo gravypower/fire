@@ -53,6 +53,7 @@ export function evaluateRetirementAccountWithdrawal(
 
 export { auTaxModule, usTaxModule };
 export type {
+  CapitalGainsRule,
   CountryCode,
   CountryTaxExtras,
   CountryTaxModule,

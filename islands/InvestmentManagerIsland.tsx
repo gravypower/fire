@@ -88,6 +88,7 @@ export default function InvestmentManagerIsland(
       type: template?.type || "shares",
       currentValue: template?.currentValue || 0,
       returnRate: template?.returnRate || 7,
+      dividendYieldRate: template?.dividendYieldRate,
       contributionAmount: template?.contributionAmount,
       contributionFrequency: template?.contributionFrequency || "monthly",
       enabled: true,
@@ -966,6 +967,33 @@ export default function InvestmentManagerIsland(
             </div>
           </div>
 
+          <div class="mb-3">
+            <label class="block text-xs font-medium text-gray-700 mb-1">
+              Dividend Yield (%) (Optional)
+            </label>
+            <input
+              type="number"
+              value={investmentFormData.dividendYieldRate ?? ""}
+              onInput={(e) => {
+                const raw = (e.target as HTMLInputElement).value;
+                setInvestmentFormData({
+                  ...investmentFormData,
+                  dividendYieldRate: raw ? parseFloat(raw) : undefined,
+                });
+              }}
+              class="input-field text-sm"
+              placeholder="0"
+              step="0.1"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Portion of the return rate above paid out as a taxable cash
+              dividend each period, instead of compounding. E.g. a 7% return
+              rate with a 4% dividend yield means 4% is paid as cash and 3%
+              compounds as capital growth. Leave blank if this investment
+              doesn't pay distributions.
+            </p>
+          </div>
+
           <div class="mb-3 p-3 bg-white rounded border border-gray-200">
             <p class="text-xs font-medium text-gray-700 mb-2">
               Regular Contributions (Optional)
@@ -1123,6 +1151,14 @@ export default function InvestmentManagerIsland(
                                     {investment.returnRate}%
                                   </span>
                                 </span>
+                                {!!investment.dividendYieldRate && (
+                                  <span>
+                                    Dividend:{" "}
+                                    <span class="font-medium text-gray-800">
+                                      {investment.dividendYieldRate}%
+                                    </span>
+                                  </span>
+                                )}
                                 {metrics.totalUnits > 0 && (
                                   <>
                                     <span>

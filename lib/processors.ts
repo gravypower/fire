@@ -11,7 +11,7 @@ import type {
   UserParameters,
 } from "../types/financial.ts";
 import { ExpenseItem } from "../types/expenses.ts";
-import type { PlannedSale } from "../types/investments.ts";
+import type { InvestmentHolding, PlannedSale } from "../types/investments.ts";
 
 /**
  * Whether any person in the household has explicit income sources configured.
@@ -734,25 +734,34 @@ export const InvestmentProcessor = {
     currentBalances: { [holdingId: string]: number } | undefined,
     interval: TimeInterval,
     availableCash: number,
+    currentCostBases?: { [holdingId: string]: number },
   ): {
     totalBalance: number;
     holdingBalances: { [holdingId: string]: number };
+    holdingCostBases: { [holdingId: string]: number };
     cashUsed: number;
   } {
     // If no individual holdings, fall back to legacy calculation
     if (!params.investmentHoldings || params.investmentHoldings.length === 0) {
       const contribution = (params.monthlyInvestmentContribution * 12) /
         intervalToPeriodsPerYear(interval);
-      const actualContribution = Math.max(0, Math.min(availableCash, contribution));
+      const actualContribution = Math.max(
+        0,
+        Math.min(availableCash, contribution),
+      );
+      const netGrowthRate = (params.investmentReturnRate -
+        (params.investmentDividendYieldRate ?? 0)) /
+        100;
       const newBalance = this.calculateInvestmentGrowth(
         params.currentInvestmentBalance,
         actualContribution,
-        params.investmentReturnRate / 100,
+        netGrowthRate,
         interval,
       );
       return {
         totalBalance: newBalance,
         holdingBalances: {},
+        holdingCostBases: {},
         cashUsed: actualContribution,
       };
     }
@@ -761,12 +770,15 @@ export const InvestmentProcessor = {
     let totalBalance = 0;
     let totalCashUsed = 0;
     const holdingBalances: { [holdingId: string]: number } = {};
+    const holdingCostBases: { [holdingId: string]: number } = {};
 
     for (const holding of params.investmentHoldings) {
       // Skip disabled holdings
       if (!holding.enabled) {
         holdingBalances[holding.id] = currentBalances?.[holding.id] ||
           holding.currentValue;
+        holdingCostBases[holding.id] = currentCostBases?.[holding.id] ??
+          holdingBalances[holding.id];
         continue;
       }
 
@@ -774,17 +786,22 @@ export const InvestmentProcessor = {
       if (holding.startDate && currentDate < holding.startDate) {
         holdingBalances[holding.id] = currentBalances?.[holding.id] ||
           holding.currentValue;
+        holdingCostBases[holding.id] = currentCostBases?.[holding.id] ??
+          holdingBalances[holding.id];
         continue;
       }
       if (holding.endDate && currentDate > holding.endDate) {
         holdingBalances[holding.id] = currentBalances?.[holding.id] ||
           holding.currentValue;
+        holdingCostBases[holding.id] = currentCostBases?.[holding.id] ??
+          holdingBalances[holding.id];
         continue;
       }
 
       // Get current balance for this holding
       const currentBalance = currentBalances?.[holding.id] ||
         holding.currentValue;
+      const currentCostBasis = currentCostBases?.[holding.id] ?? currentBalance;
 
       // Calculate contribution for this interval
       let contribution = 0;
@@ -809,21 +826,30 @@ export const InvestmentProcessor = {
         }
       }
 
-      // Calculate growth
+      // Calculate growth - only the portion of returnRate not already paid
+      // out as a dividend (handled separately, as a cash distribution
+      // computed on the opening balance earlier in the same period)
+      // compounds into the balance.
+      const netGrowthRate =
+        (holding.returnRate - (holding.dividendYieldRate ?? 0)) / 100;
       const newBalance = this.calculateInvestmentGrowth(
         currentBalance,
         contribution,
-        holding.returnRate / 100,
+        netGrowthRate,
         interval,
       );
 
       holdingBalances[holding.id] = newBalance;
+      // Cost basis grows with new contributions (new money in), not with
+      // growth or dividends (neither is "new money" for CGT purposes).
+      holdingCostBases[holding.id] = currentCostBasis + contribution;
       totalBalance += newBalance;
     }
 
     return {
       totalBalance,
       holdingBalances,
+      holdingCostBases,
       cashUsed: totalCashUsed,
     };
   },
@@ -920,6 +946,232 @@ export const InvestmentProcessor = {
       : currentBalance * (sale.amount / 100);
 
     return Math.max(0, Math.min(rawAmount, currentBalance));
+  },
+
+  /**
+   * Cash distribution paid out this period on a holding's opening balance,
+   * per its dividendYieldRate (0 if unset - no distribution, matching prior
+   * behavior). Does not reduce the balance itself; the growth phase already
+   * excludes this portion from what compounds (see calculateInvestmentHoldings).
+   */
+  calculateDividendIncome(
+    balance: number,
+    dividendYieldRatePercent: number | undefined,
+    interval: TimeInterval,
+  ): number {
+    if (
+      balance <= 0 || !dividendYieldRatePercent || dividendYieldRatePercent <= 0
+    ) {
+      return 0;
+    }
+    const intervalRate = convertAnnualRateToInterval(
+      dividendYieldRatePercent / 100,
+      interval,
+    );
+    return balance * intervalRate;
+  },
+
+  /**
+   * Sells a target dollar amount pro-rata across a set of investment
+   * holdings (weighted by current balance), reducing each holding's balance
+   * and cost basis via the average-cost method, and returns the realized
+   * gain split into short-term/long-term.
+   *
+   * The engine doesn't track individual purchase lots for holdings once the
+   * simulation is running (balances are aggregate figures that grow and
+   * receive contributions as a pool) - so each holding is treated as a
+   * single parcel acquired on its startDate (or the simulation start date,
+   * if unset), and gain is realized proportionally against its running
+   * cost basis rather than true FIFO lot matching.
+   */
+  sellFromHoldings(
+    holdings: InvestmentHolding[],
+    holdingBalances: { [holdingId: string]: number },
+    holdingCostBases: { [holdingId: string]: number },
+    amountToSell: number,
+    currentDate: Date,
+    simulationStartDate: Date,
+    longTermThresholdDays: number,
+  ): {
+    newHoldingBalances: { [holdingId: string]: number };
+    newHoldingCostBases: { [holdingId: string]: number };
+    amountSold: number;
+    shortTermGain: number;
+    longTermGain: number;
+  } {
+    const newHoldingBalances = { ...holdingBalances };
+    const newHoldingCostBases = { ...holdingCostBases };
+
+    const totalAvailable = holdings.reduce(
+      (sum, h) => sum + Math.max(0, holdingBalances[h.id] ?? h.currentValue),
+      0,
+    );
+
+    if (totalAvailable <= 0 || amountToSell <= 0) {
+      return {
+        newHoldingBalances,
+        newHoldingCostBases,
+        amountSold: 0,
+        shortTermGain: 0,
+        longTermGain: 0,
+      };
+    }
+
+    const targetSale = Math.min(amountToSell, totalAvailable);
+    let amountSold = 0;
+    let shortTermGain = 0;
+    let longTermGain = 0;
+
+    for (const holding of holdings) {
+      const balance = Math.max(
+        0,
+        holdingBalances[holding.id] ?? holding.currentValue,
+      );
+      if (balance <= 0) continue;
+
+      const share = balance / totalAvailable;
+      const saleAmount = Math.min(balance, targetSale * share);
+      if (saleAmount <= 0) continue;
+
+      const costBasis = holdingCostBases[holding.id] ?? balance;
+      const costBasisFraction = balance > 0
+        ? Math.min(1, costBasis / balance)
+        : 1;
+      const costBasisOfSale = saleAmount * costBasisFraction;
+      const gain = saleAmount - costBasisOfSale;
+
+      const acquisitionDate = holding.startDate ?? simulationStartDate;
+      const daysHeld = (currentDate.getTime() - acquisitionDate.getTime()) /
+        (1000 * 60 * 60 * 24);
+
+      if (daysHeld >= longTermThresholdDays) {
+        longTermGain += gain;
+      } else {
+        shortTermGain += gain;
+      }
+
+      newHoldingBalances[holding.id] = balance - saleAmount;
+      newHoldingCostBases[holding.id] = Math.max(
+        0,
+        costBasis - costBasisOfSale,
+      );
+      amountSold += saleAmount;
+    }
+
+    return {
+      newHoldingBalances,
+      newHoldingCostBases,
+      amountSold,
+      shortTermGain,
+      longTermGain,
+    };
+  },
+
+  /**
+   * Legacy-model equivalent of sellFromHoldings, for a single aggregate
+   * investment balance/cost basis rather than per-holding tracking.
+   */
+  sellFromAggregate(
+    balance: number,
+    costBasis: number,
+    amountToSell: number,
+    currentDate: Date,
+    acquisitionDate: Date,
+    longTermThresholdDays: number,
+  ): {
+    newBalance: number;
+    newCostBasis: number;
+    amountSold: number;
+    shortTermGain: number;
+    longTermGain: number;
+  } {
+    const targetSale = Math.max(0, Math.min(amountToSell, balance));
+    if (targetSale <= 0) {
+      return {
+        newBalance: balance,
+        newCostBasis: costBasis,
+        amountSold: 0,
+        shortTermGain: 0,
+        longTermGain: 0,
+      };
+    }
+
+    const costBasisFraction = balance > 0
+      ? Math.min(1, costBasis / balance)
+      : 1;
+    const costBasisOfSale = targetSale * costBasisFraction;
+    const gain = targetSale - costBasisOfSale;
+
+    const daysHeld = (currentDate.getTime() - acquisitionDate.getTime()) /
+      (1000 * 60 * 60 * 24);
+    const isLongTerm = daysHeld >= longTermThresholdDays;
+
+    return {
+      newBalance: balance - targetSale,
+      newCostBasis: Math.max(0, costBasis - costBasisOfSale),
+      amountSold: targetSale,
+      shortTermGain: isLongTerm ? 0 : gain,
+      longTermGain: isLongTerm ? gain : 0,
+    };
+  },
+};
+
+/**
+ * Investment Tax Processor
+ * Computes tax owed on dividend income, realized capital gains, and taxable
+ * retirement-account withdrawals - stacked on top of the household's
+ * ordinary taxable income so it's taxed at the marginal rate, using the
+ * active country module's rules.
+ */
+export const InvestmentTaxProcessor = {
+  /**
+   * Incremental tax due to investment/withdrawal income on top of
+   * ordinaryTaxableIncome (the salary-based taxable income already computed
+   * elsewhere for the period). additionalOrdinaryIncome should already
+   * include any long-term discount (e.g. AU's 50% CGT discount); it stacks
+   * on ordinary brackets. flatRateGains (e.g. US long-term capital gains)
+   * is taxed separately at the module's flat rate instead of stacking.
+   */
+  calculateInvestmentTax(
+    params: UserParameters,
+    ordinaryTaxableIncome: number,
+    additionalOrdinaryIncome: number,
+    flatRateGains: number,
+  ): number {
+    if (additionalOrdinaryIncome <= 0 && flatRateGains <= 0) {
+      return 0;
+    }
+
+    const module = getCountryModule(params.country);
+    const flatTax = flatRateGains > 0
+      ? flatRateGains * module.capitalGainsRule.longTermFlatRate
+      : 0;
+
+    let ordinaryTax = 0;
+    if (additionalOrdinaryIncome > 0) {
+      if (params.taxBrackets && params.taxBrackets.length > 0) {
+        const extras = {
+          medicareLevyRatePercent: params.medicareLevyRate,
+          standardDeduction: params.standardDeduction,
+        };
+        const taxWith = module.calculateTax(
+          ordinaryTaxableIncome + additionalOrdinaryIncome,
+          params.taxBrackets,
+          extras,
+        );
+        const taxWithout = module.calculateTax(
+          ordinaryTaxableIncome,
+          params.taxBrackets,
+          extras,
+        );
+        ordinaryTax = Math.max(0, taxWith - taxWithout);
+      } else {
+        // Fallback to simple percentage, matching IncomeProcessor.calculateAnnualTax
+        ordinaryTax = additionalOrdinaryIncome * (params.incomeTaxRate / 100);
+      }
+    }
+
+    return ordinaryTax + flatTax;
   },
 };
 

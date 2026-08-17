@@ -321,8 +321,14 @@ Deno.test("SimulationEngine.calculateTimeStep - negative cash flow handling", ()
   );
 
   // The deficit resolution phase covers a cash shortfall by selling assets,
-  // so cash settles back to zero rather than going negative...
-  assertEquals(newState.cash, 0, "Cash should be topped back up to zero");
+  // so cash settles back to (approximately) zero rather than going deeply
+  // negative. It's not exactly zero: selling appreciated investments
+  // realizes a small capital gain, and the tax on that gain is deducted
+  // immediately (since it's realized after this period's main tax phase).
+  assert(
+    Math.abs(newState.cash) < 5,
+    `Cash should be topped back up to ~zero, got ${newState.cash}`,
+  );
 
   // ...at the cost of depleting investments to cover the deficit.
   assert(
@@ -720,4 +726,107 @@ Deno.test("SimulationEngine.runSimulation - AU hard-gates retirement account acc
   assert(usFinal.superannuation < auFinal.superannuation);
   assert(usFinal.cash > auFinal.cash);
   assert(usFinal.cash > 1000); // a real amount was received, not just 0
+});
+
+Deno.test("SimulationEngine.runSimulation - dividend yield pays taxable cash income instead of compounding", () => {
+  const params = getTestParameters();
+  params.simulationYears = 1;
+  params.annualSalary = 0;
+  params.monthlyLivingExpenses = 0;
+  params.loanPrincipal = 0;
+  params.loanPaymentAmount = 0;
+  params.monthlyInvestmentContribution = 0;
+  params.currentSuperBalance = 0;
+  params.superContributionRate = 0;
+  params.desiredAnnualRetirementIncome = 0;
+  params.investmentHoldings = [{
+    id: "holding-1",
+    name: "Dividend ETF",
+    type: "etf",
+    currentValue: 100000,
+    returnRate: 4, // total return, all of it a distribution
+    dividendYieldRate: 4,
+    enabled: true,
+  }];
+
+  const result = SimulationEngine.runSimulation(params);
+  const month1 = result.states[1];
+
+  // The holding's balance shouldn't have grown - its whole return was paid
+  // out as a cash dividend rather than compounding.
+  assert(month1.investmentBalances!["holding-1"] <= 100000.01);
+
+  // The dividend was received as taxable cash income this period.
+  assert(month1.dividendIncome! > 0);
+  assert(month1.cash > 0);
+  // Tax was paid on it (flat incomeTaxRate fallback, no taxBrackets set).
+  assert(month1.investmentTaxPaid! > 0);
+});
+
+Deno.test("SimulationEngine.runSimulation - selling appreciated shares to fund retirement income realizes a taxed capital gain", () => {
+  const params = getTestParameters();
+  params.simulationYears = 2;
+  params.currentAge = 65; // Past AU preservation age
+  params.retirementAge = 60;
+  params.annualSalary = 0;
+  params.monthlyLivingExpenses = 0;
+  params.loanPrincipal = 0;
+  params.loanPaymentAmount = 0;
+  params.monthlyInvestmentContribution = 0;
+  params.currentSuperBalance = 0;
+  params.superContributionRate = 0;
+  params.desiredAnnualRetirementIncome = 60000;
+  params.currentInvestmentBalance = 0;
+  params.investmentHoldings = [{
+    id: "holding-1",
+    name: "Appreciated ETF",
+    type: "etf",
+    currentValue: 500000,
+    returnRate: 10, // fast growth so gains build up to sell against
+    enabled: true,
+  }];
+
+  const result = SimulationEngine.runSimulation(params);
+
+  // Once the holding has been growing for a while, a retirement-income
+  // withdrawal sells down units worth more than their cost basis - that
+  // realized gain should show up as taxed investment income.
+  const later = result.states[result.states.length - 1];
+  assert(later.realizedCapitalGains! > 0);
+  assert(later.investmentTaxPaid! > 0);
+});
+
+Deno.test("SimulationEngine.runSimulation - US 401k/IRA withdrawals are taxed as ordinary income, AU super is not", () => {
+  const params = getTestParameters();
+  params.simulationYears = 2;
+  params.currentAge = 65; // Past both AU's 60 and US's 59.5 access age
+  params.retirementAge = 60;
+  params.annualSalary = 0;
+  params.monthlyLivingExpenses = 0;
+  params.loanPrincipal = 0;
+  params.loanPaymentAmount = 0;
+  params.monthlyInvestmentContribution = 0;
+  params.currentInvestmentBalance = 0; // Force every dollar through super
+  params.superContributionRate = 0;
+  params.currentSuperBalance = 500000;
+  params.desiredAnnualRetirementIncome = 60000;
+
+  const auResult = SimulationEngine.runSimulation({
+    ...params,
+    country: undefined,
+  });
+  const usResult = SimulationEngine.runSimulation({
+    ...params,
+    country: "US" as const,
+  });
+
+  const auLater = auResult.states[auResult.states.length - 1];
+  const usLater = usResult.states[usResult.states.length - 1];
+
+  // AU superannuation withdrawals after preservation age are tax-free.
+  assertEquals(auLater.investmentTaxPaid ?? 0, 0);
+
+  // US 401k/IRA withdrawals are ordinary taxable income even after the
+  // account is fully accessible (no early-withdrawal penalty at this age).
+  assert(usLater.investmentTaxPaid! > 0);
 });
