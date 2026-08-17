@@ -119,7 +119,6 @@ export default function MainIsland() {
           retirementAge: 65,
           currentAge: 30,
           simulationYears: 40,
-          preservationAge: 60,
           startDate: new Date(),
           householdMode: "single",
           people: [
@@ -189,6 +188,11 @@ export default function MainIsland() {
   // and country-specific extras like the AU Medicare levy or US standard
   // deduction) whenever the active country changes - including once on
   // initial load, since this effect always runs on mount too.
+  //
+  // preservationAge only gets the fetched default when it isn't already
+  // set - once the user overrides it via Settings (or it's already been
+  // defaulted once), that value sticks across reloads and re-fetches
+  // instead of silently reverting to the country's standard age.
   useEffect(() => {
     if (!config) return;
 
@@ -206,7 +210,8 @@ export default function MainIsland() {
           ...prev,
           baseParameters: {
             ...prev.baseParameters,
-            preservationAge: taxConfig.preservationAge,
+            preservationAge: prev.baseParameters.preservationAge ??
+              taxConfig.preservationAge,
             taxBrackets: taxConfig.brackets || prev.baseParameters.taxBrackets,
             medicareLevyRate: taxConfig.medicareLevy?.rate,
             standardDeduction: taxConfig.standardDeduction,
@@ -481,7 +486,6 @@ export default function MainIsland() {
         retirementAge: 65,
         currentAge: 35,
         simulationYears: 40,
-        preservationAge: 60,
         startDate: new Date(),
         householdMode: "single",
         people: [

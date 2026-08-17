@@ -157,6 +157,15 @@ export interface FinancialState {
   interestSaved: number;
   /** Tax deductible interest paid this period (from debt recycling loans) */
   deductibleInterest?: number;
+  /** Total withdrawn this period from investments/super to fund the
+   *  desired retirement income and/or cover any remaining cash shortfall.
+   *  Included in cashFlow so it reflects the actual retirement income
+   *  received, not just pre-withdrawal salary/dividend income. */
+  retirementWithdrawal?: number;
+  /** Portion of retirementWithdrawal that came from superannuation
+   *  specifically - use the first period with a non-zero value to find
+   *  when the retirement account itself starts being drawn down. */
+  superWithdrawal?: number;
   /** Individual loan balances by loan ID (optional, falls back to loanBalance) */
   loanBalances?: { [loanId: string]: number };
   /** Individual super balances by super ID (optional, falls back to superannuation) */
@@ -311,6 +320,9 @@ export interface SimulationResult {
   retirementDate: Date | null;
   /** Age at retirement, or null if not achievable */
   retirementAge: number | null;
+  /** Date the retirement account (superannuation/401k/etc.) is first drawn
+   *  down, or null if it's never touched within the simulation period */
+  superDrawdownDate?: Date | null;
   /** Whether the financial trajectory is sustainable */
   isSustainable: boolean;
   /** Array of warning messages about the simulation */

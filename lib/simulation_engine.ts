@@ -243,6 +243,8 @@ export const SimulationEngine = {
       expenses: 0,
       interestSaved: 0,
       deductibleInterest: 0,
+      retirementWithdrawal: 0,
+      superWithdrawal: 0,
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
@@ -336,6 +338,7 @@ export const SimulationEngine = {
       states,
       retirementDate: retirement.date,
       retirementAge: retirement.age,
+      superDrawdownDate: this.findSuperDrawdownDate(states),
       isSustainable,
       warnings: allWarnings,
       milestones: milestoneResult.milestones,
@@ -390,6 +393,13 @@ export const SimulationEngine = {
     let interestSaved = 0;
     let deductibleInterest = 0;
     let netIncome = 0;
+    // Total pulled from investments/super this period to fund the desired
+    // retirement income and/or cover any remaining cash shortfall - tracked
+    // separately from netIncome so cashFlow (below) can reflect it, and
+    // superWithdrawal specifically so the UI can flag when drawdown of the
+    // retirement account itself begins.
+    let retirementWithdrawal = 0;
+    let superWithdrawal = 0;
 
     // Investment cost-basis tracking (for realized capital gains on sales)
     // and per-holding balances, kept live through the whole step so a
@@ -613,6 +623,8 @@ export const SimulationEngine = {
           },
         });
 
+        retirementWithdrawal += withdrawalResult.withdrawnAmount;
+        superWithdrawal += superannuation - withdrawalResult.newSuperannuation;
         investments = withdrawalResult.newInvestments;
         superannuation = withdrawalResult.newSuperannuation;
         cash += withdrawalResult.withdrawnAmount;
@@ -1434,6 +1446,8 @@ export const SimulationEngine = {
       investmentCostBases = withdrawalResult.newInvestmentCostBases;
       investmentCostBasis = withdrawalResult.newInvestmentCostBasis;
       const totalWithdrawn = withdrawalResult.withdrawnAmount;
+      retirementWithdrawal += totalWithdrawn;
+      superWithdrawal += fromSuper;
 
       // Add withdrawn funds to cash to cover deficit
       cash += totalWithdrawn;
@@ -1503,8 +1517,8 @@ export const SimulationEngine = {
 
     const netWorth = cash + investments + superannuation + offsetBalance +
       propertyValue - loanBalance;
-    const cashFlow = netIncome - expenses - totalLoanPayment -
-      actualInvestmentContribution;
+    const cashFlow = netIncome + retirementWithdrawal - expenses -
+      totalLoanPayment - actualInvestmentContribution;
 
     eventCollector.emit({
       type: SimulationEventType.PHASE_END,
@@ -1527,6 +1541,8 @@ export const SimulationEngine = {
       expenses,
       interestSaved,
       deductibleInterest,
+      retirementWithdrawal,
+      superWithdrawal,
       loanBalances: params.loans && params.loans.length > 0
         ? loanBalances
         : undefined,
@@ -1554,6 +1570,19 @@ export const SimulationEngine = {
           ? investmentCostBases
           : undefined,
     };
+  },
+
+  /**
+   * Finds the date of the first period in which any money was withdrawn
+   * from superannuation, i.e. when drawdown of the retirement account
+   * itself begins (as opposed to earlier withdrawals funded purely from
+   * investments). Returns null if super is never drawn down.
+   */
+  findSuperDrawdownDate(states: FinancialState[]): Date | null {
+    const firstDrawdown = states.find(
+      (state) => (state.superWithdrawal ?? 0) > 0,
+    );
+    return firstDrawdown ? firstDrawdown.date : null;
   },
 
   /**
@@ -1753,6 +1782,8 @@ export const SimulationEngine = {
       expenses: 0,
       interestSaved: 0,
       deductibleInterest: 0,
+      retirementWithdrawal: 0,
+      superWithdrawal: 0,
       loanBalances: initialLoanBalances,
       superBalances: initialSuperBalances,
       offsetBalances: initialOffsetBalances,
@@ -1891,6 +1922,7 @@ export const SimulationEngine = {
       states,
       retirementDate: retirement.date,
       retirementAge: retirement.age,
+      superDrawdownDate: this.findSuperDrawdownDate(states),
       isSustainable,
       warnings: allWarnings,
       milestones: milestoneResult.milestones,

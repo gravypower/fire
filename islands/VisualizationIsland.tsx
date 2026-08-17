@@ -332,6 +332,15 @@ export default function VisualizationIsland({
         color: "rgba(34, 197, 94, 0.85)",
       }]
       : []),
+    ...(result.superDrawdownDate
+      ? [{
+        date: result.superDrawdownDate,
+        label: "Super Drawdown Starts",
+        description:
+          "Superannuation is now being withdrawn to fund retirement income",
+        color: "rgba(139, 92, 246, 0.85)",
+      }]
+      : []),
   ];
   return (
     <div class="card p-6 fade-in">
@@ -418,6 +427,31 @@ export default function VisualizationIsland({
             )}
           </div>
         )}
+
+        {/* Super Drawdown Start Date */}
+        <div
+          class={`metric-card ${
+            result.superDrawdownDate ? "bg-purple-50" : "bg-gray-50"
+          }`}
+        >
+          <h3 class="text-sm font-medium text-gray-600 mb-1">
+            Super Drawdown Starts
+          </h3>
+          <p
+            class={`text-2xl font-bold ${
+              result.superDrawdownDate ? "text-purple-600" : "text-gray-500"
+            }`}
+          >
+            {result.superDrawdownDate
+              ? result.superDrawdownDate.toLocaleDateString()
+              : "Not in Period"}
+          </p>
+          {result.superDrawdownDate && (
+            <p class="text-sm text-gray-600 mt-1">
+              When super/retirement account withdrawals begin
+            </p>
+          )}
+        </div>
 
         {/* Current Net Worth */}
         <div class="metric-card bg-green-50">

@@ -33,6 +33,8 @@ export default function SettingsIsland(
   { config, onConfigChange }: SettingsIslandProps,
 ) {
   const activeCountry: CountryCode = config.baseParameters.country ?? "AU";
+  const activeModule = getCountryModule(activeCountry);
+  const defaultAccessAge = activeModule.retirementAccessRule.accessAge;
 
   const selectCountry = (code: CountryCode) => {
     if (code === activeCountry) return;
@@ -41,6 +43,19 @@ export default function SettingsIsland(
       baseParameters: {
         ...config.baseParameters,
         country: code,
+      },
+    });
+  };
+
+  const setPreservationAge = (value: string) => {
+    const parsed = value === "" ? undefined : Number(value);
+    onConfigChange({
+      ...config,
+      baseParameters: {
+        ...config.baseParameters,
+        preservationAge: parsed !== undefined && !isNaN(parsed)
+          ? parsed
+          : undefined,
       },
     });
   };
@@ -112,6 +127,40 @@ export default function SettingsIsland(
               </button>
             );
           })}
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold text-gray-700 mb-1">
+          Retirement Account Access Age
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">
+          The age {activeModule.retirementAccountLabel}{" "}
+          can first be withdrawn from. Defaults to {activeModule.label}'s
+          standard preservation age ({defaultAccessAge}) - override this if
+          your fund's rule differs (e.g. a birth-year-based preservation age).
+        </p>
+
+        <div class="flex items-center gap-3">
+          <input
+            type="number"
+            min="0"
+            max="120"
+            value={config.baseParameters.preservationAge ?? ""}
+            placeholder={`${defaultAccessAge}`}
+            onInput={(e) =>
+              setPreservationAge((e.target as HTMLInputElement).value)}
+            class="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {config.baseParameters.preservationAge !== undefined && (
+            <button
+              type="button"
+              onClick={() => setPreservationAge("")}
+              class="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Reset to default ({defaultAccessAge})
+            </button>
+          )}
         </div>
       </div>
     </div>

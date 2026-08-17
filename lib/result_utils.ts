@@ -416,9 +416,11 @@ export function generateWarnings(
   }
 
   // Check for consecutive negative cash flow while still working
-  // (Requirements 10.4) - once retired, cashFlow is expected to run
-  // negative every period since it doesn't account for the withdrawals
-  // that cover the gap, so periods after retirement are excluded here.
+  // (Requirements 10.4) - cashFlow includes retirement withdrawals, so once
+  // fully retired it should hover near zero rather than run negative, but
+  // the transition period where one household member has retired and
+  // another hasn't yet (no withdrawal triggers until nobody is working) can
+  // still show a temporary dip, so periods after retirement are excluded.
   const preRetirementStates = retirementDate
     ? states.filter((s) => s.date < retirementDate)
     : states;
