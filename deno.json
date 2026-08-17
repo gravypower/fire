@@ -18,6 +18,7 @@
     "chart.js": "npm:chart.js@4.4.1",
     "chart.js/auto": "npm:chart.js@4.4.1/auto",
     "chartjs-plugin-annotation": "npm:chartjs-plugin-annotation@3.0.1",
+    "chartjs-plugin-zoom": "npm:chartjs-plugin-zoom@2.2.0",
     "fresh": "jsr:@fresh/core@^2.3.3",
     "@fresh/plugin-vite": "jsr:@fresh/plugin-vite@^1.1.2",
     "vite": "npm:vite@^7.1.4",

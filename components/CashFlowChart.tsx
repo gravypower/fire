@@ -3,7 +3,7 @@
  * Validates: Requirements 6.1, 6.2, 6.3, 6.4
  */
 
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type {
   FinancialState,
   TimeInterval,
@@ -19,12 +19,12 @@ import {
 } from "../lib/result_utils.ts";
 import { ExpenseProcessor } from "../lib/processors.ts";
 
-/** A state augmented with the period-aggregated figures the tooltip's cash
- *  flow breakdown is built from - summed across every simulation tick in
- *  that display period, rather than just the tick landed on when sampling,
- *  so a lumpy income/expense (e.g. an annual salary or yearly bill) reads
- *  correctly instead of appearing as a single spike with every other
- *  period reading zero. */
+/** A state augmented with the period-aggregated figures the breakdown is
+ *  built from - summed across every simulation tick in that display
+ *  period, rather than just the tick landed on when sampling, so a lumpy
+ *  income/expense (e.g. an annual salary or yearly bill) reads correctly
+ *  instead of appearing as a single spike with every other period reading
+ *  zero. */
 type StateWithPeriodTotals = FinancialState & {
   periodCashFlow?: number;
   periodNetIncome?: number;
@@ -41,18 +41,61 @@ interface CashFlowChartProps {
    *  pinned on the chart so a jump in cash flow has a visible explanation. */
   eventMarkers?: ChartEventMarker[];
   /** Configured expense items - used to list which expenses were active in
-   *  the hovered period and how much each contributed, in the tooltip. */
+   *  the selected/hovered period and how much each contributed. */
   expenseItems?: ExpenseItem[];
   /** Display granularity the expense breakdown should be scaled to (should
    *  match whatever granularity `states` was grouped at). */
   granularity?: TimeInterval;
 }
 
+interface CashFlowBreakdown {
+  income: number;
+  retirementWithdrawal: number;
+  expenses: number;
+  loanPayment: number;
+  investmentContribution: number;
+  netCashFlow: number;
+}
+
+/** One color per breakdown component, shared by the chart's stacked bar
+ *  segments, its tooltip, and the click-through details panel so the same
+ *  figure always reads as the same color everywhere. */
+const SEGMENT_COLORS = {
+  income: { bg: "rgba(34, 197, 94, 0.75)", border: "rgb(21, 128, 61)" },
+  retirementWithdrawal: {
+    bg: "rgba(16, 185, 129, 0.75)",
+    border: "rgb(4, 120, 87)",
+  },
+  expenses: { bg: "rgba(239, 68, 68, 0.75)", border: "rgb(185, 28, 28)" },
+  loanPayment: { bg: "rgba(249, 115, 22, 0.75)", border: "rgb(194, 65, 12)" },
+  investmentContribution: {
+    bg: "rgba(139, 92, 246, 0.75)",
+    border: "rgb(109, 40, 217)",
+  },
+} as const;
+
+function getBreakdown(state: StateWithPeriodTotals): CashFlowBreakdown {
+  return {
+    income: state.periodNetIncome ?? state.netIncome ?? 0,
+    retirementWithdrawal: state.periodRetirementWithdrawal ??
+      state.retirementWithdrawal ?? 0,
+    expenses: state.periodExpenses ?? state.expenses ?? 0,
+    loanPayment: state.periodLoanPayment ?? state.loanPayment ?? 0,
+    investmentContribution: state.periodInvestmentContribution ??
+      state.investmentContribution ?? 0,
+    netCashFlow: state.periodCashFlow ?? state.cashFlow,
+  };
+}
+
 /**
  * CashFlowChart component
  *
- * Displays a bar chart showing cash flow (income - expenses) over time.
- * Positive cash flow is shown in green, negative in red.
+ * Displays a diverging stacked bar chart: inflows (income, retirement
+ * withdrawal) stack upward from zero, outflows (expenses, loan payment,
+ * investment contribution) stack downward - so every bar visibly shows how
+ * that period's cash flow is composed, not just its net total. Clicking a
+ * bar opens a details panel with the full breakdown and active expenses;
+ * scroll/drag zooms and pans the timeline.
  *
  * Requirements 6.1: Visual chart format
  * Requirements 6.2: Time on x-axis, monetary values on y-axis
@@ -71,22 +114,31 @@ export default function CashFlowChart(
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  // Resolved once per render so both the chart's annotations and the
+  // details panel agree on which markers land on which bar.
+  const resolvedEventMarkers = eventMarkers
+    .map((marker) => ({
+      marker,
+      stateIndex: findStateIndexForDate(states, marker.date),
+    }))
+    .filter(({ stateIndex }) => stateIndex >= 0);
 
   useEffect(() => {
     if (!canvasRef.current || states.length === 0) return;
 
-    // Dynamically import Chart.js and annotation plugin only on the client side
+    // Dynamically import Chart.js and plugins only on the client side
     Promise.all([
       import("chart.js/auto"),
       import("chartjs-plugin-annotation"),
-    ]).then(([ChartModule, AnnotationModule]) => {
+      import("chartjs-plugin-zoom"),
+    ]).then(([ChartModule, AnnotationModule, ZoomModule]) => {
       const Chart = ChartModule.default;
-      const annotationPlugin = AnnotationModule.default;
+      Chart.register(AnnotationModule.default);
+      // deno-lint-ignore no-explicit-any
+      Chart.register(ZoomModule.default as any);
 
-      // Register the annotation plugin
-      Chart.register(annotationPlugin);
-
-      // Destroy existing chart if it exists
       if (chartRef.current) {
         chartRef.current.destroy();
       }
@@ -94,29 +146,61 @@ export default function CashFlowChart(
       const ctx = canvasRef.current!.getContext("2d");
       if (!ctx) return;
 
-      // Prepare data
       const labels = states.map((state) => state.date.toLocaleDateString());
-      const cashFlowData = states.map((state) =>
-        state.periodCashFlow ?? state.cashFlow
+      const breakdowns = states.map(getBreakdown);
+
+      // Skip a segment entirely (data + legend entry) when it's zero for
+      // every period - e.g. no loan payment dataset at all when there's no
+      // loan, rather than a legend entry that never draws anything.
+      const allSegments: {
+        key: keyof typeof SEGMENT_COLORS;
+        label: string;
+        values: number[];
+      }[] = [
+        {
+          key: "income" as const,
+          label: "Income",
+          values: breakdowns.map((b) => b.income),
+        },
+        {
+          key: "retirementWithdrawal" as const,
+          label: "Retirement Withdrawal",
+          values: breakdowns.map((b) => b.retirementWithdrawal),
+        },
+        {
+          key: "expenses" as const,
+          label: "Expenses",
+          values: breakdowns.map((b) => -b.expenses),
+        },
+        {
+          key: "loanPayment" as const,
+          label: "Loan Payment",
+          values: breakdowns.map((b) => -b.loanPayment),
+        },
+        {
+          key: "investmentContribution" as const,
+          label: "Investment Contribution",
+          values: breakdowns.map((b) => -b.investmentContribution),
+        },
+      ];
+      const segments = allSegments.filter((segment) =>
+        segment.values.some((v) => v !== 0)
       );
 
-      // Create background colors based on positive/negative values
-      const backgroundColors = cashFlowData.map((value) =>
-        value >= 0
-          ? "rgba(34, 197, 94, 0.7)" // green for positive
-          : "rgba(239, 68, 68, 0.7)" // red for negative
-      );
+      const datasets = segments.map((segment) => ({
+        label: segment.label,
+        data: segment.values,
+        backgroundColor: SEGMENT_COLORS[segment.key].bg,
+        borderColor: SEGMENT_COLORS[segment.key].border,
+        borderWidth: 1,
+        borderRadius: 3,
+        stack: "cashflow",
+      }));
 
-      const borderColors = cashFlowData.map((value) =>
-        value >= 0
-          ? "rgb(34, 197, 94)" // green for positive
-          : "rgb(239, 68, 68)" // red for negative
-      );
-
-      // Prepare transition annotations
+      // Prepare transition + event marker annotations, plus a highlight on
+      // whichever bar is currently selected for the details panel.
       const annotations: any = {};
       transitionPoints.forEach((tp, index) => {
-        // Add vertical line annotation
         annotations[`transition-line-${index}`] = {
           type: "line",
           xMin: tp.stateIndex,
@@ -130,25 +214,12 @@ export default function CashFlowChart(
             position: "start",
             backgroundColor: "rgba(255, 99, 132, 0.9)",
             color: "white",
-            font: {
-              size: 10,
-              weight: "bold",
-            },
+            font: { size: 10, weight: "bold" },
             padding: 4,
             rotation: 0,
           },
         };
       });
-
-      // Prepare event marker annotations (house purchases, retirement, loan
-      // payoffs, ...) - resolved to a stateIndex on this chart's own
-      // (possibly time-granularity-filtered) x-axis.
-      const resolvedEventMarkers = eventMarkers
-        .map((marker) => ({
-          marker,
-          stateIndex: findStateIndexForDate(states, marker.date),
-        }))
-        .filter(({ stateIndex }) => stateIndex >= 0);
 
       resolvedEventMarkers.forEach(({ marker, stateIndex }, index) => {
         annotations[`event-marker-${index}`] = {
@@ -164,32 +235,29 @@ export default function CashFlowChart(
             position: "end",
             backgroundColor: marker.color,
             color: "white",
-            font: {
-              size: 10,
-              weight: "bold",
-            },
+            font: { size: 10, weight: "bold" },
             padding: 4,
             rotation: 0,
           },
         };
       });
 
-      // Create chart
+      if (selectedIndex !== null && selectedIndex < states.length) {
+        annotations["selected-bar"] = {
+          type: "box",
+          xMin: selectedIndex - 0.5,
+          xMax: selectedIndex + 0.5,
+          backgroundColor: "rgba(59, 130, 246, 0.12)",
+          borderColor: "rgba(59, 130, 246, 0.6)",
+          borderWidth: 2,
+          borderDash: [4, 2],
+          drawTime: "beforeDatasetsDraw",
+        };
+      }
+
       chartRef.current = new Chart(ctx, {
         type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Cash Flow",
-              data: cashFlowData,
-              backgroundColor: backgroundColors,
-              borderColor: borderColors,
-              borderWidth: 1,
-              borderRadius: 4,
-            },
-          ],
-        },
+        data: { labels, datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -201,116 +269,90 @@ export default function CashFlowChart(
             mode: "index",
             intersect: false,
           },
+          onClick: (_event, elements) => {
+            if (elements.length === 0) return;
+            const index = elements[0].index;
+            setSelectedIndex((current) => current === index ? null : index);
+          },
           plugins: {
             title: {
               display: true,
               text: "Cash Flow Over Time",
-              font: {
-                size: 16,
-                weight: "bold",
+              font: { size: 16, weight: "bold" },
+              padding: { top: 10, bottom: 10 },
+            },
+            legend: {
+              display: true,
+              position: "bottom",
+              labels: { boxWidth: 12, padding: 12, font: { size: 11 } },
+            },
+            zoom: {
+              pan: { enabled: true, mode: "x" },
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: "x",
               },
-              padding: {
-                top: 10,
-                bottom: 20,
-              },
+              limits: { x: { minRange: 3 } },
             },
             tooltip: {
-              backgroundColor: "rgba(0, 0, 0, 0.8)",
+              backgroundColor: "rgba(0, 0, 0, 0.85)",
               padding: 12,
               cornerRadius: 8,
+              // A period with no loan/investment activity shouldn't list a
+              // $0.00 line for it.
+              filter: (item) => item.parsed.y !== 0,
               callbacks: {
-                // Breaks the single "Cash Flow" figure down into the income
-                // and outflow components it's netted from (returning an
-                // array from `label` renders one line per entry).
                 label: function (context) {
-                  const state = states[context.dataIndex];
-                  if (!state) {
-                    return context.parsed.y !== null
-                      ? formatCurrency(context.parsed.y)
-                      : "";
-                  }
-
-                  const netIncome = state.periodNetIncome ??
-                    state.netIncome ?? 0;
-                  const retirementWithdrawal =
-                    state.periodRetirementWithdrawal ??
-                    state.retirementWithdrawal ?? 0;
-                  const expensesAmount = state.periodExpenses ??
-                    state.expenses ?? 0;
-                  const loanPayment = state.periodLoanPayment ??
-                    state.loanPayment ?? 0;
-                  const investmentContribution =
-                    state.periodInvestmentContribution ??
-                    state.investmentContribution ?? 0;
-
-                  const lines: string[] = [];
-                  if (netIncome !== 0) {
-                    lines.push(`Income: ${formatCurrency(netIncome)}`);
-                  }
-                  if (retirementWithdrawal !== 0) {
-                    lines.push(
-                      `+ Retirement Withdrawal: ${
-                        formatCurrency(retirementWithdrawal)
-                      }`,
-                    );
-                  }
-                  if (expensesAmount !== 0) {
-                    lines.push(
-                      `− Expenses: ${formatCurrency(expensesAmount)}`,
-                    );
-                  }
-                  if (loanPayment !== 0) {
-                    lines.push(
-                      `− Loan Payment: ${formatCurrency(loanPayment)}`,
-                    );
-                  }
-                  if (investmentContribution !== 0) {
-                    lines.push(
-                      `− Investment Contribution: ${
-                        formatCurrency(investmentContribution)
-                      }`,
-                    );
-                  }
-                  lines.push(
-                    `= Net Cash Flow: ${formatCurrency(context.parsed.y)}`,
-                  );
-
-                  return lines;
+                  const raw = context.parsed.y as number;
+                  const sign = raw < 0 ? "− " : "";
+                  return `${context.dataset.label}: ${sign}${
+                    formatCurrency(Math.abs(raw))
+                  }`;
                 },
-                // Lists which configured expenses were active this period
-                // and how much each contributed, under the breakdown above.
                 afterBody: function (context) {
-                  if (!expenseItems.length || context.length === 0) return [];
-
+                  if (context.length === 0) return [];
                   const state = states[context[0].dataIndex];
                   if (!state) return [];
 
-                  const breakdown = ExpenseProcessor.getActiveExpenseBreakdown(
-                    expenseItems,
-                    granularity,
-                    state.date,
-                  );
-                  if (breakdown.length === 0) return [];
+                  const lines = [
+                    "",
+                    `= Net Cash Flow: ${
+                      formatCurrency(getBreakdown(state).netCashFlow)
+                    }`,
+                  ];
 
-                  const maxLines = 8;
-                  const lines = ["", "Expenses:"];
-                  breakdown.slice(0, maxLines).forEach((item) => {
-                    const icon = CATEGORY_INFO[item.category]?.icon ?? "";
-                    lines.push(
-                      `${icon} ${item.name}: ${formatCurrency(item.amount)}`,
-                    );
-                  });
-                  if (breakdown.length > maxLines) {
-                    lines.push(`+ ${breakdown.length - maxLines} more`);
+                  if (expenseItems.length > 0) {
+                    const breakdown = ExpenseProcessor
+                      .getActiveExpenseBreakdown(
+                        expenseItems,
+                        granularity,
+                        state.date,
+                      );
+                    if (breakdown.length > 0) {
+                      const maxLines = 8;
+                      lines.push("", "Expenses:");
+                      breakdown.slice(0, maxLines).forEach((item) => {
+                        const icon = CATEGORY_INFO[item.category]?.icon ?? "";
+                        lines.push(
+                          `${icon} ${item.name}: ${
+                            formatCurrency(item.amount)
+                          }`,
+                        );
+                      });
+                      if (breakdown.length > maxLines) {
+                        lines.push(`+ ${breakdown.length - maxLines} more`);
+                      }
+                    }
                   }
 
+                  lines.push("", "Click bar for details →");
                   return lines;
                 },
                 title: function (context) {
                   const dateLabel = context[0].label;
                   const lines = [dateLabel];
 
-                  // Check if this index corresponds to a transition
                   const transitionAtIndex = transitionPoints.find(
                     (tp) => tp.stateIndex === context[0].dataIndex,
                   );
@@ -323,8 +365,6 @@ export default function CashFlowChart(
                     );
                   }
 
-                  // Check if this index corresponds to one or more event
-                  // markers (house purchase, retirement, loan payoff, ...)
                   resolvedEventMarkers
                     .filter(({ stateIndex }) =>
                       stateIndex === context[0].dataIndex
@@ -340,21 +380,17 @@ export default function CashFlowChart(
                 },
               },
             },
-            legend: {
-              display: false,
-            },
             annotation: {
               annotations: annotations,
             },
           },
           scales: {
             x: {
+              stacked: true,
               title: {
                 display: true,
                 text: "Date",
-                font: {
-                  weight: "bold",
-                },
+                font: { weight: "bold" },
               },
               ticks: {
                 maxRotation: 45,
@@ -365,31 +401,25 @@ export default function CashFlowChart(
               },
             },
             y: {
+              stacked: true,
               title: {
                 display: true,
                 text: "Cash Flow ($)",
-                font: {
-                  weight: "bold",
-                },
+                font: { weight: "bold" },
               },
               ticks: {
                 callback: function (value) {
                   return formatCurrency(value as number);
                 },
               },
-              // Add a zero line for reference
               grid: {
                 color: function (context) {
-                  if (context.tick.value === 0) {
-                    return "rgba(0, 0, 0, 0.5)";
-                  }
-                  return "rgba(0, 0, 0, 0.05)";
+                  return context.tick.value === 0
+                    ? "rgba(0, 0, 0, 0.5)"
+                    : "rgba(0, 0, 0, 0.05)";
                 },
                 lineWidth: function (context) {
-                  if (context.tick.value === 0) {
-                    return 2;
-                  }
-                  return 1;
+                  return context.tick.value === 0 ? 2 : 1;
                 },
               },
             },
@@ -398,13 +428,23 @@ export default function CashFlowChart(
       });
     });
 
-    // Cleanup
     return () => {
       if (chartRef.current) {
         chartRef.current.destroy();
       }
     };
-  }, [states, transitionPoints, eventMarkers, expenseItems, granularity]);
+  }, [
+    states,
+    transitionPoints,
+    eventMarkers,
+    expenseItems,
+    granularity,
+    selectedIndex,
+  ]);
+
+  const resetZoom = () => {
+    chartRef.current?.resetZoom?.();
+  };
 
   // No data available state
   if (!states || states.length === 0) {
@@ -453,11 +493,223 @@ export default function CashFlowChart(
     );
   }
 
+  const selectedState = selectedIndex !== null
+    ? states[selectedIndex]
+    : undefined;
+
   return (
     <div class="card p-4 chart-transition">
-      <div style={{ height: "400px" }}>
-        <canvas ref={canvasRef}></canvas>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-xs text-gray-500">
+          Scroll/pinch to zoom, drag to pan, click a bar for details
+        </p>
+        <button
+          type="button"
+          onClick={resetZoom}
+          class="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          Reset Zoom
+        </button>
       </div>
+      <div class="flex flex-col lg:flex-row gap-4">
+        <div style={{ height: "400px" }} class="flex-1 min-w-0">
+          <canvas ref={canvasRef}></canvas>
+        </div>
+        <div class="lg:w-72 shrink-0 lg:border-l lg:pl-4">
+          {selectedState
+            ? (
+              <CashFlowDetailsPanel
+                state={selectedState}
+                expenseItems={expenseItems}
+                granularity={granularity}
+                transitionPoint={transitionPoints.find((tp) =>
+                  tp.stateIndex === selectedIndex
+                )}
+                markers={resolvedEventMarkers
+                  .filter(({ stateIndex }) => stateIndex === selectedIndex)
+                  .map(({ marker }) => marker)}
+                onClose={() => setSelectedIndex(null)}
+              />
+            )
+            : (
+              <div class="h-full flex items-center justify-center text-center text-sm text-gray-400 italic p-6">
+                Click a bar to see its full breakdown here
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CashFlowDetailsPanel({
+  state,
+  expenseItems,
+  granularity,
+  transitionPoint,
+  markers,
+  onClose,
+}: {
+  state: StateWithPeriodTotals;
+  expenseItems: ExpenseItem[];
+  granularity: TimeInterval;
+  transitionPoint?: TransitionPoint;
+  markers: ChartEventMarker[];
+  onClose: () => void;
+}) {
+  const breakdown = getBreakdown(state);
+  const expenseBreakdown = ExpenseProcessor.getActiveExpenseBreakdown(
+    expenseItems,
+    granularity,
+    state.date,
+  );
+
+  const rows: {
+    label: string;
+    value: number;
+    color: string;
+    sign: "+" | "−";
+  }[] = [];
+  if (breakdown.income !== 0) {
+    rows.push({
+      label: "Income",
+      value: breakdown.income,
+      color: SEGMENT_COLORS.income.border,
+      sign: "+",
+    });
+  }
+  if (breakdown.retirementWithdrawal !== 0) {
+    rows.push({
+      label: "Retirement Withdrawal",
+      value: breakdown.retirementWithdrawal,
+      color: SEGMENT_COLORS.retirementWithdrawal.border,
+      sign: "+",
+    });
+  }
+  if (breakdown.expenses !== 0) {
+    rows.push({
+      label: "Expenses",
+      value: breakdown.expenses,
+      color: SEGMENT_COLORS.expenses.border,
+      sign: "−",
+    });
+  }
+  if (breakdown.loanPayment !== 0) {
+    rows.push({
+      label: "Loan Payment",
+      value: breakdown.loanPayment,
+      color: SEGMENT_COLORS.loanPayment.border,
+      sign: "−",
+    });
+  }
+  if (breakdown.investmentContribution !== 0) {
+    rows.push({
+      label: "Investment Contribution",
+      value: breakdown.investmentContribution,
+      color: SEGMENT_COLORS.investmentContribution.border,
+      sign: "−",
+    });
+  }
+
+  return (
+    <div class="fade-in">
+      <div class="flex items-start justify-between mb-3">
+        <h4 class="font-semibold text-gray-800">
+          {state.date.toLocaleDateString()}
+        </h4>
+        <button
+          type="button"
+          onClick={onClose}
+          class="text-gray-400 hover:text-gray-600 text-lg leading-none"
+          aria-label="Close details"
+        >
+          ×
+        </button>
+      </div>
+
+      {(transitionPoint || markers.length > 0) && (
+        <div class="mb-3 space-y-1.5">
+          {transitionPoint && (
+            <div class="text-xs bg-pink-50 border border-pink-200 rounded px-2 py-1.5">
+              <span class="font-medium text-pink-800">
+                🔄 {transitionPoint.transition.label || "Transition"}
+              </span>
+              <p class="text-pink-700 mt-0.5">
+                {transitionPoint.changesSummary}
+              </p>
+            </div>
+          )}
+          {markers.map((marker, i) => (
+            <div
+              key={i}
+              class="text-xs rounded px-2 py-1.5 border"
+              style={{
+                backgroundColor: `${marker.color.replace("0.85", "0.1")}`,
+                borderColor: marker.color,
+              }}
+            >
+              <span class="font-medium">📌 {marker.label}</span>
+              {marker.description && (
+                <p class="text-gray-600 mt-0.5">{marker.description}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div class="space-y-1 mb-3">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            class="flex items-center justify-between text-sm"
+          >
+            <span class="flex items-center gap-1.5 text-gray-700">
+              <span
+                class="inline-block w-2.5 h-2.5 rounded-sm"
+                style={{ backgroundColor: row.color }}
+              />
+              {row.label}
+            </span>
+            <span class="font-medium text-gray-900">
+              {row.sign} {formatCurrency(Math.abs(row.value))}
+            </span>
+          </div>
+        ))}
+        <div class="flex items-center justify-between text-sm pt-1.5 mt-1.5 border-t border-gray-200 font-semibold">
+          <span>Net Cash Flow</span>
+          <span
+            class={breakdown.netCashFlow >= 0
+              ? "text-green-700"
+              : "text-red-700"}
+          >
+            {formatCurrency(breakdown.netCashFlow)}
+          </span>
+        </div>
+      </div>
+
+      {expenseBreakdown.length > 0 && (
+        <div>
+          <h5 class="text-xs font-semibold text-gray-600 uppercase mb-1.5">
+            Expenses
+          </h5>
+          <div class="space-y-1 max-h-56 overflow-y-auto pr-1">
+            {expenseBreakdown.map((item) => (
+              <div
+                key={item.id}
+                class="flex items-center justify-between text-xs"
+              >
+                <span class="flex items-center gap-1 text-gray-600">
+                  <span>{CATEGORY_INFO[item.category]?.icon ?? ""}</span>
+                  {item.name}
+                </span>
+                <span class="text-gray-800">
+                  {formatCurrency(item.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

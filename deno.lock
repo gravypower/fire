@@ -32,19 +32,20 @@
     "npm:@babel/core@^7.28.0": "7.28.5",
     "npm:@babel/preset-react@^7.27.1": "7.29.7_@babel+core@7.28.5",
     "npm:@opentelemetry/api@^1.9.0": "1.9.1",
-    "npm:@preact/signals@^2.9.0": "2.11.1_preact@10.29.8_preact-render-to-string@6.7.0__preact@10.29.8___preact-render-to-string@6.7.0",
-    "npm:@prefresh/vite@^2.4.8": "2.4.11_preact@10.29.8_vite@7.3.6__picomatch@4.0.5_preact-render-to-string@6.7.0__preact@10.29.8___preact-render-to-string@6.7.0",
+    "npm:@preact/signals@^2.9.0": "2.11.1_preact@10.29.8__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.8",
+    "npm:@prefresh/vite@^2.4.8": "2.4.11_preact@10.29.8__preact-render-to-string@6.7.0_vite@7.3.6__picomatch@4.0.5_preact-render-to-string@6.7.0__preact@10.29.8",
     "npm:@remix-run/node-fetch-server@0.12": "0.12.0",
     "npm:@tailwindcss/vite@^4.3.3": "4.3.3_vite@7.3.6__picomatch@4.0.5",
     "npm:@types/babel__core@^7.20.5": "7.20.5",
     "npm:chart.js@4.4.1": "4.4.1",
     "npm:chartjs-plugin-annotation@3.0.1": "3.0.1_chart.js@4.4.1",
+    "npm:chartjs-plugin-zoom@2.2.0": "2.2.0_chart.js@4.4.1",
     "npm:esbuild-wasm@~0.25.11": "0.25.12",
     "npm:esbuild@0.25.7": "0.25.7",
     "npm:fast-check@3.15.0": "3.15.0",
-    "npm:preact-render-to-string@^6.6.3": "6.7.0_preact@10.29.8__preact-render-to-string@6.7.0",
-    "npm:preact@^10.28.2": "10.29.8_preact-render-to-string@6.7.0__preact@10.29.8",
-    "npm:preact@^10.29.1": "10.29.8_preact-render-to-string@6.7.0__preact@10.29.8",
+    "npm:preact-render-to-string@^6.6.3": "6.7.0_preact@10.29.8",
+    "npm:preact@^10.28.2": "10.29.8_preact-render-to-string@6.7.0",
+    "npm:preact@^10.29.1": "10.29.8_preact-render-to-string@6.7.0",
     "npm:tailwindcss@^4.3.3": "4.3.3",
     "npm:vite@^7.1.4": "7.3.6_picomatch@4.0.5"
   },
@@ -172,14 +173,6 @@
     }
   },
   "npm": {
-    "@babel/code-frame@7.27.1": {
-      "integrity": "sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==",
-      "dependencies": [
-        "@babel/helper-validator-identifier",
-        "js-tokens",
-        "picocolors"
-      ]
-    },
     "@babel/code-frame@7.29.7": {
       "integrity": "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==",
       "dependencies": [
@@ -194,14 +187,14 @@
     "@babel/core@7.28.5": {
       "integrity": "sha512-e7jT4DxYvIDLk1ZHmU/m/mB19rex9sv0c2ftBtjSBv+kVM/902eh0fINUzD7UwLLNR+jU585GxUJ8/EBfAM5fw==",
       "dependencies": [
-        "@babel/code-frame@7.27.1",
-        "@babel/generator@7.28.5",
+        "@babel/code-frame",
+        "@babel/generator",
         "@babel/helper-compilation-targets",
         "@babel/helper-module-transforms",
         "@babel/helpers",
         "@babel/parser",
-        "@babel/template@7.27.2",
-        "@babel/traverse@7.28.5",
+        "@babel/template",
+        "@babel/traverse",
         "@babel/types",
         "@jridgewell/remapping",
         "convert-source-map",
@@ -209,16 +202,6 @@
         "gensync",
         "json5",
         "semver"
-      ]
-    },
-    "@babel/generator@7.28.5": {
-      "integrity": "sha512-3EwLFhZ38J4VyIP6WNtt2kUdW9dokXA9Cr4IVIFHuCpZ3H8/YFOl5JjZHisrn1fATPBmKKqXzDFvh9fUwHz6CQ==",
-      "dependencies": [
-        "@babel/parser",
-        "@babel/types",
-        "@jridgewell/gen-mapping",
-        "@jridgewell/trace-mapping",
-        "jsesc"
       ]
     },
     "@babel/generator@7.29.8": {
@@ -241,29 +224,19 @@
       "integrity": "sha512-2+1thGUUWWjLTYTHZWK1n8Yga0ijBz1XAhUXcKy81rd5g6yh7hGqMp45v7cadSbEHc9G3OTv45SyneRN3ps4DQ==",
       "dependencies": [
         "@babel/compat-data",
-        "@babel/helper-validator-option@7.27.1",
+        "@babel/helper-validator-option",
         "browserslist",
         "lru-cache",
         "semver"
       ]
     },
-    "@babel/helper-globals@7.28.0": {
-      "integrity": "sha512-+W6cISkXFa1jXsDEdYA8HeevQT/FULhxzR99pxphltZcVaugps53THCeiWA8SguxxpSp3gKPiuYfSWopkLQ4hw=="
-    },
     "@babel/helper-globals@7.29.7": {
       "integrity": "sha512-3nQVUAtvkKH9zahfWgw96Jc/uFOmjACE1kQz82E2lqWmHBgjzbNlsC22nuQTfahmWeQtTq5nQ/4Nnd2A1wj4zA=="
-    },
-    "@babel/helper-module-imports@7.27.1": {
-      "integrity": "sha512-0gSFWUPNXNopqtIPQvlD5WgXYI5GY2kP2cCvoT8kczjbfcfuIljTbcWrulD1CIPIX2gt1wghbDy08yE1p+/r3w==",
-      "dependencies": [
-        "@babel/traverse@7.28.5",
-        "@babel/types"
-      ]
     },
     "@babel/helper-module-imports@7.29.7": {
       "integrity": "sha512-ejHwrQQYcm9xnTivShn2IDOlIzInN34AXskvq9QicvCtEzq1Vzclu/tKF8Jq1Cg8JG2GL6/EmjgsCT7lXepE3g==",
       "dependencies": [
-        "@babel/traverse@7.29.8",
+        "@babel/traverse",
         "@babel/types"
       ]
     },
@@ -271,9 +244,9 @@
       "integrity": "sha512-gytXUbs8k2sXS9PnQptz5o0QnpLL51SwASIORY6XaBKF88nsOT0Zw9szLqlSGQDP/4TljBAD5y98p2U1fqkdsw==",
       "dependencies": [
         "@babel/core",
-        "@babel/helper-module-imports@7.27.1",
+        "@babel/helper-module-imports",
         "@babel/helper-validator-identifier",
-        "@babel/traverse@7.28.5"
+        "@babel/traverse"
       ]
     },
     "@babel/helper-plugin-utils@7.29.7": {
@@ -285,16 +258,13 @@
     "@babel/helper-validator-identifier@7.29.7": {
       "integrity": "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg=="
     },
-    "@babel/helper-validator-option@7.27.1": {
-      "integrity": "sha512-YvjJow9FxbhFFKDSuFnVCe2WxXk1zWc22fFePVNEaWJEu8IrZVlda6N0uHwzZrUM1il7NC9Mlp4MaJYbYd9JSg=="
-    },
     "@babel/helper-validator-option@7.29.7": {
       "integrity": "sha512-N9ZErrD+yW5geCDtBqnOoxmR8+tNKiGuxKlDpuJxfsqpa2dFcexaziGAE/qoHLiDDreVNMupxGmSoNlyvsA3gw=="
     },
     "@babel/helpers@7.28.4": {
       "integrity": "sha512-HFN59MmQXGHVyYadKLVumYsA9dBFun/ldYxipEjzA4196jpLZd8UjEEBLkbEkvfYreDqJhZxYAWFPtrfhNpj4w==",
       "dependencies": [
-        "@babel/template@7.27.2",
+        "@babel/template",
         "@babel/types"
       ]
     },
@@ -331,7 +301,7 @@
       "dependencies": [
         "@babel/core",
         "@babel/helper-annotate-as-pure",
-        "@babel/helper-module-imports@7.29.7",
+        "@babel/helper-module-imports",
         "@babel/helper-plugin-utils",
         "@babel/plugin-syntax-jsx",
         "@babel/types"
@@ -350,49 +320,29 @@
       "dependencies": [
         "@babel/core",
         "@babel/helper-plugin-utils",
-        "@babel/helper-validator-option@7.29.7",
+        "@babel/helper-validator-option",
         "@babel/plugin-transform-react-display-name",
         "@babel/plugin-transform-react-jsx",
         "@babel/plugin-transform-react-jsx-development",
         "@babel/plugin-transform-react-pure-annotations"
       ]
     },
-    "@babel/template@7.27.2": {
-      "integrity": "sha512-LPDZ85aEJyYSd18/DkjNh4/y1ntkE5KwUHWTiqgRxruuZL2F1yuHligVHLvcHY2vMHXttKFpJn6LwfI7cw7ODw==",
-      "dependencies": [
-        "@babel/code-frame@7.27.1",
-        "@babel/parser",
-        "@babel/types"
-      ]
-    },
     "@babel/template@7.29.7": {
       "integrity": "sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==",
       "dependencies": [
-        "@babel/code-frame@7.29.7",
+        "@babel/code-frame",
         "@babel/parser",
         "@babel/types"
-      ]
-    },
-    "@babel/traverse@7.28.5": {
-      "integrity": "sha512-TCCj4t55U90khlYkVV/0TfkJkAkUg3jZFA3Neb7unZT8CPok7iiRfaX0F+WnqWqt7OxhOn0uBKXCw4lbL8W0aQ==",
-      "dependencies": [
-        "@babel/code-frame@7.27.1",
-        "@babel/generator@7.28.5",
-        "@babel/helper-globals@7.28.0",
-        "@babel/parser",
-        "@babel/template@7.27.2",
-        "@babel/types",
-        "debug"
       ]
     },
     "@babel/traverse@7.29.8": {
       "integrity": "sha512-I5z7H3bf/41ktsNVLtpN0wAa336HkqIHQ5BuPLEhTkt1jVSyZpeNKIzTgEWmlxjdg81R0IgUCcaE+Ok3NvrfZg==",
       "dependencies": [
-        "@babel/code-frame@7.29.7",
-        "@babel/generator@7.29.8",
-        "@babel/helper-globals@7.29.7",
+        "@babel/code-frame",
+        "@babel/generator",
+        "@babel/helper-globals",
         "@babel/parser",
-        "@babel/template@7.29.7",
+        "@babel/template",
         "@babel/types",
         "debug"
       ]
@@ -705,7 +655,7 @@
     "@preact/signals-core@1.14.4": {
       "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA=="
     },
-    "@preact/signals@2.11.1_preact@10.29.8_preact-render-to-string@6.7.0__preact@10.29.8___preact-render-to-string@6.7.0": {
+    "@preact/signals@2.11.1_preact@10.29.8__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.8": {
       "integrity": "sha512-uYoD+USkacTNU02kfCBkJEV7xabKTmA78W5pnT2GymsuGEC9n/ZO+UT4S96l0dIL6KLDk77VJyUFuOMBvftVHg==",
       "dependencies": [
         "@preact/signals-core",
@@ -715,7 +665,7 @@
     "@prefresh/babel-plugin@0.5.2": {
       "integrity": "sha512-AOl4HG6dAxWkJ5ndPHBgBa49oo/9bOiJuRDKHLSTyH+Fd9x00shTXpdiTj1W41l6oQIwUOAgJeHMn4QwIDpHkA=="
     },
-    "@prefresh/core@1.5.9_preact@10.29.8_preact-render-to-string@6.7.0__preact@10.29.8___preact-render-to-string@6.7.0": {
+    "@prefresh/core@1.5.9_preact@10.29.8__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.8": {
       "integrity": "sha512-IKBKCPaz34OFVC+adiQ2qaTF5qdztO2/4ZPf4KsRTgjKosWqxVXmEbxCiUydYZRY8GVie+DQlKzQr9gt6HQ+EQ==",
       "dependencies": [
         "preact"
@@ -724,7 +674,7 @@
     "@prefresh/utils@1.2.1": {
       "integrity": "sha512-vq/sIuN5nYfYzvyayXI4C2QkprfNaHUQ9ZX+3xLD8nL3rWyzpxOm1+K7RtMbhd+66QcaISViK7amjnheQ/4WZw=="
     },
-    "@prefresh/vite@2.4.11_preact@10.29.8_vite@7.3.6__picomatch@4.0.5_preact-render-to-string@6.7.0__preact@10.29.8___preact-render-to-string@6.7.0": {
+    "@prefresh/vite@2.4.11_preact@10.29.8__preact-render-to-string@6.7.0_vite@7.3.6__picomatch@4.0.5_preact-render-to-string@6.7.0__preact@10.29.8": {
       "integrity": "sha512-/XjURQqdRiCG3NpMmWqE9kJwrg9IchIOWHzulCfqg2sRe/8oQ1g5De7xrk9lbqPIQLn7ntBkKdqWXIj4E9YXyg==",
       "dependencies": [
         "@babel/core",
@@ -1000,6 +950,9 @@
     "@types/estree@1.0.9": {
       "integrity": "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg=="
     },
+    "@types/hammerjs@2.0.46": {
+      "integrity": "sha512-ynRvcq6wvqexJ9brDMS4BnBLzmr0e14d6ZJTEShTBWKymQiHwlAyGu0ZPEFI2Fh1U53F7tN9ufClWM5KvqkKOw=="
+    },
     "baseline-browser-mapping@2.9.11": {
       "integrity": "sha512-Sg0xJUNDU1sJNGdfGWhVHX0kkZ+HWcvmVymJbj6NSgZZmW/8S9Y2HQ5euytnIgakgxN6papOAWiwDo1ctFDcoQ==",
       "bin": true
@@ -1028,6 +981,14 @@
       "integrity": "sha512-hlIrXXKqSDgb+ZjVYHefmlZUXK8KbkCPiynSVrTb/HjTMkT62cOInaT1NTQCKtxKKOm9oHp958DY3RTAFKtkHg==",
       "dependencies": [
         "chart.js"
+      ]
+    },
+    "chartjs-plugin-zoom@2.2.0_chart.js@4.4.1": {
+      "integrity": "sha512-in6kcdiTlP6npIVLMd4zXZ08PDUXC52gZ4FAy5oyjk1zX3gKarXMAof7B9eFiisf9WOC3bh2saHg+J5WtLXZeA==",
+      "dependencies": [
+        "@types/hammerjs",
+        "chart.js",
+        "hammerjs"
       ]
     },
     "convert-source-map@2.0.0": {
@@ -1153,6 +1114,9 @@
     },
     "graceful-fs@4.2.11": {
       "integrity": "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="
+    },
+    "hammerjs@2.0.8": {
+      "integrity": "sha512-tSQXBXS/MWQOn/RKckawJ61vvsDpCom87JgxiYdGwHdOa0ht0vzUWDlfioofFCRU0L+6NGDt6XzbgoJvZkMeRQ=="
     },
     "jiti@2.7.0": {
       "integrity": "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==",
@@ -1282,13 +1246,13 @@
         "source-map-js"
       ]
     },
-    "preact-render-to-string@6.7.0_preact@10.29.8__preact-render-to-string@6.7.0": {
+    "preact-render-to-string@6.7.0_preact@10.29.8": {
       "integrity": "sha512-Z4WR8fmLMRpdYqJ9i7vrlXSsSrxVJydwrkEXHapexfARbWfGb7vGcnvNQnIzN0cXciMVOlz/XLoiMCi9gUsy9Q==",
       "dependencies": [
         "preact"
       ]
     },
-    "preact@10.29.8_preact-render-to-string@6.7.0__preact@10.29.8": {
+    "preact@10.29.8_preact-render-to-string@6.7.0": {
       "integrity": "sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==",
       "dependencies": [
         "preact-render-to-string"
@@ -1459,6 +1423,7 @@
       "npm:@types/babel__core@^7.20.5",
       "npm:chart.js@4.4.1",
       "npm:chartjs-plugin-annotation@3.0.1",
+      "npm:chartjs-plugin-zoom@2.2.0",
       "npm:fast-check@3.15.0",
       "npm:preact@^10.29.1",
       "npm:tailwindcss@^4.3.3",
