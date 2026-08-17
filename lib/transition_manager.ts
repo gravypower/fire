@@ -114,7 +114,12 @@ function applyParameterChanges(
       case "currentSuperBalance": {
         const superAccount = updatedPerson.superAccounts[0];
         if (superAccount) {
-          const field = key === "currentSuperBalance" ? "balance" : key;
+          // UserParameters' legacy field names don't match SuperAccount's.
+          const field = key === "currentSuperBalance"
+            ? "balance"
+            : key === "superReturnRate"
+            ? "returnRate"
+            : "contributionRate";
           updatedPerson = {
             ...updatedPerson,
             superAccounts: [
