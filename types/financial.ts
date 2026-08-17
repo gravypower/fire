@@ -627,6 +627,21 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     }),
   },
   {
+    id: "fixed-income-shift",
+    name: "Shift to Fixed Income",
+    description:
+      "De-risk by moving investments and super out of growth assets into " +
+      "bonds/cash - lower expected return, lower volatility. A common move " +
+      "in the run-up to (or start of) retirement.",
+    category: "retirement",
+    generateChanges: () => ({
+      // Typical conservative bond/cash yield - edit to match your actual
+      // fixed-income allocation's expected return.
+      investmentReturnRate: 4,
+      superReturnRate: 4,
+    }),
+  },
+  {
     id: "relocation-cheaper",
     name: "Relocate to Cheaper Area",
     description: "Move to area with lower cost of living",
