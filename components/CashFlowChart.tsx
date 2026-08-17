@@ -15,7 +15,6 @@ import {
   type ChartEventMarker,
   findStateIndexForDate,
   formatCurrency,
-  wrapTooltipText,
 } from "../lib/result_utils.ts";
 import { ExpenseProcessor } from "../lib/processors.ts";
 
@@ -297,58 +296,26 @@ export default function CashFlowChart(
             },
             tooltip: {
               backgroundColor: "rgba(0, 0, 0, 0.85)",
-              padding: 12,
+              padding: 10,
               cornerRadius: 8,
-              // A period with no loan/investment activity shouldn't list a
-              // $0.00 line for it.
-              filter: (item) => item.parsed.y !== 0,
+              displayColors: false,
+              // The click-through details panel is where the full
+              // breakdown/expense list lives now - the hover tooltip is
+              // just a quick at-a-glance summary. Keeping exactly one
+              // (arbitrary) tooltip item, rather than filtering all of
+              // them out, is what keeps title/label callbacks below from
+              // running with no data - Chart.js hands every callback the
+              // same filtered item list.
+              filter: (_item, index) => index === 0,
               callbacks: {
                 label: function (context) {
-                  const raw = context.parsed.y as number;
-                  const sign = raw < 0 ? "− " : "";
-                  return `${context.dataset.label}: ${sign}${
-                    formatCurrency(Math.abs(raw))
+                  const state = states[context.dataIndex];
+                  if (!state) return "";
+                  return `Net Cash Flow: ${
+                    formatCurrency(getBreakdown(state).netCashFlow)
                   }`;
                 },
-                afterBody: function (context) {
-                  if (context.length === 0) return [];
-                  const state = states[context[0].dataIndex];
-                  if (!state) return [];
-
-                  const lines = [
-                    "",
-                    `= Net Cash Flow: ${
-                      formatCurrency(getBreakdown(state).netCashFlow)
-                    }`,
-                  ];
-
-                  if (expenseItems.length > 0) {
-                    const breakdown = ExpenseProcessor
-                      .getActiveExpenseBreakdown(
-                        expenseItems,
-                        granularity,
-                        state.date,
-                      );
-                    if (breakdown.length > 0) {
-                      const maxLines = 8;
-                      lines.push("", "Expenses:");
-                      breakdown.slice(0, maxLines).forEach((item) => {
-                        const icon = CATEGORY_INFO[item.category]?.icon ?? "";
-                        lines.push(
-                          `${icon} ${item.name}: ${
-                            formatCurrency(item.amount)
-                          }`,
-                        );
-                      });
-                      if (breakdown.length > maxLines) {
-                        lines.push(`+ ${breakdown.length - maxLines} more`);
-                      }
-                    }
-                  }
-
-                  lines.push("", "Click bar for details →");
-                  return lines;
-                },
+                afterLabel: () => "Click bar for full breakdown →",
                 title: function (context) {
                   const dateLabel = context[0].label;
                   const lines = [dateLabel];
@@ -361,7 +328,6 @@ export default function CashFlowChart(
                       `🔄 ${
                         transitionAtIndex.transition.label || "Transition"
                       }`,
-                      ...wrapTooltipText(transitionAtIndex.changesSummary),
                     );
                   }
 
@@ -371,9 +337,6 @@ export default function CashFlowChart(
                     )
                     .forEach(({ marker }) => {
                       lines.push(`📌 ${marker.label}`);
-                      if (marker.description) {
-                        lines.push(...wrapTooltipText(marker.description));
-                      }
                     });
 
                   return lines;
