@@ -589,6 +589,7 @@ export default function VisualizationIsland({
             eventMarkers={chartEventMarkers}
             transitionPoints={effectiveTransitionPoints}
             expenseItems={userParameters?.expenseItems}
+            userParameters={userParameters}
             granularity={selectedGranularity}
           />
         </ChartErrorBoundary>

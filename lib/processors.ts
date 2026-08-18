@@ -254,6 +254,79 @@ export const IncomeProcessor = {
   },
 
   /**
+   * Lists which income sources are active for the given date/interval and
+   * how much each contributes (gross, before tax) - the per-source
+   * breakdown behind calculateIncome's total, for display (e.g. a chart
+   * details panel), mirroring ExpenseProcessor.getActiveExpenseBreakdown.
+   */
+  getActiveIncomeBreakdown(
+    params: UserParameters,
+    interval: TimeInterval,
+    currentDate?: Date,
+  ): { id: string; label: string; amount: number }[] {
+    const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
+    const breakdown: { id: string; label: string; amount: number }[] = [];
+
+    if (peopleHaveIncomeSources(params)) {
+      const yearsElapsed = currentDate
+        ? (currentDate.getTime() - params.startDate.getTime()) /
+          (1000 * 60 * 60 * 24 * 365.25)
+        : 0;
+
+      for (const person of params.people!) {
+        // A retired person earns no income - matching the same check
+        // calculateTotalAnnualIncome applies.
+        const personCurrentAge = person.currentAge + yearsElapsed;
+        if (personCurrentAge >= person.retirementAge) {
+          continue;
+        }
+
+        for (const source of person.incomeSources ?? []) {
+          const annualAmount = this.calculateIncomeFromSource(
+            source,
+            currentDate,
+          );
+          if (annualAmount > 0) {
+            breakdown.push({
+              id: source.id,
+              label: `${source.label} (${person.name})`,
+              amount: annualAmount / intervalPeriodsPerYear,
+            });
+          }
+        }
+      }
+      return breakdown.sort((a, b) => b.amount - a.amount);
+    }
+
+    if (params.incomeSources && params.incomeSources.length > 0) {
+      for (const source of params.incomeSources) {
+        const annualAmount = this.calculateIncomeFromSource(
+          source,
+          currentDate,
+        );
+        if (annualAmount > 0) {
+          breakdown.push({
+            id: source.id,
+            label: source.label,
+            amount: annualAmount / intervalPeriodsPerYear,
+          });
+        }
+      }
+      return breakdown.sort((a, b) => b.amount - a.amount);
+    }
+
+    if (params.annualSalary > 0) {
+      breakdown.push({
+        id: "legacy-salary",
+        label: "Salary",
+        amount: params.annualSalary / intervalPeriodsPerYear,
+      });
+    }
+
+    return breakdown;
+  },
+
+  /**
    * Calculates tax on income for the specified time interval
    * @param params User financial parameters
    * @param annualIncome Annual gross income amount
@@ -553,7 +626,12 @@ export const ExpenseProcessor = {
     items: ExpenseItem[],
     interval: TimeInterval,
     currentDate?: Date,
-  ): { id: string; name: string; category: ExpenseItem["category"]; amount: number }[] {
+  ): {
+    id: string;
+    name: string;
+    category: ExpenseItem["category"];
+    amount: number;
+  }[] {
     const breakdown: {
       id: string;
       name: string;

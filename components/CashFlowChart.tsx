@@ -8,6 +8,7 @@ import type {
   FinancialState,
   TimeInterval,
   TransitionPoint,
+  UserParameters,
 } from "../types/financial.ts";
 import type { ExpenseItem } from "../types/expenses.ts";
 import { CATEGORY_INFO } from "../types/expenses.ts";
@@ -16,7 +17,7 @@ import {
   findStateIndexForDate,
   formatCurrency,
 } from "../lib/result_utils.ts";
-import { ExpenseProcessor } from "../lib/processors.ts";
+import { ExpenseProcessor, IncomeProcessor } from "../lib/processors.ts";
 
 /** A state augmented with the period-aggregated figures the breakdown is
  *  built from - summed across every simulation tick in that display
@@ -42,8 +43,13 @@ interface CashFlowChartProps {
   /** Configured expense items - used to list which expenses were active in
    *  the selected/hovered period and how much each contributed. */
   expenseItems?: ExpenseItem[];
-  /** Display granularity the expense breakdown should be scaled to (should
-   *  match whatever granularity `states` was grouped at). */
+  /** Full user parameters - used to list which income sources were active
+   *  in the selected period and how much each contributed (per person, in
+   *  couple mode). Optional so the chart still renders without it, just
+   *  without an income breakdown in the details panel. */
+  userParameters?: UserParameters;
+  /** Display granularity the expense/income breakdown should be scaled to
+   *  (should match whatever granularity `states` was grouped at). */
   granularity?: TimeInterval;
 }
 
@@ -108,6 +114,7 @@ export default function CashFlowChart(
     transitionPoints = [],
     eventMarkers = [],
     expenseItems = [],
+    userParameters,
     granularity = "month",
   }: CashFlowChartProps,
 ) {
@@ -569,6 +576,7 @@ export default function CashFlowChart(
               <CashFlowDetailsPanel
                 state={selectedState}
                 expenseItems={expenseItems}
+                userParameters={userParameters}
                 granularity={granularity}
                 transitionPoint={transitionPoints.find((tp) =>
                   tp.stateIndex === selectedIndex
@@ -593,6 +601,7 @@ export default function CashFlowChart(
 function CashFlowDetailsPanel({
   state,
   expenseItems,
+  userParameters,
   granularity,
   transitionPoint,
   markers,
@@ -600,6 +609,7 @@ function CashFlowDetailsPanel({
 }: {
   state: StateWithPeriodTotals;
   expenseItems: ExpenseItem[];
+  userParameters?: UserParameters;
   granularity: TimeInterval;
   transitionPoint?: TransitionPoint;
   markers: ChartEventMarker[];
@@ -611,6 +621,13 @@ function CashFlowDetailsPanel({
     granularity,
     state.date,
   );
+  const incomeBreakdown = userParameters
+    ? IncomeProcessor.getActiveIncomeBreakdown(
+      userParameters,
+      granularity,
+      state.date,
+    )
+    : [];
 
   const rows: {
     label: string;
@@ -734,6 +751,30 @@ function CashFlowDetailsPanel({
           </span>
         </div>
       </div>
+
+      {incomeBreakdown.length > 0 && (
+        <div class="mb-3">
+          <h5 class="text-xs font-semibold text-gray-600 uppercase mb-1.5">
+            Income Sources
+          </h5>
+          <div class="space-y-1">
+            {incomeBreakdown.map((item) => (
+              <div
+                key={item.id}
+                class="flex items-center justify-between text-xs"
+              >
+                <span class="flex items-center gap-1 text-gray-600">
+                  <span>💼</span>
+                  {item.label}
+                </span>
+                <span class="text-gray-800">
+                  {formatCurrency(item.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {expenseBreakdown.length > 0 && (
         <div>
