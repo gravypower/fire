@@ -29,6 +29,7 @@ function createMinimalFinancialState(date: Date): FinancialState {
     taxPaid: 500,
     expenses: 4000,
     interestSaved: 0,
+    propertyValue: 0,
   };
 }
 

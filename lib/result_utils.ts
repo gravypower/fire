@@ -219,6 +219,65 @@ export function isFinancialStateComplete(state: FinancialState): boolean {
 }
 
 /**
+ * Single source of truth for "is this financial trajectory sustainable" -
+ * shared by SimulationEngine.checkSustainability (the primary path's
+ * result.isSustainable) and the server projection layer, so every consumer
+ * agrees on the same answer for the same simulation.
+ *
+ * Deliberately does NOT count consecutive negative-cashFlow periods:
+ * cashFlow only tracks income minus expenses/loans/contributions, and
+ * retirement income is drawn from investments/super rather than counted as
+ * "income" - so a fully-funded, on-track retiree runs negative cashFlow
+ * every single period of retirement, which would flag nearly every
+ * successful retirement plan as "unsustainable". Instead this judges
+ * sustainability by whether the portfolio (investments + super) actually
+ * runs out: starting the simulation at zero is fine (someone just
+ * beginning to save), but once it's built up, hitting zero again means the
+ * plan ran out of money.
+ *
+ * Also deliberately checks only the FINAL state's net worth, not every
+ * state along the way: a large mortgage against modest starting savings
+ * routinely puts net worth well below zero in the early states even though
+ * the trajectory is healthy and recovering (the common, unremarkable shape
+ * of "just bought a house") - flagging every such period as
+ * "unsustainable" forever, even after net worth turns positive and keeps
+ * growing, would make this fire on a huge share of ordinary households.
+ */
+export function isFinanciallySustainable(states: FinancialState[]): boolean {
+  if (states.length === 0) {
+    return false;
+  }
+
+  const firstState = states[0];
+  const lastState = states[states.length - 1];
+
+  // Debt should not be growing over the course of the simulation
+  if (lastState.loanBalance > firstState.loanBalance) {
+    return false;
+  }
+
+  // Net worth should end positive
+  if (lastState.netWorth < 0) {
+    return false;
+  }
+
+  // Once the portfolio has built up meaningfully, it shouldn't hit zero -
+  // that's the plan running out of money, as opposed to just starting from
+  // zero savings.
+  let everHadMeaningfulPortfolio = false;
+  for (const state of states) {
+    const portfolio = state.investments + state.superannuation;
+    if (portfolio > 1000) {
+      everHadMeaningfulPortfolio = true;
+    } else if (everHadMeaningfulPortfolio && portfolio <= 0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Result of sustainability check
  */
 export interface SustainabilityResult {

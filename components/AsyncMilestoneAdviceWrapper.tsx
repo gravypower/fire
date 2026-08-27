@@ -7,10 +7,8 @@
 import { useEffect, useState } from "preact/hooks";
 import type {
   AdviceGenerationError,
-  AdviceGenerationResult,
   Milestone,
   MilestoneDetectionError,
-  MilestoneDetectionResult,
   RetirementAdvice,
 } from "../types/milestones.ts";
 import type {
@@ -34,7 +32,7 @@ import {
 } from "../lib/error_handling_utils.ts";
 import MilestoneTimeline from "./MilestoneTimeline.tsx";
 import RetirementAdvicePanel from "./RetirementAdvicePanel.tsx";
-import { AdviceLoadingState, MilestoneLoadingState } from "./LoadingStates.tsx";
+import { AdviceLoadingState } from "./LoadingStates.tsx";
 
 interface AsyncMilestoneAdviceWrapperProps {
   /** Simulation states for milestone detection */

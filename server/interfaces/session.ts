@@ -3,6 +3,7 @@
  */
 
 import type {
+  EnhancedSimulationResult,
   SimulationResult,
   UserParameters,
 } from "../../types/financial.ts";
@@ -26,8 +27,10 @@ export interface SessionContext {
   parameters: UserParameters;
   /** Session metadata */
   metadata: Record<string, any>;
-  /** Most recent simulation result, cached so projections can be reshaped without re-simulating */
-  result?: SimulationResult;
+  /** Most recent simulation result, cached so projections can be reshaped
+   *  without re-simulating. EnhancedSimulationResult when the run used
+   *  transitions (carries transitionPoints/periods too). */
+  result?: SimulationResult | EnhancedSimulationResult;
   /** Milestones detected from the most recent result */
   milestones?: Milestone[];
   /** Incremented each time a new result is cached; used as the projection version */

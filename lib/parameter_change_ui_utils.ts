@@ -4,13 +4,7 @@
 
 import type { Person, UserParameters } from "../types/financial.ts";
 import {
-  getAdvisableParameters,
-  getHouseholdParameters,
-  getParameterCategory,
-  getPersonSpecificParameters,
-  isChangeableParameter,
   PARAMETER_METADATA,
-  type ParameterMetadata,
   requiresPersonSelection,
 } from "../types/parameter_categories.ts";
 
@@ -142,7 +136,7 @@ function getCurrentParameterValue(
 export function validateParameterValue(
   parameterKey: string,
   value: any,
-  params: UserParameters,
+  _params: UserParameters,
 ): { isValid: boolean; error?: string } {
   const metadata = PARAMETER_METADATA[parameterKey];
   if (!metadata) {

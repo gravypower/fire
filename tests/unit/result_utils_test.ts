@@ -29,6 +29,7 @@ Deno.test("groupByTimeInterval - returns single state for single input", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   }];
 
   const result = groupByTimeInterval(states, "month");
@@ -56,6 +57,7 @@ Deno.test("groupByTimeInterval - filters to weekly intervals", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     });
   }
 
@@ -91,6 +93,7 @@ Deno.test("groupByTimeInterval - filters to monthly intervals", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     });
   }
 
@@ -143,6 +146,7 @@ Deno.test("isFinancialStateComplete - returns true for complete state", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), true);
@@ -161,6 +165,7 @@ Deno.test("isFinancialStateComplete - returns false for invalid date", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), false);
@@ -179,6 +184,7 @@ Deno.test("isFinancialStateComplete - returns false for NaN values", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), false);
@@ -197,6 +203,7 @@ Deno.test("isFinancialStateComplete - returns false for Infinity values", () => 
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   assertEquals(isFinancialStateComplete(state), false);
@@ -225,6 +232,7 @@ Deno.test("checkSustainability - detects increasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -238,6 +246,7 @@ Deno.test("checkSustainability - detects increasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -260,6 +269,7 @@ Deno.test("checkSustainability - detects consecutive negative cash flow", () => 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -273,6 +283,7 @@ Deno.test("checkSustainability - detects consecutive negative cash flow", () => 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -286,6 +297,7 @@ Deno.test("checkSustainability - detects consecutive negative cash flow", () => 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -309,6 +321,7 @@ Deno.test("checkSustainability - detects net worth growth", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -322,6 +335,7 @@ Deno.test("checkSustainability - detects net worth growth", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -344,6 +358,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -357,6 +372,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -370,6 +386,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0, // Positive cash flow breaks the streak
+      propertyValue: 0,
     },
     {
       date: new Date("2024-04-01"),
@@ -383,6 +400,7 @@ Deno.test("checkSustainability - handles mixed cash flow patterns", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -418,6 +436,7 @@ Deno.test("detectIncreasingDebt - returns false for single state", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   }];
 
   assertEquals(detectIncreasingDebt(states), false);
@@ -437,6 +456,7 @@ Deno.test("detectIncreasingDebt - detects increasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -450,6 +470,7 @@ Deno.test("detectIncreasingDebt - detects increasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -470,6 +491,7 @@ Deno.test("detectIncreasingDebt - returns false for decreasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -483,6 +505,7 @@ Deno.test("detectIncreasingDebt - returns false for decreasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -509,6 +532,7 @@ Deno.test("detectNegativeCashFlow - detects 3+ consecutive negative periods", ()
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -522,6 +546,7 @@ Deno.test("detectNegativeCashFlow - detects 3+ consecutive negative periods", ()
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -535,6 +560,7 @@ Deno.test("detectNegativeCashFlow - detects 3+ consecutive negative periods", ()
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -557,6 +583,7 @@ Deno.test("detectNegativeCashFlow - returns false for less than 3 consecutive", 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -570,6 +597,7 @@ Deno.test("detectNegativeCashFlow - returns false for less than 3 consecutive", 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -583,6 +611,7 @@ Deno.test("detectNegativeCashFlow - returns false for less than 3 consecutive", 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -605,6 +634,7 @@ Deno.test("detectNegativeCashFlow - respects custom threshold", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -618,6 +648,7 @@ Deno.test("detectNegativeCashFlow - respects custom threshold", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -643,6 +674,7 @@ Deno.test("detectNetWorthGrowth - returns false for single state", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   }];
 
   assertEquals(detectNetWorthGrowth(states), false);
@@ -662,6 +694,7 @@ Deno.test("detectNetWorthGrowth - detects positive growth", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -675,6 +708,7 @@ Deno.test("detectNetWorthGrowth - detects positive growth", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -695,6 +729,7 @@ Deno.test("detectNetWorthGrowth - returns false for declining net worth", () => 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -708,6 +743,7 @@ Deno.test("detectNetWorthGrowth - returns false for declining net worth", () => 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -732,6 +768,7 @@ Deno.test("generateWarnings - returns empty array for single state", () => {
     taxPaid: 0,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
   }];
 
   const warnings = generateWarnings(states);
@@ -752,6 +789,7 @@ Deno.test("generateWarnings - generates warning for increasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -765,6 +803,7 @@ Deno.test("generateWarnings - generates warning for increasing debt", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -790,6 +829,7 @@ Deno.test("generateWarnings - generates alert for negative cash flow", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -803,6 +843,7 @@ Deno.test("generateWarnings - generates alert for negative cash flow", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -816,6 +857,7 @@ Deno.test("generateWarnings - generates alert for negative cash flow", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -841,6 +883,7 @@ Deno.test("generateWarnings - generates warning for net worth decline", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -854,6 +897,7 @@ Deno.test("generateWarnings - generates warning for net worth decline", () => {
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -880,6 +924,7 @@ Deno.test("generateWarnings - generates alert for severely depleted cash", () =>
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -893,6 +938,7 @@ Deno.test("generateWarnings - generates alert for severely depleted cash", () =>
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -919,6 +965,7 @@ Deno.test("generateWarnings - generates multiple warnings for multiple issues", 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -932,6 +979,7 @@ Deno.test("generateWarnings - generates multiple warnings for multiple issues", 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -945,6 +993,7 @@ Deno.test("generateWarnings - generates multiple warnings for multiple issues", 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -977,6 +1026,7 @@ Deno.test("generateWarnings - no warnings for healthy financial trajectory", () 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-12-01"),
@@ -990,6 +1040,7 @@ Deno.test("generateWarnings - no warnings for healthy financial trajectory", () 
       taxPaid: 0,
       expenses: 3000,
       interestSaved: 0, // Positive cash flow
+      propertyValue: 0,
     },
   ];
 

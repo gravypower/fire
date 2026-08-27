@@ -41,6 +41,7 @@ Deno.test("MilestoneDetector - Loan payoff detection", () => {
       taxPaid: 500,
       expenses: 2000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -54,6 +55,7 @@ Deno.test("MilestoneDetector - Loan payoff detection", () => {
       taxPaid: 500,
       expenses: 2000,
       interestSaved: 0,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-03-01"),
@@ -67,6 +69,7 @@ Deno.test("MilestoneDetector - Loan payoff detection", () => {
       taxPaid: 500,
       expenses: 2000,
       interestSaved: 0,
+      propertyValue: 0,
     },
   ];
 
@@ -131,6 +134,7 @@ Deno.test("MilestoneDetector - loan payoff interest is consistent regardless of 
         taxPaid: 500,
         expenses: 2000,
         interestSaved: 0,
+        propertyValue: 0,
       });
     }
     return states;
@@ -208,6 +212,7 @@ Deno.test("MilestoneDetector - Offset completion detection", () => {
       taxPaid: 500,
       expenses: 2000,
       interestSaved: 100,
+      propertyValue: 0,
     },
     {
       date: new Date("2024-02-01"),
@@ -221,6 +226,7 @@ Deno.test("MilestoneDetector - Offset completion detection", () => {
       taxPaid: 500,
       expenses: 2000,
       interestSaved: 200,
+      propertyValue: 0,
     },
   ];
 

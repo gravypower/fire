@@ -10,6 +10,11 @@ import type {
   SimulationResult,
   UserParameters,
 } from "../types/financial.ts";
+import {
+  addToHoldingContributions,
+  scaleExpenseItems,
+  setHoldingReturnRates,
+} from "../types/financial.ts";
 import type {
   AdviceGenerationConfig,
   AdviceGenerationError,
@@ -28,11 +33,219 @@ import {
   MemoizationCache,
 } from "./performance_utils.ts";
 import {
-  createPersonSpecificAdvice,
   createRetirementAgeAdvice,
   createSuperContributionAdvice,
   validatePersonSpecificAdvice,
 } from "./person_specific_advice_utils.ts";
+import { ExpenseProcessor, IncomeProcessor } from "./processors.ts";
+
+/**
+ * "Current" figures used throughout this advice engine's simplified
+ * projections, preferring the modern per-item/per-holding data (which the
+ * simulation engine itself uses whenever populated) over the legacy
+ * aggregate UserParameters fields, which are silently ignored by the
+ * engine once expenseItems/investmentHoldings/people[].incomeSources are
+ * populated (see ExpenseProcessor.calculateExpenses,
+ * InvestmentProcessor.calculateInvestmentHoldings,
+ * IncomeProcessor.calculateTotalAnnualIncome). Reading the legacy fields
+ * directly here would show the user advice built on numbers unrelated to
+ * their actual configured holdings/expenses/income.
+ */
+
+function currentMonthlyEssentialExpenses(params: UserParameters): number {
+  if (params.expenseItems && params.expenseItems.length > 0) {
+    return ExpenseProcessor.calculateMonthlyTotal(params.expenseItems);
+  }
+  return params.monthlyLivingExpenses + params.monthlyRentOrMortgage;
+}
+
+/** Monthly housing (rent/mortgage) costs specifically. */
+function currentMonthlyHousingCosts(params: UserParameters): number {
+  if (params.expenseItems && params.expenseItems.length > 0) {
+    return ExpenseProcessor.calculateMonthlyTotal(
+      params.expenseItems.filter((item) => item.category === "housing"),
+    );
+  }
+  return params.monthlyRentOrMortgage;
+}
+
+/** Monthly living expenses excluding housing. */
+function currentMonthlyNonHousingExpenses(params: UserParameters): number {
+  if (params.expenseItems && params.expenseItems.length > 0) {
+    return ExpenseProcessor.calculateMonthlyTotal(
+      params.expenseItems.filter((item) => item.category !== "housing"),
+    );
+  }
+  return params.monthlyLivingExpenses;
+}
+
+function currentTotalInvestmentBalance(params: UserParameters): number {
+  if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+    return params.investmentHoldings.reduce(
+      (sum, h) => sum + h.currentValue,
+      0,
+    );
+  }
+  return params.currentInvestmentBalance;
+}
+
+function currentMonthlyInvestmentContribution(params: UserParameters): number {
+  if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+    return params.investmentHoldings.reduce((sum, h) => {
+      if (!h.contributionAmount || !h.contributionFrequency) return sum;
+      const annual = h.contributionFrequency === "weekly"
+        ? h.contributionAmount * 52
+        : h.contributionFrequency === "fortnightly"
+        ? h.contributionAmount * 26
+        : h.contributionFrequency === "yearly"
+        ? h.contributionAmount
+        : h.contributionAmount * 12;
+      return sum + annual / 12;
+    }, 0);
+  }
+  return params.monthlyInvestmentContribution;
+}
+
+/** Portfolio-value-weighted average return rate across holdings. */
+function currentInvestmentReturnRate(params: UserParameters): number {
+  if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+    const totalValue = currentTotalInvestmentBalance(params);
+    if (totalValue > 0) {
+      return params.investmentHoldings.reduce(
+        (sum, h) => sum + h.returnRate * (h.currentValue / totalValue),
+        0,
+      );
+    }
+    // No value yet to weight by - simple average of configured rates.
+    return params.investmentHoldings.reduce(
+      (sum, h) => sum + h.returnRate,
+      0,
+    ) / params.investmentHoldings.length;
+  }
+  return params.investmentReturnRate;
+}
+
+function currentTotalAnnualSalary(params: UserParameters): number {
+  if (params.people?.some((p) => p.incomeSources?.length)) {
+    return IncomeProcessor.calculateTotalAnnualIncome(params);
+  }
+  return params.annualSalary;
+}
+
+/**
+ * Builds the parameterChanges for "increase monthly investment
+ * contributions by a fixed dollar amount" advice - the modern-model
+ * equivalent (distributed pro-rata across holdings) when investmentHoldings
+ * is populated, otherwise the legacy scalar field.
+ */
+function investmentContributionIncreaseChanges(
+  params: UserParameters,
+  monthlyIncrease: number,
+): Partial<UserParameters> {
+  if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+    return {
+      investmentHoldings: addToHoldingContributions(
+        params.investmentHoldings,
+        monthlyIncrease,
+      ),
+    };
+  }
+  return {
+    monthlyInvestmentContribution: params.monthlyInvestmentContribution +
+      monthlyIncrease,
+  };
+}
+
+/**
+ * Builds the parameterChanges for "shift to a flat expected return rate"
+ * advice (e.g. a more aggressive or more conservative allocation) - the
+ * modern-model equivalent when investmentHoldings is populated.
+ */
+function investmentReturnRateChanges(
+  params: UserParameters,
+  newRatePercent: number,
+): Partial<UserParameters> {
+  if (params.investmentHoldings && params.investmentHoldings.length > 0) {
+    return {
+      investmentHoldings: setHoldingReturnRates(
+        params.investmentHoldings,
+        newRatePercent,
+      ),
+    };
+  }
+  return { investmentReturnRate: newRatePercent };
+}
+
+/**
+ * Builds the parameterChanges for "increase income by a percentage" advice
+ * (e.g. a raise or promotion) - scales every before-tax income source by
+ * the same factor when people[] is populated (the modern model, where
+ * income isn't attributable to just one field), otherwise the legacy
+ * annualSalary field.
+ */
+function incomeIncreaseChanges(
+  params: UserParameters,
+  factor: number,
+): Partial<UserParameters> {
+  if (params.people?.some((p) => p.incomeSources?.length)) {
+    return {
+      people: params.people.map((person) => ({
+        ...person,
+        incomeSources: person.incomeSources.map((source) =>
+          source.isBeforeTax
+            ? { ...source, amount: source.amount * (1 + factor) }
+            : source
+        ),
+      })),
+    };
+  }
+  return { annualSalary: params.annualSalary * (1 + factor) };
+}
+
+/**
+ * Builds the parameterChanges for "reduce expenses by a factor" advice
+ * (e.g. cut living expenses or housing costs by 5/10/15%) - the
+ * modern-model equivalent when expenseItems is populated.
+ */
+function expenseReductionChanges(
+  params: UserParameters,
+  reductionFactor: number,
+  category: "housing" | "nonHousing",
+): Partial<UserParameters> {
+  if (params.expenseItems && params.expenseItems.length > 0) {
+    if (category === "housing") {
+      return {
+        expenseItems: scaleExpenseItems(
+          params.expenseItems,
+          1 - reductionFactor,
+          "housing",
+        ),
+      };
+    }
+    // scaleExpenseItems only supports "scale items IN this category" (or
+    // all items) - apply it category-by-category to get "scale everything
+    // except housing".
+    const nonHousingCategories = new Set(
+      params.expenseItems.map((item) => item.category).filter((c) =>
+        c !== "housing"
+      ),
+    );
+    let items = params.expenseItems;
+    for (const cat of nonHousingCategories) {
+      items = scaleExpenseItems(items, 1 - reductionFactor, cat);
+    }
+    return { expenseItems: items };
+  }
+  return category === "housing"
+    ? {
+      monthlyRentOrMortgage: params.monthlyRentOrMortgage *
+        (1 - reductionFactor),
+    }
+    : {
+      monthlyLivingExpenses: params.monthlyLivingExpenses *
+        (1 - reductionFactor),
+    };
+}
 
 /**
  * Default configuration for advice generation
@@ -364,7 +577,7 @@ export class RetirementAdviceEngine {
       firstNetWorth: Math.round(firstState.netWorth / 1000), // Round to nearest $1k for cache efficiency
       lastNetWorth: Math.round(lastState.netWorth / 1000),
       midNetWorth: Math.round(midState.netWorth / 1000),
-      salary: params.annualSalary,
+      salary: currentTotalAnnualSalary(params),
       loanBalance: Math.round((firstState.loanBalance || 0) / 1000),
       investments: Math.round(firstState.investments / 1000),
       age: params.currentAge,
@@ -547,7 +760,7 @@ export class RetirementAdviceEngine {
     const { investingLikelyBetter, note } = this
       .evaluateDebtVsInvestmentTradeoff(
         loan.interestRate,
-        params.investmentReturnRate,
+        currentInvestmentReturnRate(params),
       );
 
     for (const extraPayment of extraPaymentOptions) {
@@ -619,6 +832,13 @@ export class RetirementAdviceEngine {
             states,
           ),
           effectivenessScore,
+          parameterChanges: {
+            loans: (params.loans ?? []).map((l) =>
+              l.id === loan.id
+                ? { ...l, paymentAmount: l.paymentAmount + extraPayment }
+                : l
+            ),
+          },
         });
       }
     }
@@ -643,7 +863,7 @@ export class RetirementAdviceEngine {
     const { investingLikelyBetter, note } = this
       .evaluateDebtVsInvestmentTradeoff(
         params.loanInterestRate,
-        params.investmentReturnRate,
+        currentInvestmentReturnRate(params),
       );
 
     for (const extraPayment of extraPaymentOptions) {
@@ -706,6 +926,9 @@ export class RetirementAdviceEngine {
             states,
           ),
           effectivenessScore,
+          parameterChanges: {
+            loanPaymentAmount: currentPayment + extraPayment,
+          },
         });
       }
     }
@@ -753,8 +976,7 @@ export class RetirementAdviceEngine {
     // $2,000) rather than sweeping every dollar of cash into the offset -
     // the offset still earns the loan's rate risk-free, but zeroing out
     // cash entirely leaves no buffer for unexpected expenses.
-    const monthlyEssentialCosts = params.monthlyLivingExpenses +
-      params.monthlyRentOrMortgage;
+    const monthlyEssentialCosts = currentMonthlyEssentialExpenses(params);
     const emergencyBuffer = Math.max(2000, monthlyEssentialCosts * 3);
     const sweepableCash = currentState.cash - emergencyBuffer;
 
@@ -910,11 +1132,13 @@ export class RetirementAdviceEngine {
   ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
-    // Only generate person-specific advice for household mode
-    if (
-      params.householdMode !== "couple" || !params.people ||
-      params.people.length === 0
-    ) {
+    // Generate person-specific advice whenever people[] is populated with
+    // super accounts - not gated on householdMode === "couple". The UI
+    // stores super accounts under params.people in single mode too (see
+    // peopleHaveSuperAccounts in lib/processors.ts), so a single-mode
+    // household configured the normal way was previously getting zero
+    // super-contribution or retirement-age advice.
+    if (!params.people || params.people.length === 0) {
       return advice;
     }
 
@@ -1080,7 +1304,7 @@ export class RetirementAdviceEngine {
   ): AdviceItem[] {
     const advice: AdviceItem[] = [];
 
-    const currentContribution = params.monthlyInvestmentContribution;
+    const currentContribution = currentMonthlyInvestmentContribution(params);
     const increaseOptions = [50, 100, 200, 500];
 
     for (const increase of increaseOptions) {
@@ -1088,7 +1312,7 @@ export class RetirementAdviceEngine {
       const annualIncrease = increase * 12;
 
       // Estimate impact over 10 years with compound growth
-      const returnRate = params.investmentReturnRate / 100;
+      const returnRate = currentInvestmentReturnRate(params) / 100;
       const years = Math.min(10, params.retirementAge - params.currentAge);
       const futureValue = this.calculateFutureValue(
         annualIncrease,
@@ -1128,6 +1352,10 @@ export class RetirementAdviceEngine {
         },
         feasibilityScore: this.calculateFeasibilityScore(increase, states),
         effectivenessScore: Math.min(95, (futureValue / 10000) * 10), // Scale based on future value
+        parameterChanges: investmentContributionIncreaseChanges(
+          params,
+          increase,
+        ),
       });
     }
 
@@ -1145,15 +1373,17 @@ export class RetirementAdviceEngine {
 
     // Suggest more aggressive allocation if young and conservative
     const yearsToRetirement = params.retirementAge - params.currentAge;
-    const currentReturnRate = params.investmentReturnRate;
+    const currentReturnRate = currentInvestmentReturnRate(params);
 
     if (yearsToRetirement > 10 && currentReturnRate < 7) {
       const suggestedRate = Math.min(8, currentReturnRate + 1.5);
       const additionalReturn = suggestedRate - currentReturnRate;
 
       // Calculate impact on final portfolio value
-      const currentBalance = params.currentInvestmentBalance;
-      const monthlyContribution = params.monthlyInvestmentContribution;
+      const currentBalance = currentTotalInvestmentBalance(params);
+      const monthlyContribution = currentMonthlyInvestmentContribution(
+        params,
+      );
 
       const currentFutureValue = this.calculateFutureValue(
         monthlyContribution * 12,
@@ -1196,6 +1426,7 @@ export class RetirementAdviceEngine {
         },
         feasibilityScore: 70, // Requires some knowledge and risk tolerance
         effectivenessScore: Math.min(90, (additionalReturn / 2) * 100), // Scale based on additional return
+        parameterChanges: investmentReturnRateChanges(params, suggestedRate),
       });
     }
 
@@ -1217,15 +1448,22 @@ export class RetirementAdviceEngine {
     }
 
     // Suggest expense reductions in high-impact categories
-    const expenseCategories = [
+    const expenseCategories: {
+      name: string;
+      key: "housing" | "nonHousing";
+      amount: number;
+      reductionPotential: number;
+    }[] = [
       {
         name: "Living Expenses",
-        amount: params.monthlyLivingExpenses,
+        key: "nonHousing",
+        amount: currentMonthlyNonHousingExpenses(params),
         reductionPotential: 0.15,
       },
       {
         name: "Housing Costs",
-        amount: params.monthlyRentOrMortgage,
+        key: "housing",
+        amount: currentMonthlyHousingCosts(params),
         reductionPotential: 0.10,
       },
     ];
@@ -1240,13 +1478,18 @@ export class RetirementAdviceEngine {
 
         for (let i = 0; i < reductionAmounts.length; i++) {
           const reduction = reductionAmounts[i];
+          const reductionFactor = i === 0
+            ? 0.05
+            : i === 1
+            ? 0.10
+            : category.reductionPotential;
           const annualSavings = reduction * 12;
 
           // Calculate impact if invested
           const yearsToRetirement = params.retirementAge - params.currentAge;
           const investedValue = this.calculateFutureValue(
             annualSavings,
-            params.investmentReturnRate / 100,
+            currentInvestmentReturnRate(params) / 100,
             yearsToRetirement,
           );
 
@@ -1285,6 +1528,11 @@ export class RetirementAdviceEngine {
             },
             feasibilityScore: 90 - (i * 20), // Easier reductions have higher feasibility
             effectivenessScore: Math.min(85, (investedValue / 10000) * 10),
+            parameterChanges: expenseReductionChanges(
+              params,
+              reductionFactor,
+              category.key,
+            ),
           });
         }
       }
@@ -1308,11 +1556,19 @@ export class RetirementAdviceEngine {
     }
 
     // Analyze income increase opportunities
-    const currentAnnualSalary = params.annualSalary;
+    const currentAnnualSalary = currentTotalAnnualSalary(params);
     const increaseOptions = [
-      { amount: currentAnnualSalary * 0.05, label: "5% raise" },
-      { amount: currentAnnualSalary * 0.10, label: "10% raise" },
-      { amount: currentAnnualSalary * 0.20, label: "20% raise (promotion)" },
+      { amount: currentAnnualSalary * 0.05, factor: 0.05, label: "5% raise" },
+      {
+        amount: currentAnnualSalary * 0.10,
+        factor: 0.10,
+        label: "10% raise",
+      },
+      {
+        amount: currentAnnualSalary * 0.20,
+        factor: 0.20,
+        label: "20% raise (promotion)",
+      },
     ];
 
     for (let i = 0; i < increaseOptions.length; i++) {
@@ -1323,7 +1579,7 @@ export class RetirementAdviceEngine {
       const yearsToRetirement = params.retirementAge - params.currentAge;
       const investedValue = this.calculateFutureValue(
         netIncrease,
-        params.investmentReturnRate / 100,
+        currentInvestmentReturnRate(params) / 100,
         yearsToRetirement,
       );
 
@@ -1363,6 +1619,7 @@ export class RetirementAdviceEngine {
           95,
           (option.amount / currentAnnualSalary) * 200,
         ), // Scale based on percentage increase
+        parameterChanges: incomeIncreaseChanges(params, option.factor),
       });
     }
 

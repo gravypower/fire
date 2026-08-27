@@ -19,7 +19,15 @@ export function calculateTaxWithBrackets(
 ): number {
   let totalTax = 0;
 
-  for (const bracket of brackets) {
+  // Defensive sort: the loop below breaks as soon as income doesn't reach
+  // a bracket's min, which is only correct when brackets are in ascending
+  // order by min. Brackets can arrive here from user-editable config
+  // (the public API, or a hand-edited/re-imported saved scenario) with no
+  // guarantee of order - an unsorted array would otherwise break out of
+  // the loop early and silently undertax (or zero-tax) the income.
+  const sortedBrackets = [...brackets].sort((a, b) => a.min - b.min);
+
+  for (const bracket of sortedBrackets) {
     const bracketMin = bracket.min;
     const bracketMax = bracket.max ?? Infinity;
 

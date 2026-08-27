@@ -79,6 +79,7 @@ function buildTestStates(params: UserParameters): FinancialState[] {
       taxPaid: 1000,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
       deductibleInterest: 0,
     });
   }
@@ -228,6 +229,7 @@ Deno.test("RetirementAdviceEngine - downgrades debt payoff advice when investing
     taxPaid: 1000,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
     deductibleInterest: 0,
   }));
 
@@ -268,6 +270,7 @@ Deno.test("RetirementAdviceEngine - keeps debt payoff advice at full priority wh
     taxPaid: 1000,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
     deductibleInterest: 0,
   }));
 
@@ -310,6 +313,7 @@ Deno.test("RetirementAdviceEngine - offset advice reserves an emergency buffer i
     taxPaid: 1000,
     expenses: 3000,
     interestSaved: 0,
+    propertyValue: 0,
     deductibleInterest: 0,
   }));
 

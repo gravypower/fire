@@ -29,7 +29,7 @@ const DEFAULT_CONFIG: SessionConfig = {
 export class InMemorySessionManager implements SessionManager {
   private sessions = new Map<string, SessionContext>();
   private config: SessionConfig;
-  private cleanupTimer?: number;
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(config: Partial<SessionConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };

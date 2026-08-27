@@ -2,7 +2,7 @@
  * Core data models and types for the Finance Simulation Tool
  */
 
-import type { ExpenseItem } from "./expenses.ts";
+import type { ExpenseCategory, ExpenseItem } from "./expenses.ts";
 import type { InvestmentHolding } from "./investments.ts";
 import type { HousePurchase } from "./property.ts";
 import type { CountryCode } from "./country_module.ts";
@@ -662,6 +662,103 @@ export function resolveCurrentAnnualSalary(
 }
 
 /**
+ * Scales every expense item's amount by a factor, optionally restricted to
+ * a specific category (e.g. "housing" for a rent-only change) - the
+ * modern-model equivalent of scaling the legacy monthlyLivingExpenses/
+ * monthlyRentOrMortgage fields, which ExpenseProcessor.calculateExpenses
+ * ignores once expenseItems is populated and non-empty.
+ */
+export function scaleExpenseItems(
+  items: ExpenseItem[],
+  factor: number,
+  category?: ExpenseCategory,
+): ExpenseItem[] {
+  return items.map((item) =>
+    !category || item.category === category
+      ? { ...item, amount: item.amount * factor }
+      : item
+  );
+}
+
+/**
+ * Scales every investment holding's regular contribution amount by a
+ * factor (0 to stop contributing entirely) - the modern-model equivalent
+ * of scaling monthlyInvestmentContribution, which
+ * InvestmentProcessor.calculateInvestmentHoldings ignores once
+ * investmentHoldings is populated and non-empty.
+ */
+export function scaleHoldingContributions(
+  holdings: InvestmentHolding[],
+  factor: number,
+): InvestmentHolding[] {
+  return holdings.map((h) =>
+    h.contributionAmount
+      ? { ...h, contributionAmount: h.contributionAmount * factor }
+      : h
+  );
+}
+
+/**
+ * Adds a fixed dollar amount (monthly) to holdings' regular contributions,
+ * distributed pro-rata by each holding's current contribution share (or
+ * evenly across holdings that accept contributions if none currently
+ * has one) - the modern-model equivalent of adding a flat dollar amount
+ * to monthlyInvestmentContribution.
+ */
+export function addToHoldingContributions(
+  holdings: InvestmentHolding[],
+  monthlyIncrease: number,
+): InvestmentHolding[] {
+  const contributing = holdings.filter((h) =>
+    h.contributionAmount && h.contributionAmount > 0
+  );
+  const totalCurrent = contributing.reduce(
+    (sum, h) => sum + (h.contributionAmount ?? 0),
+    0,
+  );
+
+  if (totalCurrent > 0) {
+    return holdings.map((h) =>
+      h.contributionAmount && h.contributionAmount > 0
+        ? {
+          ...h,
+          contributionAmount: h.contributionAmount +
+            monthlyIncrease * (h.contributionAmount / totalCurrent),
+        }
+        : h
+    );
+  }
+
+  // No holding currently has a contribution to weight by - split evenly
+  // across every enabled holding instead.
+  const enabled = holdings.filter((h) => h.enabled);
+  if (enabled.length === 0) return holdings;
+  const perHolding = monthlyIncrease / enabled.length;
+  return holdings.map((h) =>
+    h.enabled
+      ? {
+        ...h,
+        contributionAmount: (h.contributionAmount ?? 0) + perHolding,
+        contributionFrequency: h.contributionFrequency ?? "monthly",
+      }
+      : h
+  );
+}
+
+/**
+ * Sets every investment holding's expected return rate to a flat value
+ * (e.g. shifting the whole portfolio to conservative bonds/cash) - the
+ * modern-model equivalent of investmentReturnRate, which is ignored once
+ * investmentHoldings is populated and non-empty.
+ */
+export function setHoldingReturnRates(
+  holdings: InvestmentHolding[],
+  returnRatePercent: number,
+): InvestmentHolding[] {
+  return holdings.map((h) => ({ ...h, returnRate: returnRatePercent }));
+}
+
+/**
  * Predefined transition templates for common life events
  */
 export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
@@ -673,6 +770,9 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     generateChanges: (current, personId) => ({
       annualSalary: resolveCurrentAnnualSalary(current, personId) * 0.5,
       monthlyLivingExpenses: current.monthlyLivingExpenses * 0.8,
+      ...(current.expenseItems && current.expenseItems.length > 0
+        ? { expenseItems: scaleExpenseItems(current.expenseItems, 0.8) }
+        : {}),
     }),
   },
   {
@@ -684,6 +784,17 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
       annualSalary: 0,
       monthlyInvestmentContribution: 0,
       monthlyLivingExpenses: current.monthlyLivingExpenses * 0.7,
+      ...(current.expenseItems && current.expenseItems.length > 0
+        ? { expenseItems: scaleExpenseItems(current.expenseItems, 0.7) }
+        : {}),
+      ...(current.investmentHoldings && current.investmentHoldings.length > 0
+        ? {
+          investmentHoldings: scaleHoldingContributions(
+            current.investmentHoldings,
+            0,
+          ),
+        }
+        : {}),
     }),
   },
   {
@@ -694,11 +805,19 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
       "bonds/cash - lower expected return, lower volatility. A common move " +
       "in the run-up to (or start of) retirement.",
     category: "retirement",
-    generateChanges: () => ({
+    generateChanges: (current) => ({
       // Typical conservative bond/cash yield - edit to match your actual
       // fixed-income allocation's expected return.
       investmentReturnRate: 4,
       superReturnRate: 4,
+      ...(current.investmentHoldings && current.investmentHoldings.length > 0
+        ? {
+          investmentHoldings: setHoldingReturnRates(
+            current.investmentHoldings,
+            4,
+          ),
+        }
+        : {}),
     }),
   },
   {
@@ -709,6 +828,16 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     generateChanges: (current) => ({
       monthlyRentOrMortgage: current.monthlyRentOrMortgage * 0.7,
       monthlyLivingExpenses: current.monthlyLivingExpenses * 0.85,
+      ...(current.expenseItems && current.expenseItems.length > 0
+        ? {
+          // Housing (rent/mortgage) drops further than other living
+          // expenses, matching the two legacy fields above.
+          expenseItems: current.expenseItems.map((item) => ({
+            ...item,
+            amount: item.amount * (item.category === "housing" ? 0.7 : 0.85),
+          })),
+        }
+        : {}),
     }),
   },
   {
@@ -750,6 +879,14 @@ export const TRANSITION_TEMPLATES: TransitionTemplate[] = [
     generateChanges: (current) => ({
       monthlyInvestmentContribution: current.monthlyInvestmentContribution *
         1.5,
+      ...(current.investmentHoldings && current.investmentHoldings.length > 0
+        ? {
+          investmentHoldings: scaleHoldingContributions(
+            current.investmentHoldings,
+            1.5,
+          ),
+        }
+        : {}),
     }),
   },
 ];

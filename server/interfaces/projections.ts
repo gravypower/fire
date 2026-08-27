@@ -2,8 +2,13 @@
  * Projection interfaces for the event-sourced financial simulation system
  */
 
-import type { FinancialState } from "../../types/financial.ts";
+import type {
+  FinancialState,
+  ParameterPeriod,
+  TransitionPoint,
+} from "../../types/financial.ts";
 import type { Milestone } from "../../types/milestones.ts";
+import type { AnySimulationEvent } from "../../lib/simulation_events.ts";
 
 /**
  * Base projection interface
@@ -49,6 +54,18 @@ export interface TimelineProjection extends Projection {
   states: FinancialState[];
   /** Detected milestones */
   milestones: Milestone[];
+  /** Warning messages about the simulation (e.g. retirement not achievable,
+   *  sustainability alerts) - carried through from the underlying
+   *  SimulationResult so clients don't have to re-derive them. */
+  warnings: string[];
+  /** Transition points that occurred during simulation, if any transitions
+   *  were configured (undefined for a plain, transition-free simulation) */
+  transitionPoints?: TransitionPoint[];
+  /** Parameter periods used in simulation, if any transitions were
+   *  configured (undefined for a plain, transition-free simulation) */
+  periods?: ParameterPeriod[];
+  /** Complete event timeline for debugging and analysis */
+  events?: AnySimulationEvent[];
   /** Retirement analysis */
   retirementAnalysis: {
     retirementDate: Date | null;

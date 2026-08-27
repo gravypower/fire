@@ -17,7 +17,6 @@ import {
 import { useState } from "preact/hooks";
 import MilestoneErrorBoundary from "./MilestoneErrorBoundary.tsx";
 import {
-  InlineLoadingState,
   MilestoneLoadingState,
   MilestoneSkeletonLoader,
 } from "./LoadingStates.tsx";

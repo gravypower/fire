@@ -14,10 +14,12 @@ import type {
   TimelineProjection,
 } from "../interfaces/projections.ts";
 import type {
+  EnhancedSimulationResult,
   FinancialState,
   SimulationResult,
 } from "../../types/financial.ts";
 import type { Milestone } from "../../types/milestones.ts";
+import { isFinanciallySustainable } from "../../lib/result_utils.ts";
 
 export function buildFinancialProjection(
   sessionId: string,
@@ -52,7 +54,7 @@ export function buildFinancialProjection(
 export function buildTimelineProjection(
   sessionId: string,
   version: number,
-  result: SimulationResult,
+  result: SimulationResult | EnhancedSimulationResult,
   milestones: Milestone[],
 ): TimelineProjection {
   return {
@@ -61,6 +63,16 @@ export function buildTimelineProjection(
     lastUpdated: new Date(),
     states: result.states,
     milestones,
+    // Carried through so clients don't have to re-derive them (and so
+    // safety-relevant warnings like "retirement not achievable" actually
+    // reach the UI) - transitionPoints/periods only exist when the run
+    // used transitions (EnhancedSimulationResult).
+    warnings: result.warnings,
+    transitionPoints: "transitionPoints" in result
+      ? result.transitionPoints
+      : undefined,
+    periods: "periods" in result ? result.periods : undefined,
+    events: result.events,
     retirementAnalysis: {
       retirementDate: result.retirementDate,
       retirementAge: result.retirementAge,
@@ -134,56 +146,15 @@ function extractKeyMilestones(
 /**
  * Determines whether the projected trajectory is financially sustainable.
  *
- * SimulationEngine.checkSustainability (used for result.isSustainable) flags
- * any 3+ consecutive periods of negative cash flow, which fires on every
- * retiree since cashFlow only tracks income minus expenses and retirement
- * income is drawn from investments/super rather than "income". A boundary
- * of "before the achieved retirement date" doesn't fix this either: when a
- * target retirement age isn't affordable, the engine keeps searching for
- * the earliest affordable age, so there can be a real gap where income has
- * already stopped (age hits the configured retirement age) before the
- * model confirms retirement is "safely achieved" - cashFlow is negative
- * throughout that gap even though assets are growing fine.
- *
- * So instead of counting negative-cashFlow streaks, judge sustainability
- * by whether the portfolio (investments + super) actually runs out: it's
- * fine to start the simulation at zero (someone just beginning to save),
- * but once it's built up, hitting zero again means the plan ran out of
- * money.
+ * Thin wrapper around result_utils.isFinanciallySustainable - the single
+ * source of truth also used by SimulationEngine.checkSustainability (which
+ * backs result.isSustainable), so every API surface agrees on the same
+ * verdict for the same simulation rather than this projection layer
+ * silently disagreeing with the cached session result.
  */
 export function assessSustainability(
   states: FinancialState[],
   _retirementDate: Date | null,
 ): boolean {
-  if (states.length === 0) {
-    return false;
-  }
-
-  const firstState = states[0];
-  const lastState = states[states.length - 1];
-
-  // Debt should not be growing over the course of the simulation
-  if (lastState.loanBalance > firstState.loanBalance) {
-    return false;
-  }
-
-  // Net worth should never go negative
-  if (states.some((state) => state.netWorth < 0)) {
-    return false;
-  }
-
-  // Once the portfolio has built up meaningfully, it shouldn't hit zero -
-  // that's the plan running out of money, as opposed to just starting from
-  // zero savings.
-  let everHadMeaningfulPortfolio = false;
-  for (const state of states) {
-    const portfolio = state.investments + state.superannuation;
-    if (portfolio > 1000) {
-      everHadMeaningfulPortfolio = true;
-    } else if (everHadMeaningfulPortfolio && portfolio <= 0) {
-      return false;
-    }
-  }
-
-  return true;
+  return isFinanciallySustainable(states);
 }

@@ -834,7 +834,6 @@ export class LocalStorageService implements StorageService {
 
     try {
       const exportData = {
-        version: "2.0",
         exportedAt: new Date().toISOString(),
         appName: "Finance Simulation Tool",
         ...configToSerializable(config),

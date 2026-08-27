@@ -36,7 +36,9 @@ export default class ErrorBoundary
   /**
    * Update state when an error is caught
    */
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  static override getDerivedStateFromError(
+    error: Error,
+  ): Partial<ErrorBoundaryState> {
     return {
       hasError: true,
       error,
@@ -46,7 +48,7 @@ export default class ErrorBoundary
   /**
    * Log error details
    */
-  componentDidCatch(error: Error, errorInfo: any) {
+  override componentDidCatch(error: Error, errorInfo: any) {
     console.error("ErrorBoundary caught an error:", error);
     console.error("Error info:", errorInfo);
 

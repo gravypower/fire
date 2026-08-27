@@ -26,7 +26,11 @@ import {
   peopleHaveSuperAccounts,
   RetirementCalculator,
 } from "./processors.ts";
-import { formatCurrency, generateWarnings } from "./result_utils.ts";
+import {
+  formatCurrency,
+  generateWarnings,
+  isFinanciallySustainable,
+} from "./result_utils.ts";
 import {
   buildParameterPeriods,
   resolveParametersForDate,
@@ -443,6 +447,36 @@ export const SimulationEngine = {
     let longTermGain = 0;
     let taxableRetirementWithdrawal = 0;
 
+    // Superannuation accounts and per-account balances, kept live through
+    // the whole step (mirroring investmentBalances above) so a withdrawal
+    // made in Phase 2b/6b is reflected by the growth phase (Phase 5) later
+    // in the same period, and persists correctly into next period's
+    // starting balances - otherwise Phase 5 rebuilt each account's balance
+    // from currentState.superBalances (the prior period's snapshot),
+    // silently undoing any withdrawal already taken from super this period.
+    const allSuperAccounts: SuperAccount[] = [];
+    if (peopleHaveSuperAccounts(params)) {
+      for (const person of params.people!) {
+        allSuperAccounts.push(
+          ...person.superAccounts.map((acc) => ({
+            ...acc,
+            personId: acc.personId ?? person.id,
+          })),
+        );
+      }
+    } else if (params.superAccounts && params.superAccounts.length > 0) {
+      allSuperAccounts.push(...params.superAccounts);
+    }
+    let superBalances: { [superId: string]: number } = allSuperAccounts
+      .reduce(
+        (acc, superAcc) => ({
+          ...acc,
+          [superAcc.id]: currentState.superBalances?.[superAcc.id] ??
+            superAcc.balance,
+        }),
+        {} as { [superId: string]: number },
+      );
+
     // Phase 1: Income - Add salary income (tax will be calculated later after we know deductible interest)
     eventCollector.emit({
       type: SimulationEventType.PHASE_START,
@@ -606,6 +640,8 @@ export const SimulationEngine = {
           investmentBalances,
           investmentCostBases,
           investmentCostBasis,
+          allSuperAccounts,
+          superBalances,
         );
 
         // Emit withdrawal event
@@ -637,6 +673,7 @@ export const SimulationEngine = {
         shortTermGain += withdrawalResult.shortTermGain;
         longTermGain += withdrawalResult.longTermGain;
         taxableRetirementWithdrawal += withdrawalResult.taxableSuperWithdrawal;
+        superBalances = withdrawalResult.newSuperBalances;
       }
     } else {
       eventCollector.emit({
@@ -754,6 +791,27 @@ export const SimulationEngine = {
     let offsetBalances: { [loanId: string]: number } = {};
     let totalLoanPayment = 0;
 
+    // Pass 1 (interest only): this period's interest accrues on each
+    // loan's balance regardless of how much actually gets paid, so it -
+    // and therefore any debt-recycling deductible interest - can be
+    // determined now, before tax is calculated below. Actual payment
+    // application (which loan gets how much, and how much principal that
+    // buys) is deferred to Pass 2, AFTER tax is deducted from cash - so
+    // that decision reflects real post-tax cash rather than the pre-tax
+    // figure, which overstated what was actually available and let a full
+    // loan payment go out while tax was left chronically unfunded with no
+    // trace (see Pass 2 below).
+    interface LoanPassState {
+      id: string;
+      currentBalance: number;
+      currentOffsetBalance: number;
+      interestRate: number;
+      payment: number;
+      hasOffset: boolean;
+      isDebtRecycling: boolean;
+    }
+    const loanPassStates: LoanPassState[] = [];
+
     if (params.loans !== undefined && params.loans.length > 0) {
       // Multiple loans - process each loan with its own offset
       const loanPhasePeriodEnd = advanceDate(currentState.date, interval);
@@ -792,51 +850,31 @@ export const SimulationEngine = {
           (loan.offsetBalance || 0);
         offsetBalances[loan.id] = currentOffsetBalance;
 
-        if (currentLoanBalance > 0 && cash >= loanPayment) {
-          const loanResult = LoanProcessor.calculateLoanPayment(
+        if (currentLoanBalance > 0) {
+          const hasOffset = loan.hasOffset || false;
+          const { interestPaid } = LoanProcessor.calculateInterestForPeriod(
             currentLoanBalance,
             currentOffsetBalance,
             loan.interestRate / 100,
-            loanPayment,
             interval,
-            loan.hasOffset || false,
-            loan.isDebtRecycling || false,
+            hasOffset,
           );
-          loanBalances[loan.id] = loanResult.newBalance;
-          interestSaved += loanResult.interestSaved;
-          deductibleInterest += loanResult.deductibleInterest;
-          cash -= loanPayment;
-        } else if (currentLoanBalance > 0) {
-          // Partial payment scenario
-          const partialPayment = Math.max(0, Math.min(cash, loanPayment));
-          const loanResult = LoanProcessor.calculateLoanPayment(
-            currentLoanBalance,
+          if (loan.isDebtRecycling) {
+            deductibleInterest += interestPaid;
+          }
+          loanPassStates.push({
+            id: loan.id,
+            currentBalance: currentLoanBalance,
             currentOffsetBalance,
-            loan.interestRate / 100,
-            partialPayment,
-            interval,
-            loan.hasOffset || false,
-            loan.isDebtRecycling || false,
-          );
-          loanBalances[loan.id] = loanResult.newBalance;
-          interestSaved += loanResult.interestSaved;
-          deductibleInterest += loanResult.deductibleInterest;
-          cash -= partialPayment;
+            interestRate: loan.interestRate,
+            payment: loanPayment,
+            hasOffset,
+            isDebtRecycling: loan.isDebtRecycling || false,
+          });
         } else {
           loanBalances[loan.id] = 0;
         }
       }
-
-      // Calculate total loan balance for legacy field
-      loanBalance = Object.values(loanBalances).reduce(
-        (sum, bal) => sum + bal,
-        0,
-      );
-      // Calculate total offset balance for legacy field
-      offsetBalance = Object.values(offsetBalances).reduce(
-        (sum, bal) => sum + bal,
-        0,
-      );
     } else if (params.loans === undefined) {
       // Legacy single loan (only if loans array doesn't exist)
       const loanPayment = convertPaymentToInterval(
@@ -847,38 +885,19 @@ export const SimulationEngine = {
       totalLoanPayment = loanPayment;
 
       if (loanBalance > 0) {
-        // Check if we have enough cash for loan payment
-        if (cash >= loanPayment) {
-          const loanResult = LoanProcessor.calculateLoanPayment(
-            loanBalance,
-            offsetBalance,
-            params.loanInterestRate / 100, // Convert percentage to decimal
-            loanPayment,
-            interval,
-            params.useOffsetAccount || false,
-            false, // Legacy loans don't support debt recycling
-          );
-          loanBalance = loanResult.newBalance;
-          interestSaved = loanResult.interestSaved;
-          cash -= loanPayment;
-        } else {
-          // Negative cash flow scenario - can't make full loan payment
-          // Requirements 7.1, 7.2: Handle negative cash flow
-          // Pay what we can, but this creates an unsustainable situation
-          const partialPayment = Math.max(0, cash);
-          const loanResult = LoanProcessor.calculateLoanPayment(
-            loanBalance,
-            offsetBalance,
-            params.loanInterestRate / 100,
-            partialPayment,
-            interval,
-            params.useOffsetAccount || false,
-            false, // Legacy loans don't support debt recycling
-          );
-          loanBalance = loanResult.newBalance;
-          interestSaved = loanResult.interestSaved;
-          cash = 0; // All cash used for partial loan payment
-        }
+        const hasOffset = params.useOffsetAccount || false;
+        // No calculateInterestForPeriod call needed here: legacy loans
+        // don't support debt recycling, so there's nothing to add to
+        // deductibleInterest (unlike the multi-loan branch above).
+        loanPassStates.push({
+          id: "__legacy__",
+          currentBalance: loanBalance,
+          currentOffsetBalance: offsetBalance,
+          interestRate: params.loanInterestRate,
+          payment: loanPayment,
+          hasOffset,
+          isDebtRecycling: false, // Legacy loans don't support debt recycling
+        });
       }
     } else {
       // loans array exists but is empty - no loans to process
@@ -916,7 +935,13 @@ export const SimulationEngine = {
     // Convert deductible interest to annual amount for tax calculation
     const annualDeductibleInterest = deductibleInterest * periodsPerYear;
 
-    // Calculate taxable income (gross income minus deductible interest)
+    // Calculate taxable income (gross income minus deductible interest).
+    // Only used below as the marginal-tax base for investment/dividend/
+    // capital-gains stacking (InvestmentTaxProcessor), which isn't
+    // attributed to a specific person in this data model - the actual
+    // salary tax (periodSalaryTax) is computed per-person below via
+    // IncomeProcessor.calculateTax, which taxes a couple's income sources
+    // separately against their own brackets rather than as one combined sum.
     const annualGrossIncome = IncomeProcessor.calculateTotalAnnualIncome(
       params,
       currentState.date,
@@ -927,8 +952,12 @@ export const SimulationEngine = {
     );
 
     // Calculate tax on taxable income
-    const annualTax = IncomeProcessor.calculateAnnualTax(params, taxableIncome);
-    const periodSalaryTax = annualTax / periodsPerYear;
+    const periodSalaryTax = IncomeProcessor.calculateTax(
+      params,
+      interval,
+      currentState.date,
+      annualDeductibleInterest,
+    );
 
     // Investment-related tax (dividends, realized capital gains from any
     // Phase 2b withdrawal above, and taxable retirement-account withdrawals
@@ -947,6 +976,12 @@ export const SimulationEngine = {
     const additionalOrdinaryIncome = annualDividendIncome +
       annualShortTermGain + discountedLongTermGain +
       annualTaxableRetirementWithdrawal;
+    // Running total of ordinary-stacking income realized so far this
+    // period, so a later same-period tax top-up (planned sale, then
+    // deficit resolution) stacks on top of what an earlier one already
+    // realized instead of each being taxed as if it were the only thing
+    // that happened this period.
+    let cumulativeAdditionalOrdinaryIncome = additionalOrdinaryIncome;
     const annualInvestmentTax = InvestmentTaxProcessor.calculateInvestmentTax(
       params,
       taxableIncome,
@@ -960,6 +995,50 @@ export const SimulationEngine = {
     // Subtract tax from cash (we already added gross income/dividends earlier)
     cash -= taxPaid;
     netIncome = grossIncome - taxPaid;
+
+    // Pass 2 (payment application): now that cash reflects this period's
+    // tax, decide how much of each loan's payment is actually affordable
+    // and apply it. A shortfall here shows up as slower amortization or
+    // (for an underpaid loan) balance growth via negative amortization -
+    // a real, visible, trackable outcome - rather than as an invisible
+    // cash deficit that a pre-tax affordability check could otherwise hide.
+    for (const loanState of loanPassStates) {
+      const isLegacy = loanState.id === "__legacy__";
+      const fullPayment = cash >= loanState.payment;
+      const payment = fullPayment
+        ? loanState.payment
+        : Math.max(0, cash);
+      const loanResult = LoanProcessor.calculateLoanPayment(
+        loanState.currentBalance,
+        loanState.currentOffsetBalance,
+        loanState.interestRate / 100,
+        payment,
+        interval,
+        loanState.hasOffset,
+        loanState.isDebtRecycling,
+      );
+      interestSaved += loanResult.interestSaved;
+      cash -= payment;
+
+      if (isLegacy) {
+        loanBalance = loanResult.newBalance;
+      } else {
+        loanBalances[loanState.id] = loanResult.newBalance;
+      }
+    }
+
+    if (params.loans !== undefined && params.loans.length > 0) {
+      // Calculate total loan balance for legacy field
+      loanBalance = Object.values(loanBalances).reduce(
+        (sum, bal) => sum + bal,
+        0,
+      );
+      // Calculate total offset balance for legacy field
+      offsetBalance = Object.values(offsetBalances).reduce(
+        (sum, bal) => sum + bal,
+        0,
+      );
+    }
 
     eventCollector.emit({
       type: SimulationEventType.PHASE_END,
@@ -1144,11 +1223,13 @@ export const SimulationEngine = {
       const plannedFlatRateGains = cgRule.longTermFlatRate > 0
         ? plannedSaleLongTermGain
         : 0;
+      const plannedSaleAnnualOrdinary = plannedSaleShortTermGain *
+          periodsPerYear +
+        discountedPlannedLongTermGain * periodsPerYear;
       const plannedSaleTax = InvestmentTaxProcessor.calculateInvestmentTax(
         params,
-        taxableIncome + additionalOrdinaryIncome,
-        plannedSaleShortTermGain * periodsPerYear +
-          discountedPlannedLongTermGain * periodsPerYear,
+        taxableIncome + cumulativeAdditionalOrdinaryIncome,
+        plannedSaleAnnualOrdinary,
         plannedFlatRateGains * periodsPerYear,
       ) / periodsPerYear;
 
@@ -1156,6 +1237,7 @@ export const SimulationEngine = {
       cash -= plannedSaleTax;
       shortTermGain += plannedSaleShortTermGain;
       longTermGain += plannedSaleLongTermGain;
+      cumulativeAdditionalOrdinaryIncome += plannedSaleAnnualOrdinary;
     }
 
     eventCollector.emit({
@@ -1175,39 +1257,15 @@ export const SimulationEngine = {
       data: { phase: SimulationPhase.SUPERANNUATION },
     });
 
-    // Handle multiple super accounts if provided, otherwise use legacy single super
-    let superBalances: { [superId: string]: number } = {};
-
-    // Collect all super accounts from all people, or top-level superAccounts
-    const allSuperAccounts: SuperAccount[] = [];
-
-    if (peopleHaveSuperAccounts(params)) {
-      // Collect super accounts from all people - backfilling personId from
-      // the owning person when the account itself doesn't have one set, so
-      // the per-person contribution logic below always has an owner to
-      // check against. Without this, an account missing personId fell into
-      // the "legacy household" branch and kept accruing contributions off
-      // the whole household's income - including after its own owner
-      // retired, as long as anyone else was still working.
-      for (const person of params.people!) {
-        allSuperAccounts.push(
-          ...person.superAccounts.map((acc) => ({
-            ...acc,
-            personId: acc.personId ?? person.id,
-          })),
-        );
-      }
-    } else if (params.superAccounts && params.superAccounts.length > 0) {
-      // Use top-level super accounts (legacy or single mode)
-      allSuperAccounts.push(...params.superAccounts);
-    }
-
+    // allSuperAccounts and the live superBalances map are already
+    // established at the top of this function (see the comment there) so
+    // that any withdrawal from Phase 2b/6b is reflected here rather than
+    // being overwritten by the prior period's snapshot.
     if (allSuperAccounts.length > 0) {
       // Multiple super accounts - handle person-specific contributions
       superannuation = 0;
       for (const superAcc of allSuperAccounts) {
-        const currentBalance = currentState.superBalances?.[superAcc.id] ??
-          superAcc.balance;
+        const currentBalance = superBalances[superAcc.id] ?? superAcc.balance;
 
         // Calculate contribution based on person's working status
         let superContribution = 0;
@@ -1217,10 +1275,16 @@ export const SimulationEngine = {
           if (person) {
             const personCurrentAge = person.currentAge + yearsElapsed;
             if (personCurrentAge < person.retirementAge) {
-              // Calculate this person's income for super contribution
+              // Calculate this person's income for super contribution -
+              // only before-tax sources, matching the same isBeforeTax
+              // filter IncomeProcessor.calculateTotalAnnualIncome applies
+              // for the tax calculation. Without this, an after-tax income
+              // source (already-taxed money, e.g. a pension or side income)
+              // was also treated as super-guarantee-eligible salary.
               let personIncome = 0;
               for (const incomeSource of person.incomeSources) {
                 if (
+                  incomeSource.isBeforeTax &&
                   this.isIncomeSourceActive(incomeSource, currentState.date)
                 ) {
                   personIncome += this.calculateIncomeSourceAmount(
@@ -1359,14 +1423,24 @@ export const SimulationEngine = {
           if (
             currentLoanBalance > 0 && currentOffsetBalance >= currentLoanBalance
           ) {
+            // Pay out the loan using the offset balance. The offset money
+            // is consumed to extinguish the debt - both were already
+            // counted in net worth (offsetBalance as an asset, loanBalance
+            // as a liability of the same size), so paying one off with the
+            // other is a wash. Only any excess offset beyond the loan
+            // balance becomes newly-liquid cash; crediting the full offset
+            // amount on top of zeroing the loan would fabricate net worth
+            // equal to the paid-off balance.
+            const excessOffset = currentOffsetBalance - currentLoanBalance;
+
             // Pay out the loan (set balance to 0)
             loanBalances[loan.id] = 0;
 
-            // Clear the offset for this loan and convert to cash
+            // Clear the offset for this loan
             offsetBalances[loan.id] = 0;
 
-            // Add the offset amount to cash (it was already saved, now it's liquid)
-            cash += currentOffsetBalance;
+            // Only the excess (if any) is newly-liquid cash
+            cash += excessOffset;
 
             // Update totals
             loanBalance = Object.values(loanBalances).reduce(
@@ -1437,6 +1511,8 @@ export const SimulationEngine = {
         investmentBalances,
         investmentCostBases,
         investmentCostBasis,
+        allSuperAccounts,
+        superBalances,
       );
 
       // Apply results
@@ -1448,6 +1524,7 @@ export const SimulationEngine = {
       investmentBalances = withdrawalResult.newInvestmentBalances;
       investmentCostBases = withdrawalResult.newInvestmentCostBases;
       investmentCostBasis = withdrawalResult.newInvestmentCostBasis;
+      superBalances = withdrawalResult.newSuperBalances;
       const totalWithdrawn = withdrawalResult.withdrawnAmount;
       retirementWithdrawal += totalWithdrawn;
       superWithdrawal += fromSuper;
@@ -1472,14 +1549,17 @@ export const SimulationEngine = {
         const flatGain = cgRule.longTermFlatRate > 0
           ? withdrawalResult.longTermGain
           : 0;
+        const deficitAnnualOrdinary = (withdrawalResult.shortTermGain +
+          discountedGain +
+          withdrawalResult.taxableSuperWithdrawal) * periodsPerYear;
         const deficitInvestmentTax =
           InvestmentTaxProcessor.calculateInvestmentTax(
             params,
-            taxableIncome + additionalOrdinaryIncome,
-            (withdrawalResult.shortTermGain + discountedGain +
-              withdrawalResult.taxableSuperWithdrawal) * periodsPerYear,
+            taxableIncome + cumulativeAdditionalOrdinaryIncome,
+            deficitAnnualOrdinary,
             flatGain * periodsPerYear,
           ) / periodsPerYear;
+        cumulativeAdditionalOrdinaryIncome += deficitAnnualOrdinary;
 
         taxPaid += deficitInvestmentTax;
         cash -= deficitInvestmentTax;
@@ -1594,52 +1674,47 @@ export const SimulationEngine = {
   /**
    * Checks if the financial trajectory is sustainable
    * Adds warnings for concerning patterns
+   *
+   * Delegates the actual verdict to result_utils.isFinanciallySustainable -
+   * the single source of truth also used by the server projection layer -
+   * rather than counting consecutive negative-cashFlow periods, which fires
+   * on nearly every retiree (retirement income is drawn from
+   * investments/super rather than tracked as "cashFlow") and previously
+   * made this diverge from the projection layer's own, separately-patched
+   * sustainability check.
    */
   checkSustainability(
     states: FinancialState[],
     warnings: string[],
-    retirementDate: Date | null = null,
+    _retirementDate: Date | null = null,
   ): boolean {
     if (states.length < 2) {
       return true;
     }
 
-    let isSustainable = true;
-
     // Check for increasing debt
     const firstLoanBalance = states[0].loanBalance;
     const lastLoanBalance = states[states.length - 1].loanBalance;
+    let explained = false;
     if (lastLoanBalance > firstLoanBalance) {
       warnings.push("Loan balance is increasing over time");
-      isSustainable = false;
-    }
-
-    // Check for consecutive negative cash flow while still working. Once
-    // retired, cashFlow (income minus expenses/loans/contributions) is
-    // expected to run negative every period - it doesn't account for the
-    // retirement withdrawals that cover the gap - so counting those periods
-    // here would flag a fully-funded, on-track retirement as unsustainable.
-    const preRetirementStates = retirementDate
-      ? states.filter((s) => s.date < retirementDate)
-      : states;
-    let consecutiveNegative = 0;
-    for (const state of preRetirementStates) {
-      if (state.cashFlow < 0) {
-        consecutiveNegative++;
-        if (consecutiveNegative >= 3) {
-          warnings.push("Sustained negative cash flow detected");
-          isSustainable = false;
-          break;
-        }
-      } else {
-        consecutiveNegative = 0;
-      }
+      explained = true;
     }
 
     // Check for negative net worth
     if (states[states.length - 1].netWorth < 0) {
       warnings.push("Net worth is negative");
-      isSustainable = false;
+      explained = true;
+    }
+
+    const isSustainable = isFinanciallySustainable(states);
+    if (!isSustainable && !explained) {
+      // Neither of the two specific warnings above fired, so this failure
+      // is the portfolio-depletion check - surface it explicitly rather
+      // than leaving isSustainable:false unexplained.
+      warnings.push(
+        "Investments and superannuation are projected to run out",
+      );
     }
 
     return isSustainable;
@@ -2061,6 +2136,8 @@ export const SimulationEngine = {
     currentInvestmentBalances: { [holdingId: string]: number },
     currentInvestmentCostBases: { [holdingId: string]: number },
     currentInvestmentCostBasis: number,
+    allSuperAccounts: SuperAccount[],
+    currentSuperBalances: { [superId: string]: number },
   ): {
     newInvestments: number;
     newSuperannuation: number;
@@ -2071,6 +2148,7 @@ export const SimulationEngine = {
     shortTermGain: number;
     longTermGain: number;
     taxableSuperWithdrawal: number;
+    newSuperBalances: { [superId: string]: number };
   } {
     let investments = currentInvestments;
     let superannuation = currentSuperannuation;
@@ -2086,6 +2164,26 @@ export const SimulationEngine = {
     let shortTermGain = 0;
     let longTermGain = 0;
     let taxableSuperWithdrawal = 0;
+
+    // Per-account super balances, reduced pro-rata (by current balance
+    // share) alongside the pooled `superannuation` scalar below, so the
+    // caller's live superBalances map reflects this withdrawal too - not
+    // just the aggregate. Mirrors sellInvestments' role for investments.
+    const superBalances = { ...currentSuperBalances };
+    const withdrawFromSuperBalances = (totalReduction: number) => {
+      if (totalReduction <= 0 || allSuperAccounts.length === 0) return;
+      const totalSuper = allSuperAccounts.reduce(
+        (sum, acc) => sum + Math.max(0, superBalances[acc.id] ?? acc.balance),
+        0,
+      );
+      if (totalSuper <= 0) return;
+      for (const acc of allSuperAccounts) {
+        const balance = Math.max(0, superBalances[acc.id] ?? acc.balance);
+        if (balance <= 0) continue;
+        const share = balance / totalSuper;
+        superBalances[acc.id] = Math.max(0, balance - totalReduction * share);
+      }
+    };
 
     const countryModule = getCountryModule(params.country);
     const longTermThresholdDays =
@@ -2160,9 +2258,14 @@ export const SimulationEngine = {
           superannuation,
         );
         superannuation -= result.amountReceived + result.penaltyPaid;
+        withdrawFromSuperBalances(result.amountReceived + result.penaltyPaid);
         withdrawnAmount += result.amountReceived;
         remainingShortfall -= result.amountReceived;
-        recordSuperWithdrawal(result.amountReceived);
+        // Taxable base is the gross pre-penalty distribution, not just the
+        // net amount received - the early-withdrawal penalty is a separate
+        // additional charge under US tax treatment, not a reduction of
+        // taxable income.
+        recordSuperWithdrawal(result.amountReceived + result.penaltyPaid);
       }
 
       // 2. Withdraw from investments if still short
@@ -2202,11 +2305,17 @@ export const SimulationEngine = {
           superannuation,
         );
         superannuation -= superResult.amountReceived + superResult.penaltyPaid;
+        withdrawFromSuperBalances(
+          superResult.amountReceived + superResult.penaltyPaid,
+        );
         sellInvestments(investmentWithdrawal);
         investments -= investmentWithdrawal;
         withdrawnAmount += superResult.amountReceived + investmentWithdrawal;
         remainingShortfall -= superResult.amountReceived + investmentWithdrawal;
-        recordSuperWithdrawal(superResult.amountReceived);
+        // See note above: taxable base is the gross pre-penalty amount.
+        recordSuperWithdrawal(
+          superResult.amountReceived + superResult.penaltyPaid,
+        );
       }
     } else {
       // STRATEGY: Investments First (Default)
@@ -2230,9 +2339,11 @@ export const SimulationEngine = {
           superannuation,
         );
         superannuation -= result.amountReceived + result.penaltyPaid;
+        withdrawFromSuperBalances(result.amountReceived + result.penaltyPaid);
         withdrawnAmount += result.amountReceived;
         remainingShortfall -= result.amountReceived;
-        recordSuperWithdrawal(result.amountReceived);
+        // See note above: taxable base is the gross pre-penalty amount.
+        recordSuperWithdrawal(result.amountReceived + result.penaltyPaid);
       }
     }
 
@@ -2245,6 +2356,7 @@ export const SimulationEngine = {
     if (remainingShortfall > 0 && superannuation > 0 && anyoneOverPensionAge) {
       const emergencyWithdrawal = Math.min(remainingShortfall, superannuation);
       superannuation -= emergencyWithdrawal;
+      withdrawFromSuperBalances(emergencyWithdrawal);
       withdrawnAmount += emergencyWithdrawal;
       remainingShortfall -= emergencyWithdrawal;
       recordSuperWithdrawal(emergencyWithdrawal);
@@ -2260,6 +2372,7 @@ export const SimulationEngine = {
       shortTermGain,
       longTermGain,
       taxableSuperWithdrawal,
+      newSuperBalances: superBalances,
     };
   },
 

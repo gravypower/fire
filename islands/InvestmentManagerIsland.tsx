@@ -243,10 +243,12 @@ export default function InvestmentManagerIsland(
             id: `purchase-${Date.now()}`,
             date: purchaseFormData.date ||
               new Date().toISOString().split("T")[0],
-            units: purchaseFormData.units,
-            pricePerUnit: purchaseFormData.pricePerUnit,
+            // Both fields are already validated as defined and positive by
+            // the guard at the top of this function.
+            units: purchaseFormData.units!,
+            pricePerUnit: purchaseFormData.pricePerUnit!,
             totalCost: purchaseFormData.totalCost ||
-              (purchaseFormData.units * purchaseFormData.pricePerUnit +
+              (purchaseFormData.units! * purchaseFormData.pricePerUnit! +
                 (purchaseFormData.fees || 0)),
             fees: purchaseFormData.fees,
             notes: purchaseFormData.notes,

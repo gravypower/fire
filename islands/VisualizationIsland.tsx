@@ -11,7 +11,7 @@ import type {
   TransitionPoint,
   UserParameters,
 } from "../types/financial.ts";
-import type { Milestone, RetirementAdvice } from "../types/milestones.ts";
+import type { Milestone } from "../types/milestones.ts";
 import {
   type ChartEventMarker,
   findLoanPayoffDate,
@@ -19,7 +19,6 @@ import {
   groupByTimeInterval,
 } from "../lib/result_utils.ts";
 import { detectMilestonesFromSimulation } from "../lib/milestone_detector.ts";
-import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
 import NetWorthChart from "../components/NetWorthChart.tsx";
 import CashFlowChart from "../components/CashFlowChart.tsx";
 import ChartErrorBoundary from "../components/ChartErrorBoundary.tsx";
@@ -211,18 +210,6 @@ export default function VisualizationIsland({
     ? result.states[result.states.length - 1].netWorth
     : 0;
 
-  const finalCash = result.states.length > 0
-    ? result.states[result.states.length - 1].cash
-    : 0;
-
-  const finalInvestments = result.states.length > 0
-    ? result.states[result.states.length - 1].investments
-    : 0;
-
-  const finalSuper = result.states.length > 0
-    ? result.states[result.states.length - 1].superannuation
-    : 0;
-
   const finalLoanBalance = result.states.length > 0
     ? result.states[result.states.length - 1].loanBalance
     : 0;
@@ -234,20 +221,6 @@ export default function VisualizationIsland({
   const initialLoanBalance = result.states.length > 0
     ? result.states[0].loanBalance
     : 0;
-
-  // Calculate total tax paid and interest saved (full simulation)
-  const totalTaxPaid = result.states.reduce(
-    (sum, state) => sum + (state.taxPaid || 0),
-    0,
-  );
-  const totalInterestSaved = result.states.reduce(
-    (sum, state) => sum + (state.interestSaved || 0),
-    0,
-  );
-  const totalDeductibleInterest = result.states.reduce(
-    (sum, state) => sum + (state.deductibleInterest || 0),
-    0,
-  );
 
   // Calculate cumulative totals for filtered states (sum of all period totals)
   const filteredTaxPaid = statesWithPeriodTotals.reduce(
@@ -270,9 +243,8 @@ export default function VisualizationIsland({
   // Find loan payoff date
   const loanPayoffDate = findLoanPayoffDate(result.states);
 
-  // Generate milestones and advice if user parameters are available
+  // Generate milestones if user parameters are available
   let milestones: Milestone[] = [];
-  let retirementAdvice: RetirementAdvice | null = null;
 
   if (userParameters) {
     try {
@@ -283,16 +255,8 @@ export default function VisualizationIsland({
         effectiveTransitionPoints,
       );
       milestones = milestoneResult.milestones;
-
-      // Generate retirement advice
-      const adviceResult = generateRetirementAdvice(
-        result,
-        userParameters,
-        milestones,
-      );
-      retirementAdvice = adviceResult.advice;
     } catch (error) {
-      console.warn("Failed to generate milestones or advice:", error);
+      console.warn("Failed to detect milestones:", error);
     }
   }
 

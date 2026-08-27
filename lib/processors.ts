@@ -152,18 +152,18 @@ export const IncomeProcessor = {
     source: IncomeSource,
     currentDate?: Date,
   ): number {
-    // Check if this is a one-off income
+    // Check if this is a one-off income. Matches by month (not just year),
+    // and endDate is inclusive - both matching SimulationEngine.isIncomeSourceActive
+    // exactly, so the amount used for tax (this function, via
+    // calculateTotalAnnualIncome) always agrees with the amount actually
+    // credited to cash for the period. A year-only match previously taxed
+    // a one-off amount in every month of its year, months before (or after)
+    // the cash was actually received.
     if (source.isOneOff && source.oneOffDate && currentDate) {
-      // One-off income only applies on its specific date
-      // For simplicity, we'll apply it in the year it occurs
-      const oneOffYear = source.oneOffDate.getFullYear();
-      const currentYear = currentDate.getFullYear();
-
-      if (oneOffYear === currentYear) {
-        return source.amount; // One-off amount is already the total
-      } else {
-        return 0; // Not in the year of the one-off
-      }
+      const sameMonth =
+        currentDate.getFullYear() === source.oneOffDate.getFullYear() &&
+        currentDate.getMonth() === source.oneOffDate.getMonth();
+      return sameMonth ? source.amount : 0; // One-off amount is already the total
     }
 
     // Check date range for recurring income
@@ -173,8 +173,8 @@ export const IncomeProcessor = {
         return 0; // Income hasn't started yet
       }
 
-      // Check if income has ended
-      if (source.endDate && currentDate >= source.endDate) {
+      // Check if income has ended (inclusive of end date)
+      if (source.endDate && currentDate > source.endDate) {
         return 0; // Income has ended
       }
     }
@@ -354,51 +354,76 @@ export const IncomeProcessor = {
    * @param params User financial parameters
    * @param interval Time interval for calculation
    * @param currentDate Current simulation date (optional, for date-based filtering)
+   * @param annualDeductibleInterest Annual deductible interest (e.g. from
+   *   debt-recycling loans) to net off taxable income before taxing
    * @returns Tax amount for the interval
    */
   calculateTax(
     params: UserParameters,
     interval: TimeInterval,
     currentDate?: Date,
+    annualDeductibleInterest = 0,
   ): number {
-    // If any person has explicit income sources, calculate tax per person
+    // If any person has explicit income sources, calculate tax per person -
+    // progressive brackets are per-taxpayer, so a household's combined
+    // income must never be run through the brackets as one lump sum.
     if (peopleHaveIncomeSources(params)) {
-      return this.calculateHouseholdTax(params, interval, currentDate);
+      return this.calculateHouseholdTax(
+        params,
+        interval,
+        currentDate,
+        annualDeductibleInterest,
+      );
     }
 
     // Legacy single-person calculation
     const totalAnnual = this.calculateTotalAnnualIncome(params, currentDate);
-    const annualTax = this.calculateAnnualTax(params, totalAnnual);
+    const taxableAnnual = Math.max(
+      0,
+      totalAnnual - annualDeductibleInterest,
+    );
+    const annualTax = this.calculateAnnualTax(params, taxableAnnual);
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
     return annualTax / intervalPeriodsPerYear;
   },
 
   /**
    * Calculates tax for a household (couple mode)
-   * Each person's income is taxed separately using their own tax brackets
+   * Each person's income is taxed separately using their own tax brackets,
+   * rather than one combined bracket run over the household's total income -
+   * progressive brackets are per-taxpayer, so taxing the sum overtaxes any
+   * household with more than one earner.
    * @param params User financial parameters
    * @param interval Time interval for calculation
    * @param currentDate Current simulation date (optional, for date-based filtering)
+   * @param annualDeductibleInterest Household-level deductible interest (from
+   *   debt-recycling loans, not attributed to a specific person in this data
+   *   model) to net off before taxing - split pro-rata by each person's
+   *   share of household income, since there's no per-person loan ownership
+   *   to attribute it to directly.
    * @returns Total household tax amount for the interval
    */
   calculateHouseholdTax(
     params: UserParameters,
     interval: TimeInterval,
     currentDate?: Date,
+    annualDeductibleInterest = 0,
   ): number {
     if (!params.people || params.people.length === 0) {
       return 0;
     }
 
     const intervalPeriodsPerYear = intervalToPeriodsPerYear(interval);
-    let totalTax = 0;
 
     const yearsElapsed = currentDate
       ? (currentDate.getTime() - params.startDate.getTime()) /
         (1000 * 60 * 60 * 24 * 365.25)
       : 0;
 
-    // Calculate tax for each person separately
+    // First pass: each working person's before-tax annual income (and the
+    // household total), so the deduction can be split pro-rata below.
+    const personIncomes: { annualIncome: number }[] = [];
+    let totalAnnualIncome = 0;
     for (const person of params.people) {
       // A retired person earns no income, so nothing to tax - matching the
       // same currentAge < retirementAge check the income phase already
@@ -410,28 +435,34 @@ export const IncomeProcessor = {
         continue;
       }
 
-      // Calculate this person's annual income
       let personAnnualIncome = 0;
-
-      // Sum up all before-tax income sources for this person
       if (person.incomeSources && person.incomeSources.length > 0) {
         for (const source of person.incomeSources) {
           if (source.isBeforeTax) {
-            const annualAmount = this.calculateIncomeFromSource(
+            personAnnualIncome += this.calculateIncomeFromSource(
               source,
               currentDate,
             );
-            personAnnualIncome += annualAmount;
           }
         }
       }
+      personIncomes.push({ annualIncome: personAnnualIncome });
+      totalAnnualIncome += personAnnualIncome;
+    }
 
-      // Calculate tax for this person using household tax brackets
+    // Calculate tax for each person separately, against their own brackets
+    let totalTax = 0;
+    for (const { annualIncome } of personIncomes) {
+      const deductionShare = totalAnnualIncome > 0
+        ? annualDeductibleInterest * (annualIncome / totalAnnualIncome)
+        : 0;
+      const personTaxableIncome = Math.max(0, annualIncome - deductionShare);
+
       let personAnnualTax = 0;
       if (params.taxBrackets && params.taxBrackets.length > 0) {
         // Use household tax brackets
         personAnnualTax = getCountryModule(params.country).calculateTax(
-          personAnnualIncome,
+          personTaxableIncome,
           params.taxBrackets,
           {
             medicareLevyRatePercent: params.medicareLevyRate,
@@ -440,7 +471,7 @@ export const IncomeProcessor = {
         );
       } else {
         // Fall back to flat rate
-        personAnnualTax = personAnnualIncome * (params.incomeTaxRate / 100);
+        personAnnualTax = personTaxableIncome * (params.incomeTaxRate / 100);
       }
 
       totalTax += personAnnualTax;
@@ -670,6 +701,45 @@ export const ExpenseProcessor = {
  */
 export const LoanProcessor = {
   /**
+   * Calculates this period's interest on a loan balance, independent of
+   * any payment - interest accrues on the (offset-reduced) balance
+   * regardless of how much is actually paid. Split out from
+   * calculateLoanPayment so a caller can determine a loan's (deductible)
+   * interest before deciding how much cash to apply to principal - e.g.
+   * to fold deductible interest into a tax calculation that must run
+   * before the payment-affordability decision (which depends on cash
+   * left over after tax).
+   * @returns Object with interest paid and interest saved via offset
+   */
+  calculateInterestForPeriod(
+    balance: number,
+    offsetBalance: number,
+    interestRate: number,
+    interval: TimeInterval,
+    useOffset: boolean = false,
+  ): { interestPaid: number; interestSaved: number } {
+    if (balance <= 0) {
+      return { interestPaid: 0, interestSaved: 0 };
+    }
+
+    const intervalRate = convertAnnualRateToInterval(interestRate, interval);
+
+    // Offset account reduces the balance on which interest is charged
+    const effectiveBalance = useOffset
+      ? Math.max(0, balance - offsetBalance)
+      : balance;
+
+    const interestPaid = effectiveBalance * intervalRate;
+
+    const interestWithoutOffset = balance * intervalRate;
+    const interestSaved = useOffset
+      ? (interestWithoutOffset - interestPaid)
+      : 0;
+
+    return { interestPaid, interestSaved };
+  },
+
+  /**
    * Calculates loan payment and updates balance with offset account support
    * @param balance Current loan balance
    * @param offsetBalance Current offset account balance
@@ -706,27 +776,13 @@ export const LoanProcessor = {
       };
     }
 
-    // Convert annual interest rate to interval rate
-    const intervalRate = convertAnnualRateToInterval(interestRate, interval);
-
-    // Calculate effective balance for interest calculation
-    // Offset account reduces the balance on which interest is charged
-    const effectiveBalance = useOffset
-      ? Math.max(0, balance - offsetBalance)
-      : balance;
-
-    // Calculate interest for this period on the effective balance
-    const interestPaid = effectiveBalance * intervalRate;
-
-    // Calculate interest saved due to offset account
-    const interestWithoutOffset = balance * intervalRate;
-    const interestSaved = useOffset
-      ? (interestWithoutOffset - interestPaid)
-      : 0;
-
-    // Calculate deductible interest for debt recycling loans
-    // Only the interest actually paid (not saved by offset) is deductible
-    const deductibleInterest = isDebtRecycling ? interestPaid : 0;
+    const { interestPaid, interestSaved } = this.calculateInterestForPeriod(
+      balance,
+      offsetBalance,
+      interestRate,
+      interval,
+      useOffset,
+    );
 
     // Principal paid is the payment minus interest (but can't exceed remaining balance)
     const principalPaid = Math.max(
@@ -734,9 +790,24 @@ export const LoanProcessor = {
       Math.min(payment - interestPaid, balance),
     );
 
-    // New balance is current balance minus principal paid
-    // (Interest is paid but doesn't reduce the balance, only principal does)
-    const newBalance = Math.max(0, balance - principalPaid);
+    // If the payment doesn't cover this period's interest, the unpaid
+    // interest capitalizes onto the balance (negative amortization) below
+    // rather than silently disappearing - a real loan's balance grows when
+    // it's underpaid, it doesn't hold flat.
+    const unpaidInterest = Math.max(0, interestPaid - payment);
+
+    // New balance is current balance minus principal paid, plus any
+    // interest shortfall that wasn't actually funded by the payment.
+    // (Interest is paid but doesn't reduce the balance, only principal
+    // does - except for the unpaid portion, which increases it.)
+    const newBalance = Math.max(0, balance - principalPaid + unpaidInterest);
+
+    // Calculate deductible interest for debt recycling loans - capped at
+    // the interest actually funded by the payment (not saved by offset).
+    // An unpaid, capitalized shortfall isn't a real cash outflow yet, so
+    // it isn't deductible until a later period's payment actually covers it.
+    const interestActuallyPaid = interestPaid - unpaidInterest;
+    const deductibleInterest = isDebtRecycling ? interestActuallyPaid : 0;
 
     return {
       newBalance,
@@ -899,7 +970,7 @@ export const InvestmentProcessor = {
     for (const holding of params.investmentHoldings) {
       // Skip disabled holdings
       if (!holding.enabled) {
-        holdingBalances[holding.id] = currentBalances?.[holding.id] ||
+        holdingBalances[holding.id] = currentBalances?.[holding.id] ??
           holding.currentValue;
         holdingCostBases[holding.id] = currentCostBases?.[holding.id] ??
           holdingBalances[holding.id];
@@ -908,14 +979,14 @@ export const InvestmentProcessor = {
 
       // Check date range
       if (holding.startDate && currentDate < holding.startDate) {
-        holdingBalances[holding.id] = currentBalances?.[holding.id] ||
+        holdingBalances[holding.id] = currentBalances?.[holding.id] ??
           holding.currentValue;
         holdingCostBases[holding.id] = currentCostBases?.[holding.id] ??
           holdingBalances[holding.id];
         continue;
       }
       if (holding.endDate && currentDate > holding.endDate) {
-        holdingBalances[holding.id] = currentBalances?.[holding.id] ||
+        holdingBalances[holding.id] = currentBalances?.[holding.id] ??
           holding.currentValue;
         holdingCostBases[holding.id] = currentCostBases?.[holding.id] ??
           holdingBalances[holding.id];
@@ -923,7 +994,7 @@ export const InvestmentProcessor = {
       }
 
       // Get current balance for this holding
-      const currentBalance = currentBalances?.[holding.id] ||
+      const currentBalance = currentBalances?.[holding.id] ??
         holding.currentValue;
       const currentCostBasis = currentCostBases?.[holding.id] ?? currentBalance;
 

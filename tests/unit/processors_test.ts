@@ -345,6 +345,7 @@ Deno.test("RetirementCalculator.findRetirementDate - achievable retirement", () 
       taxPaid: 500,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     });
   }
 
@@ -381,6 +382,7 @@ Deno.test("RetirementCalculator.findRetirementDate - not achievable", () => {
       taxPaid: 500,
       expenses: 3000,
       interestSaved: 0,
+      propertyValue: 0,
     });
   }
 

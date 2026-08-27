@@ -33,7 +33,7 @@ export default class ChartErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(
+  static override getDerivedStateFromError(
     error: Error,
   ): Partial<ChartErrorBoundaryState> {
     return {
@@ -42,7 +42,7 @@ export default class ChartErrorBoundary extends Component<
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  override componentDidCatch(error: Error, errorInfo: any) {
     console.error("Chart rendering error:", error);
     console.error("Error info:", errorInfo);
   }

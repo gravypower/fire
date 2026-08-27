@@ -15,19 +15,13 @@ import {
   addTransition,
   removeTransition,
   updateTransition,
-  validateTransition,
 } from "../lib/transition_manager.ts";
 import { applyTemplate } from "../lib/templates.ts";
 import {
-  createPersonParameterChange,
-  getChangeableParameters,
-  getParameterChangeDescription,
   getParametersByCategory,
   type ParameterChangeOption,
-  validateParameterChangeForm,
 } from "../lib/parameter_change_ui_utils.ts";
 import {
-  getParameterCategory,
   PERSON_SPECIFIC_PARAMETERS,
   requiresPersonSelection,
 } from "../types/parameter_categories.ts";
@@ -763,7 +757,6 @@ export default function TransitionManagerIsland({
               onParamToggle={handleParamToggle}
               onParamValueChange={handleParamValueChange}
               onPersonSelectionChange={handlePersonSelectionChange}
-              formatParamName={formatParamName}
             />
           </div>
 
@@ -791,7 +784,6 @@ function ParameterSelector({
   onParamToggle,
   onParamValueChange,
   onPersonSelectionChange,
-  formatParamName,
 }: {
   config: SimulationConfiguration;
   formData: TransitionFormData;
@@ -804,7 +796,6 @@ function ParameterSelector({
     param: keyof UserParameters,
     personId: string,
   ) => void;
-  formatParamName: (param: keyof UserParameters) => string;
 }) {
   // Get changeable parameters organized by category
   const paramsByCategory = getParametersByCategory(config.baseParameters);

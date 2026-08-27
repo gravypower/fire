@@ -4,10 +4,8 @@
  * Validates: Requirements 1.1, 2.1
  */
 
-import { ComponentChildren } from "preact";
 import type {
   AdviceGenerationError,
-  FinancialState,
   MilestoneDetectionError,
 } from "../types/milestones.ts";
 

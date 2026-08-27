@@ -12,10 +12,15 @@ import type {
 import { detectMilestonesFromSimulation } from "../../../lib/milestone_detector.ts";
 import { ScenarioComparisonEngine } from "../../../lib/scenario_comparison_engine.ts";
 import { SimulationEngine } from "../../../lib/simulation_engine.ts";
-import { assessSustainability } from "../../../server/projections/projection-builder.ts";
+import {
+  getErrorMessages,
+  isValid,
+  validateUserParameters,
+} from "../../../lib/validation.ts";
 import type {
   EnhancedSimulationResult,
   SimulationConfiguration,
+  UserParameters,
 } from "../../../types/financial.ts";
 import { Handlers } from "fresh/compat";
 
@@ -24,6 +29,29 @@ interface CommandResponse {
   commandId: string;
   error?: string;
   data?: any;
+}
+
+/**
+ * Validates a full UserParameters object, returning a ready-to-return
+ * error CommandResponse if it's invalid, or null if it's fine to proceed.
+ * Used at every point client-supplied parameters enter the engine, so bad
+ * input (negative balances, NaN/Infinity rates, retirementAge <=
+ * currentAge, malformed tax brackets, etc.) is rejected with a clear
+ * message instead of silently producing a garbage or NaN simulation.
+ */
+function validationError(
+  params: UserParameters,
+  commandId: string,
+): CommandResponse | null {
+  const errors = validateUserParameters(params);
+  if (isValid(errors)) {
+    return null;
+  }
+  return {
+    success: false,
+    commandId,
+    error: `Invalid parameters: ${getErrorMessages(errors).join("; ")}`,
+  };
 }
 
 async function runAndCacheSimulation(
@@ -68,11 +96,16 @@ async function handleRunSimulation(
   command: RunSimulationCommand,
 ): Promise<CommandResponse> {
   const { parameters, configuration } = command.data;
+  const resolvedConfiguration = configuration ??
+    { baseParameters: parameters, transitions: [] };
 
-  await runAndCacheSimulation(
-    command.sessionId,
-    configuration ?? { baseParameters: parameters, transitions: [] },
+  const invalid = validationError(
+    resolvedConfiguration.baseParameters,
+    command.id,
   );
+  if (invalid) return invalid;
+
+  await runAndCacheSimulation(command.sessionId, resolvedConfiguration);
 
   return { success: true, commandId: command.id };
 }
@@ -80,6 +113,21 @@ async function handleRunSimulation(
 async function handleUpdateParameters(
   command: UpdateParametersCommand,
 ): Promise<CommandResponse> {
+  // Validate against the merged result (current session parameters plus
+  // this partial change), matching how updateSessionParameters itself
+  // merges - a partial change is only invalid in the context of what it's
+  // being merged onto (e.g. a lone retirementAge edit needs the session's
+  // existing currentAge to check against).
+  const session = await sessionManager.getSession(command.sessionId);
+  if (session) {
+    const merged = {
+      ...session.parameters,
+      ...command.data.parameterChanges,
+    };
+    const invalid = validationError(merged, command.id);
+    if (invalid) return invalid;
+  }
+
   // Only updates the session's stored parameters; the client always follows
   // this with a RunSimulation command to actually re-simulate.
   await sessionManager.updateSessionParameters(
@@ -113,6 +161,9 @@ async function handleCompareScenarios(
 ): Promise<CommandResponse> {
   const { configuration } = command.data;
 
+  const invalid = validationError(configuration.baseParameters, command.id);
+  if (invalid) return invalid;
+
   const withTransitionsResult = SimulationEngine.runSimulationWithTransitions(
     configuration,
   );
@@ -120,24 +171,14 @@ async function handleCompareScenarios(
     configuration.baseParameters,
   );
 
-  // SimulationEngine's own isSustainable flags any 3+ consecutive periods of
-  // negative cash flow, which fires on every retiree since retirement income
-  // is drawn from investments/super rather than tracked as "cashFlow" -
-  // recompute with retirement-aware logic instead.
+  // result.isSustainable already reflects retirement-aware logic (see
+  // SimulationEngine.checkSustainability / result_utils.isFinanciallySustainable) -
+  // no need to recompute it here.
   const withTransitions = {
     ...withTransitionsResult,
-    isSustainable: assessSustainability(
-      withTransitionsResult.states,
-      withTransitionsResult.retirementDate,
-    ),
     transitionPoints: withTransitionsResult.transitionPoints ?? [],
     periods: withTransitionsResult.periods ?? [],
   };
-  const withoutTransitionsIsSustainable = assessSustainability(
-    withoutTransitionsResult.states,
-    withoutTransitionsResult.retirementDate,
-  );
-  withoutTransitionsResult.isSustainable = withoutTransitionsIsSustainable;
 
   let retirementDateDifference: number | null = null;
   if (
@@ -189,6 +230,11 @@ async function handleCompareNamedScenarios(
 ): Promise<CommandResponse> {
   const { scenarios } = command.data;
 
+  for (const { configuration } of scenarios) {
+    const invalid = validationError(configuration.baseParameters, command.id);
+    if (invalid) return invalid;
+  }
+
   const results = scenarios.map(({ id, name, configuration }) => {
     const hasTransitions = configuration.transitions &&
       configuration.transitions.length > 0;
@@ -196,12 +242,6 @@ async function handleCompareNamedScenarios(
     const result = hasTransitions
       ? SimulationEngine.runSimulationWithTransitions(configuration)
       : SimulationEngine.runSimulation(configuration.baseParameters);
-
-    // See note in handleCompareScenarios: recompute with retirement-aware logic
-    result.isSustainable = assessSustainability(
-      result.states,
-      result.retirementDate,
-    );
 
     const milestoneResult = detectMilestonesFromSimulation(
       result.states,

@@ -11,7 +11,6 @@ import type {
 } from "../types/financial.ts";
 import type { AdviceItem } from "../types/milestones.ts";
 import {
-  getParameterCategory,
   isChangeableParameter,
   PARAMETER_METADATA,
   requiresPersonSelection,

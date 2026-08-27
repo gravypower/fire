@@ -5,7 +5,6 @@
  */
 
 import { Component, ComponentChildren } from "preact";
-import type { AdviceGenerationError } from "../types/milestones.ts";
 
 interface AdviceErrorBoundaryProps {
   children: ComponentChildren;
@@ -42,7 +41,7 @@ export default class AdviceErrorBoundary extends Component<
     };
   }
 
-  static getDerivedStateFromError(
+  static override getDerivedStateFromError(
     error: Error,
   ): Partial<AdviceErrorBoundaryState> {
     return {
@@ -51,7 +50,7 @@ export default class AdviceErrorBoundary extends Component<
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  override componentDidCatch(error: Error, errorInfo: any) {
     console.error("Advice component error:", error);
     console.error("Error context:", this.props.context);
     console.error("Error info:", errorInfo);

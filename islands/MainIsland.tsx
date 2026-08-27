@@ -28,6 +28,10 @@ import { storageService } from "../lib/storage.ts";
 import { generateRetirementAdvice } from "../lib/retirement_advice_engine.ts";
 import type { RetirementAdvice } from "../types/milestones.ts";
 import { validateSimulationYears } from "../lib/validation.ts";
+import {
+  applyPersonSpecificAdvice,
+  validatePersonSpecificAdvice,
+} from "../lib/person_specific_advice_utils.ts";
 
 export default function MainIsland() {
   const [config, setConfig] = useState<SimulationConfiguration | null>(null);
@@ -83,6 +87,7 @@ export default function MainIsland() {
         scrollContainer.removeEventListener("scroll", handleScroll);
       };
     }
+    return undefined;
   }, [activeTab]);
 
   // Load configuration on mount and setup real-time updates
@@ -1024,28 +1029,30 @@ export default function MainIsland() {
                     {activeTab}
                   </span>
                   {activeTab === "investments" &&
-                    config?.baseParameters.investmentHoldings?.length > 0 && (
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {config.baseParameters.investmentHoldings.length}
-                    </span>
-                  )}
+                    (config?.baseParameters.investmentHoldings?.length ??
+                          0) > 0 && (
+                      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {config?.baseParameters.investmentHoldings?.length}
+                      </span>
+                    )}
                   {activeTab === "property" &&
-                    config?.baseParameters.housePurchases?.length > 0 && (
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {config.baseParameters.housePurchases.length}
-                    </span>
-                  )}
+                    (config?.baseParameters.housePurchases?.length ?? 0) >
+                        0 && (
+                      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {config?.baseParameters.housePurchases?.length}
+                      </span>
+                    )}
                   {activeTab === "results" && simulationResult && (
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       Ready
                     </span>
                   )}
                   {activeTab === "milestones" &&
-                    simulationResult?.milestones?.length > 0 && (
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {simulationResult.milestones.length}
-                    </span>
-                  )}
+                    (simulationResult?.milestones?.length ?? 0) > 0 && (
+                      <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        {simulationResult?.milestones?.length}
+                      </span>
+                    )}
                   {activeTab === "advice" && retirementAdvice && (
                     <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                       {retirementAdvice.recommendations.length}
@@ -1153,10 +1160,11 @@ export default function MainIsland() {
                         />
                       </svg>
                       Investments
-                      {config?.baseParameters.investmentHoldings?.length > 0 &&
+                      {(config?.baseParameters.investmentHoldings?.length ??
+                            0) > 0 &&
                         (
                           <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {config.baseParameters.investmentHoldings.length}
+                            {config?.baseParameters.investmentHoldings?.length}
                           </span>
                         )}
                     </button>
@@ -1185,9 +1193,10 @@ export default function MainIsland() {
                         />
                       </svg>
                       Property
-                      {config?.baseParameters.housePurchases?.length > 0 && (
+                      {(config?.baseParameters.housePurchases?.length ?? 0) >
+                          0 && (
                         <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {config.baseParameters.housePurchases.length}
+                          {config?.baseParameters.housePurchases?.length}
                         </span>
                       )}
                     </button>
@@ -1247,9 +1256,9 @@ export default function MainIsland() {
                         />
                       </svg>
                       Milestones
-                      {simulationResult?.milestones?.length > 0 && (
+                      {(simulationResult?.milestones?.length ?? 0) > 0 && (
                         <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          {simulationResult.milestones.length}
+                          {simulationResult?.milestones?.length}
                         </span>
                       )}
                     </button>
@@ -1798,8 +1807,30 @@ export default function MainIsland() {
                         advice={retirementAdvice}
                         currentScenario={simulationResult}
                         onImplementStrategy={(strategy) => {
-                          console.log("Strategy to implement:", strategy);
-                          // Could implement strategy implementation here
+                          if (!config) return;
+
+                          const validation = validatePersonSpecificAdvice(
+                            strategy,
+                            config.baseParameters,
+                          );
+                          if (!validation.isValid) {
+                            alert(
+                              `Could not apply "${strategy.title}":\n${
+                                validation.errors.join("\n")
+                              }`,
+                            );
+                            return;
+                          }
+
+                          const updatedParams = applyPersonSpecificAdvice(
+                            config.baseParameters,
+                            strategy,
+                          );
+                          handleConfigurationChange({
+                            ...config,
+                            baseParameters: updatedParams,
+                          });
+                          alert(`Applied: ${strategy.title}`);
                         }}
                       />
                     </ErrorBoundary>

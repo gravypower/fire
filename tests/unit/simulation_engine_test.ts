@@ -132,6 +132,7 @@ Deno.test("SimulationEngine.calculateTimeStep - income calculation", () => {
     taxPaid: 0,
     expenses: 0,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   const newState = SimulationEngine.calculateTimeStep(
@@ -168,6 +169,7 @@ Deno.test("SimulationEngine.calculateTimeStep - expense deduction", () => {
     taxPaid: 0,
     expenses: 0,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   const newState = SimulationEngine.calculateTimeStep(
@@ -203,6 +205,7 @@ Deno.test("SimulationEngine.calculateTimeStep - loan payment with interest", () 
     taxPaid: 0,
     expenses: 0,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   const newState = SimulationEngine.calculateTimeStep(
@@ -240,6 +243,7 @@ Deno.test("SimulationEngine.calculateTimeStep - offset account reduces interest"
     taxPaid: 0,
     expenses: 0,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   const newState = SimulationEngine.calculateTimeStep(
@@ -273,6 +277,7 @@ Deno.test("SimulationEngine.calculateTimeStep - investment contributions and gro
     taxPaid: 0,
     expenses: 0,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   const newState = SimulationEngine.calculateTimeStep(
@@ -305,6 +310,7 @@ Deno.test("SimulationEngine.calculateTimeStep - negative cash flow handling", ()
     taxPaid: 0,
     expenses: 0,
     interestSaved: 0,
+    propertyValue: 0,
   };
 
   const newState = SimulationEngine.calculateTimeStep(

@@ -19,7 +19,6 @@ import AdviceErrorBoundary from "./AdviceErrorBoundary.tsx";
 import {
   AdviceLoadingState,
   AdviceSkeletonLoader,
-  InlineLoadingState,
 } from "./LoadingStates.tsx";
 import {
   AdviceGenerationFailedDisplay,
@@ -737,7 +736,8 @@ function RetirementAdvicePanelCore({
                   advice={rankedItem}
                   isExpanded={expandedAdvice.has(item.id)}
                   onToggle={() => toggleAdvice(item.id)}
-                  onImplement={onImplementStrategy
+                  onImplement={onImplementStrategy &&
+                      (item.parameterChanges || item.personSpecificChanges)
                     ? () => handleImplementStrategy(item)
                     : undefined}
                 />
@@ -816,7 +816,8 @@ function RetirementAdvicePanelCore({
                   advice={item}
                   isExpanded={expandedAdvice.has(item.id)}
                   onToggle={() => toggleAdvice(item.id)}
-                  onImplement={onImplementStrategy
+                  onImplement={onImplementStrategy &&
+                      (item.parameterChanges || item.personSpecificChanges)
                     ? () => handleImplementStrategy(item)
                     : undefined}
                 />
@@ -849,7 +850,8 @@ function RetirementAdvicePanelCore({
                   advice={rankedItem}
                   isExpanded={expandedAdvice.has(item.id)}
                   onToggle={() => toggleAdvice(item.id)}
-                  onImplement={onImplementStrategy
+                  onImplement={onImplementStrategy &&
+                      (item.parameterChanges || item.personSpecificChanges)
                     ? () => handleImplementStrategy(item)
                     : undefined}
                 />

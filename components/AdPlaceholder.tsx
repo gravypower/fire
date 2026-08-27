@@ -10,7 +10,6 @@ interface AdPlaceholderProps {
 
 export default function AdPlaceholder({
   variant = "premium",
-  size = "medium",
 }: AdPlaceholderProps) {
   if (variant === "premium") {
     return (

@@ -137,7 +137,7 @@ export default function HouseholdManagerIsland(
     );
 
     // Sync legacy fields with first person's data for backward compatibility
-    const firstPerson = updatedPeople[0] as UserParameters;
+    const firstPerson: Person | undefined = updatedPeople[0];
     const legacyUpdates: Partial<UserParameters> = {};
 
     if (firstPerson) {
