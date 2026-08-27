@@ -230,3 +230,16 @@ export class InMemorySessionManager implements SessionManager {
     this.sessions.clear();
   }
 }
+
+/**
+ * Shared session manager instance used across all API routes.
+ *
+ * Deliberately instantiated here rather than in a route file: a module
+ * that's both a route entry point and a shared import (as
+ * routes/api/simulation/session.ts used to be) gets code-split into two
+ * separate chunks in production builds, each running this line
+ * independently - giving the route handler and its importers two different
+ * session stores. See server/cache/websocket-broadcaster.ts for the same
+ * issue on the WebSocket connection registry.
+ */
+export const sessionManager = new InMemorySessionManager();

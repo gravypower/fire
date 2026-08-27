@@ -1,5 +1,5 @@
-import { sessionManager } from "./session.ts";
-import { getWebSocketStats } from "./websocket.ts";
+import { sessionManager } from "../../../server/cache/session-manager.ts";
+import { getWebSocketStats } from "../../../server/cache/websocket-broadcaster.ts";
 import { Handlers } from "fresh/compat";
 
 export const handler: Handlers = {

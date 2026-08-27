@@ -1,6 +1,6 @@
-import { sessionManager } from "./session.ts";
-import { projectionService } from "./projections.ts";
-import { broadcastProjectionUpdate } from "./websocket.ts";
+import { sessionManager } from "../../../server/cache/session-manager.ts";
+import { projectionService } from "../../../server/projections/projection-service.ts";
+import { broadcastProjectionUpdate } from "../../../server/cache/websocket-broadcaster.ts";
 import type {
   ClearCacheCommand,
   Command,

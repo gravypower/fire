@@ -14,6 +14,7 @@ import {
   buildMilestoneProjection,
   buildTimelineProjection,
 } from "./projection-builder.ts";
+import { sessionManager } from "../cache/session-manager.ts";
 
 /**
  * Session manager interface for projection service
@@ -105,3 +106,10 @@ export function createProjectionService(
 ): ProjectionService {
   return new ProjectionService(sessionManager);
 }
+
+/**
+ * Shared projection service instance used across all API routes.
+ * Instantiated here (not in a route file) for the same reason as
+ * server/cache/session-manager.ts's sessionManager export - see its comment.
+ */
+export const projectionService = createProjectionService(sessionManager);

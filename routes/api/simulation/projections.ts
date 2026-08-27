@@ -1,9 +1,6 @@
-import { createProjectionService } from "../../../server/projections/projection-service.ts";
-import { sessionManager } from "./session.ts";
+import { projectionService } from "../../../server/projections/projection-service.ts";
+import { sessionManager } from "../../../server/cache/session-manager.ts";
 import { Handlers } from "fresh/compat";
-
-// Global projection service instance
-const projectionService = createProjectionService(sessionManager);
 
 export const handler: Handlers = {
   // GET /api/simulation/projections?sessionId=xxx&type=financial|timeline|milestone|all
@@ -90,6 +87,3 @@ export const handler: Handlers = {
     }
   },
 };
-
-// Export projection service for use by other modules
-export { projectionService };

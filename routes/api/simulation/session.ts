@@ -1,12 +1,9 @@
-import { InMemorySessionManager } from "../../../server/cache/session-manager.ts";
+import { sessionManager } from "../../../server/cache/session-manager.ts";
 import type {
   ParameterTransition,
   UserParameters,
 } from "../../../types/financial.ts";
 import { Handlers } from "fresh/compat";
-
-// Global session manager instance
-const sessionManager = new InMemorySessionManager();
 
 export const handler: Handlers = {
   // POST /api/simulation/session - Create new session
@@ -173,6 +170,3 @@ export const handler: Handlers = {
     }
   },
 };
-
-// Export session manager for use by other modules
-export { sessionManager };
