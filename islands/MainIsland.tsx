@@ -60,6 +60,11 @@ export default function MainIsland() {
   const isOffline = connectionStatus === "disconnected" ||
     connectionStatus === "error";
 
+  // Shareable-link / live collaboration state
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
+
   // Scroll position tracking
   const scrollPositions = useRef<Record<string, number>>({
     configure: 0,
@@ -92,62 +97,99 @@ export default function MainIsland() {
 
   // Load configuration on mount and setup real-time updates
   useEffect(() => {
-    const loadedConfig = storageService.loadConfiguration();
-    if (loadedConfig) {
-      setConfig(loadedConfig);
-      // Run initial simulation with loaded config
-      runSimulation(loadedConfig);
-    } else {
-      // No saved config, create default one
-      const defaultConfig: SimulationConfiguration = {
-        baseParameters: {
-          annualSalary: 80000,
-          salaryFrequency: "monthly",
-          incomeTaxRate: 30,
-          monthlyLivingExpenses: 0,
-          monthlyRentOrMortgage: 0,
-          expenseItems: [],
-          loans: [],
-          loanPrincipal: 0,
-          loanInterestRate: 5.5,
-          loanPaymentAmount: 0,
-          loanPaymentFrequency: "monthly",
-          useOffsetAccount: false,
-          currentOffsetBalance: 0,
-          monthlyInvestmentContribution: 500,
-          investmentReturnRate: 7,
-          currentInvestmentBalance: 10000,
-          superContributionRate: 11,
-          superReturnRate: 7,
-          currentSuperBalance: 50000,
-          desiredAnnualRetirementIncome: 60000,
-          retirementAge: 65,
-          currentAge: 30,
-          simulationYears: 40,
-          startDate: new Date(),
-          householdMode: "single",
-          people: [
-            {
-              id: "person-1",
-              name: "Me",
-              currentAge: 30,
-              retirementAge: 65,
-              incomeSources: [],
-              superAccounts: [],
-            },
-          ],
-        },
-        transitions: [],
-      };
-      setConfig(defaultConfig);
-      // Save the default config
-      try {
-        storageService.saveConfiguration(defaultConfig);
-      } catch (error) {
-        console.error("Failed to save initial configuration:", error);
+    const loadLocalConfig = () => {
+      const loadedConfig = storageService.loadConfiguration();
+      if (loadedConfig) {
+        setConfig(loadedConfig);
+        // Run initial simulation with loaded config
+        runSimulation(loadedConfig);
+      } else {
+        // No saved config, create default one
+        const defaultConfig: SimulationConfiguration = {
+          baseParameters: {
+            annualSalary: 80000,
+            salaryFrequency: "monthly",
+            incomeTaxRate: 30,
+            monthlyLivingExpenses: 0,
+            monthlyRentOrMortgage: 0,
+            expenseItems: [],
+            loans: [],
+            loanPrincipal: 0,
+            loanInterestRate: 5.5,
+            loanPaymentAmount: 0,
+            loanPaymentFrequency: "monthly",
+            useOffsetAccount: false,
+            currentOffsetBalance: 0,
+            monthlyInvestmentContribution: 500,
+            investmentReturnRate: 7,
+            currentInvestmentBalance: 10000,
+            superContributionRate: 11,
+            superReturnRate: 7,
+            currentSuperBalance: 50000,
+            desiredAnnualRetirementIncome: 60000,
+            retirementAge: 65,
+            currentAge: 30,
+            simulationYears: 40,
+            startDate: new Date(),
+            householdMode: "single",
+            people: [
+              {
+                id: "person-1",
+                name: "Me",
+                currentAge: 30,
+                retirementAge: 65,
+                incomeSources: [],
+                superAccounts: [],
+              },
+            ],
+          },
+          transitions: [],
+        };
+        setConfig(defaultConfig);
+        // Save the default config
+        try {
+          storageService.saveConfiguration(defaultConfig);
+        } catch (error) {
+          console.error("Failed to save initial configuration:", error);
+        }
+        // Run initial simulation
+        runSimulation(defaultConfig);
       }
-      // Run initial simulation
-      runSimulation(defaultConfig);
+    };
+
+    // A shared link (?session=<id>) joins the sender's live session instead
+    // of starting a fresh local one.
+    const params = new URLSearchParams(window.location.search);
+    const sharedSessionId = params.get("session");
+
+    if (sharedSessionId) {
+      apiClient.joinSession(sharedSessionId).then((info) => {
+        const joinedConfig: SimulationConfiguration = {
+          baseParameters: info.parameters!,
+          transitions: info.transitions ?? [],
+        };
+        setConfig(joinedConfig);
+        try {
+          storageService.saveConfiguration(joinedConfig);
+        } catch (error) {
+          console.error("Failed to save joined configuration:", error);
+        }
+        runSimulation(joinedConfig);
+        setShareNotice(
+          "You're viewing a shared session — edits sync live in both directions.",
+        );
+      }).catch((error) => {
+        console.warn(
+          "Failed to join shared session, starting locally instead:",
+          error,
+        );
+        setShareNotice(
+          "That shared link has expired or is invalid — started a new session instead.",
+        );
+        loadLocalConfig();
+      });
+    } else {
+      loadLocalConfig();
     }
 
     // Setup real-time update subscriptions
@@ -180,8 +222,23 @@ export default function MainIsland() {
       // Could trigger a projection refresh here if needed
     };
 
+    // A remote edit from another client connected to the same session
+    // (e.g. a partner via a shared link). Only sync local state/storage -
+    // deliberately don't re-broadcast or re-trigger a simulation here, since
+    // whoever made the edit already triggers their own runSimulation, whose
+    // projection_update broadcast (above) refreshes charts on both ends.
+    const handleRemoteConfigUpdate = (remoteConfig: SimulationConfiguration) => {
+      setConfig(remoteConfig);
+      try {
+        storageService.saveConfiguration(remoteConfig);
+      } catch (error) {
+        console.error("Failed to save remotely updated configuration:", error);
+      }
+    };
+
     apiClient.onProjectionUpdate(handleProjectionUpdate);
     apiClient.onEventAdded(handleEventAdded);
+    apiClient.onConfigUpdate(handleRemoteConfigUpdate);
 
     // Cleanup on unmount
     return () => {
@@ -297,6 +354,7 @@ export default function MainIsland() {
     try {
       if (apiClient.getCurrentSessionId()) {
         await apiClient.updateParameters(newConfig.baseParameters);
+        apiClient.sendConfigUpdate(newConfig);
       }
     } catch (error) {
       console.warn("Failed to update server parameters:", error);
@@ -304,6 +362,37 @@ export default function MainIsland() {
 
     // Trigger simulation
     runSimulation(newConfig);
+  };
+
+  const handleShare = async () => {
+    try {
+      let sessionId = apiClient.getCurrentSessionId();
+      if (!sessionId && config) {
+        await apiClient.createSession(
+          undefined,
+          config.baseParameters,
+          config.transitions,
+        );
+        sessionId = apiClient.getCurrentSessionId();
+      }
+      if (!sessionId) {
+        throw new Error("No session available to share");
+      }
+
+      const url = `${window.location.origin}${window.location.pathname}?session=${sessionId}`;
+      setShareUrl(url);
+      setShareCopied(false);
+
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+      } catch (clipboardError) {
+        console.warn("Failed to copy share link automatically:", clipboardError);
+      }
+    } catch (error) {
+      console.error("Failed to create share link:", error);
+      setShareNotice("Couldn't create a shareable link. Please try again.");
+    }
   };
 
   // Save scroll position when switching tabs
@@ -726,6 +815,29 @@ export default function MainIsland() {
                   </div>
                 )}
 
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  disabled={!config}
+                  class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Share this session with your partner"
+                >
+                  <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8.684 13.342a4 4 0 100-2.684m0 2.684a4 4 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a4 4 0 105.368-5.368 4 4 0 00-5.368 5.368zm0 9.316a4 4 0 105.368 5.368 4 4 0 00-5.368-5.368z"
+                    />
+                  </svg>
+                  <span class="hidden sm:inline">Share</span>
+                </button>
+
                 <a
                   href="/help"
                   class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
@@ -749,6 +861,61 @@ export default function MainIsland() {
               </div>
             </div>
           </div>
+
+          {shareUrl && (
+            <div class="border-t border-gray-200 bg-blue-50 px-4 sm:px-6 lg:px-8 py-2">
+              <div class="max-w-[1800px] mx-auto flex items-center gap-2 flex-wrap">
+                <span class="text-sm text-blue-900 font-medium whitespace-nowrap">
+                  Shareable link{shareCopied ? " (copied!)" : ""}:
+                </span>
+                <input
+                  type="text"
+                  readOnly
+                  value={shareUrl}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  class="flex-1 min-w-[200px] text-sm bg-white border border-blue-200 rounded px-2 py-1 text-gray-700"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(shareUrl);
+                      setShareCopied(true);
+                    } catch (error) {
+                      console.warn("Failed to copy share link:", error);
+                    }
+                  }}
+                  class="px-3 py-1 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded hover:bg-blue-100 transition-colors"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShareUrl(null)}
+                  class="px-2 py-1 text-sm text-blue-700 hover:text-blue-900"
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
+          {shareNotice && (
+            <div class="border-t border-gray-200 bg-amber-50 px-4 sm:px-6 lg:px-8 py-2">
+              <div class="max-w-[1800px] mx-auto flex items-center justify-between gap-2">
+                <span class="text-sm text-amber-900">{shareNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setShareNotice(null)}
+                  class="px-2 py-1 text-sm text-amber-700 hover:text-amber-900"
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Fixed Navigation Bar */}

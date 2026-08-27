@@ -9,6 +9,7 @@ import type {
   SessionStats,
 } from "../interfaces/session.ts";
 import type {
+  ParameterTransition,
   SimulationResult,
   UserParameters,
 } from "../../types/financial.ts";
@@ -18,7 +19,7 @@ import type { Milestone } from "../../types/milestones.ts";
  * Default session configuration
  */
 const DEFAULT_CONFIG: SessionConfig = {
-  timeoutMs: 30 * 60 * 1000, // 30 minutes
+  timeoutMs: 2 * 60 * 60 * 1000, // 2 hours - gives a shared link time to be opened
   maxSessions: 1000,
   cleanupIntervalMs: 5 * 60 * 1000, // 5 minutes
 };
@@ -39,6 +40,7 @@ export class InMemorySessionManager implements SessionManager {
   async createSession(
     userId?: string,
     parameters?: UserParameters,
+    transitions?: ParameterTransition[],
   ): Promise<SessionContext> {
     // Check session limit
     if (this.sessions.size >= this.config.maxSessions) {
@@ -58,6 +60,7 @@ export class InMemorySessionManager implements SessionManager {
       lastAccessedAt: now,
       expiresAt: new Date(now.getTime() + this.config.timeoutMs),
       parameters: parameters || this.getDefaultParameters(),
+      transitions: transitions ?? [],
       metadata: {},
       resultVersion: 0,
     };
@@ -111,6 +114,19 @@ export class InMemorySessionManager implements SessionManager {
       session.result = result;
       session.milestones = milestones;
       session.resultVersion++;
+      await this.touchSession(sessionId);
+    }
+  }
+
+  async updateSessionConfiguration(
+    sessionId: string,
+    parameters: UserParameters,
+    transitions: ParameterTransition[],
+  ): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.parameters = parameters;
+      session.transitions = transitions;
       await this.touchSession(sessionId);
     }
   }

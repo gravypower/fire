@@ -7,6 +7,7 @@
 import type {
   ComparisonSimulationResult,
   EnhancedSimulationResult,
+  ParameterTransition,
   ScenarioComparisonResult,
   SimulationConfiguration,
   UserParameters,
@@ -26,6 +27,7 @@ interface SessionInfo {
   lastAccessedAt: Date;
   expiresAt: Date;
   parameters?: UserParameters;
+  transitions?: ParameterTransition[];
 }
 
 interface CommandResult {
@@ -171,7 +173,7 @@ class WebSocketManager {
   /**
    * Send message to server
    */
-  private send(message: any): void {
+  send(message: any): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     }
@@ -267,6 +269,7 @@ export class ApiClient {
   async createSession(
     userId?: string,
     parameters?: UserParameters,
+    transitions?: ParameterTransition[],
   ): Promise<SessionInfo> {
     try {
       const response = await fetch(`${this.baseUrl}/session`, {
@@ -277,6 +280,7 @@ export class ApiClient {
         body: JSON.stringify({
           userId,
           parameters,
+          transitions,
         }),
       });
 
@@ -331,6 +335,28 @@ export class ApiClient {
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * Join an existing session created by another browser (e.g. via a shared
+   * link), instead of creating a new one. Throws if the session doesn't
+   * exist or has expired.
+   */
+  async joinSession(sessionId: string): Promise<SessionInfo> {
+    const info = await this.getSession(sessionId);
+
+    this.currentSessionId = sessionId;
+
+    try {
+      await this.wsManager.connect(sessionId);
+    } catch (error) {
+      console.warn(
+        "WebSocket connection failed, continuing without real-time updates:",
+        error,
+      );
+    }
+
+    return info;
   }
 
   /**
@@ -602,6 +628,34 @@ export class ApiClient {
   onEventAdded(callback: (events: any[]) => void): void {
     this.wsManager.on("event_added", (data) => {
       callback(data.events);
+    });
+  }
+
+  /**
+   * Broadcast a full configuration edit to any other clients connected to
+   * this session (e.g. a partner viewing the same shared link). No-op if
+   * there's no active session.
+   */
+  sendConfigUpdate(config: SimulationConfiguration): void {
+    if (!this.currentSessionId) {
+      return;
+    }
+    this.wsManager.send({
+      type: "config_update",
+      sessionId: this.currentSessionId,
+      data: { configuration: config },
+    });
+  }
+
+  /**
+   * Subscribe to configuration edits made by other clients connected to
+   * this session.
+   */
+  onConfigUpdate(
+    callback: (configuration: SimulationConfiguration) => void,
+  ): void {
+    this.wsManager.on("config_update", (data) => {
+      callback(data.configuration);
     });
   }
 

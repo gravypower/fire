@@ -4,6 +4,7 @@
 
 import type {
   EnhancedSimulationResult,
+  ParameterTransition,
   SimulationResult,
   UserParameters,
 } from "../../types/financial.ts";
@@ -25,6 +26,8 @@ export interface SessionContext {
   expiresAt: Date;
   /** Current user parameters */
   parameters: UserParameters;
+  /** Current parameter transitions (life-stage changes over time) */
+  transitions: ParameterTransition[];
   /** Session metadata */
   metadata: Record<string, any>;
   /** Most recent simulation result, cached so projections can be reshaped
@@ -57,6 +60,7 @@ export interface SessionManager {
   createSession(
     userId?: string,
     parameters?: UserParameters,
+    transitions?: ParameterTransition[],
   ): Promise<SessionContext>;
 
   /** Get session by ID */
@@ -69,6 +73,13 @@ export interface SessionManager {
   updateSessionParameters(
     sessionId: string,
     parameters: Partial<UserParameters>,
+  ): Promise<void>;
+
+  /** Wholesale-replace session parameters and transitions (last-write-wins) */
+  updateSessionConfiguration(
+    sessionId: string,
+    parameters: UserParameters,
+    transitions: ParameterTransition[],
   ): Promise<void>;
 
   /** Cache the latest simulation result and detected milestones for a session */

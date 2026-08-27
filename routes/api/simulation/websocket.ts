@@ -6,7 +6,13 @@ const activeConnections = new Map<string, Set<WebSocket>>();
 
 // Message types for WebSocket communication
 interface WebSocketMessage {
-  type: "subscribe" | "unsubscribe" | "ping" | "projection_update" | "error";
+  type:
+    | "subscribe"
+    | "unsubscribe"
+    | "ping"
+    | "projection_update"
+    | "config_update"
+    | "error";
   sessionId?: string;
   data?: any;
   timestamp?: Date;
@@ -18,6 +24,7 @@ interface WebSocketMessage {
 export function broadcastToSession(
   sessionId: string,
   message: Omit<WebSocketMessage, "sessionId">,
+  excludeSocket?: WebSocket,
 ): void {
   const connections = activeConnections.get(sessionId);
   if (!connections) {
@@ -34,6 +41,9 @@ export function broadcastToSession(
   const deadConnections: WebSocket[] = [];
 
   for (const ws of connections) {
+    if (ws === excludeSocket) {
+      continue;
+    }
     try {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(messageStr);
@@ -137,6 +147,22 @@ export const handler: Handlers = {
                 data: { message: "Subscribed to session updates" },
               }));
               break;
+
+            case "config_update": {
+              const configuration = message.data?.configuration;
+              if (configuration) {
+                await sessionManager.updateSessionConfiguration(
+                  sessionId,
+                  configuration.baseParameters,
+                  configuration.transitions ?? [],
+                );
+                broadcastToSession(sessionId, {
+                  type: "config_update",
+                  data: { configuration },
+                }, socket);
+              }
+              break;
+            }
 
             default:
               socket.send(JSON.stringify({

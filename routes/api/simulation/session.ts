@@ -1,5 +1,8 @@
 import { InMemorySessionManager } from "../../../server/cache/session-manager.ts";
-import type { UserParameters } from "../../../types/financial.ts";
+import type {
+  ParameterTransition,
+  UserParameters,
+} from "../../../types/financial.ts";
 import { Handlers } from "fresh/compat";
 
 // Global session manager instance
@@ -12,12 +15,17 @@ export const handler: Handlers = {
 
     try {
       const body = await req.json();
-      const { userId, parameters } = body as {
+      const { userId, parameters, transitions } = body as {
         userId?: string;
         parameters?: UserParameters;
+        transitions?: ParameterTransition[];
       };
 
-      const session = await sessionManager.createSession(userId, parameters);
+      const session = await sessionManager.createSession(
+        userId,
+        parameters,
+        transitions,
+      );
 
       return new Response(
         JSON.stringify({
@@ -96,6 +104,7 @@ export const handler: Handlers = {
             lastAccessedAt: session.lastAccessedAt,
             expiresAt: session.expiresAt,
             parameters: session.parameters,
+            transitions: session.transitions,
           },
         }),
         {

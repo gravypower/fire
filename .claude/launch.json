@@ -6,6 +6,12 @@
       "runtimeExecutable": "deno",
       "runtimeArgs": ["task", "dev"],
       "port": 8000
+    },
+    {
+      "name": "fire-preview",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["task", "preview"],
+      "port": 8000
     }
   ]
 }
